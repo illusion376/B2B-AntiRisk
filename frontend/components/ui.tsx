@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 export function IconButton({ label, children, active, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
@@ -8,18 +8,23 @@ export function IconButton({ label, children, active, className = '', ...props }
 }
 
 export function Modal({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
-    const close = () => closeRef.current();
+    const close = () => { if (!dialog?.open) closeRef.current(); };
     dialog?.addEventListener('close', close);
     return () => { dialog?.removeEventListener('close', close); dialog?.close(); };
   }, []);
-  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }} aria-labelledby="modal-title">
-    <div className="modal-header"><h2 id="modal-title">{title}</h2><IconButton label="Закрыть окно" onClick={onClose}><X size={20} /></IconButton></div>
+  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} onClick={e => {
+    if (e.target !== e.currentTarget) return;
+    const bounds = e.currentTarget.getBoundingClientRect();
+    if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) onClose();
+  }} aria-labelledby={titleId}>
+    <div className="modal-header"><h2 id={titleId}>{title}</h2><IconButton label="Закрыть окно" onClick={onClose}><X size={20} /></IconButton></div>
     {children}
   </dialog>;
 }

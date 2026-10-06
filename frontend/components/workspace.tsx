@@ -12,16 +12,15 @@ import { applyRules, initialWorkspace, parseWorkspace, STORAGE_KEY } from '@/lib
 import { RulesManager, RuleEditor, DeleteRuleDialog } from './rules-manager';
 import { ProjectsView, NewProjectDialog } from './projects-view';
 import { ProjectFilesView } from './project-files';
+import { useWorkspaceNavigation } from './use-workspace-navigation';
 import { DEMO_PROJECT_ID, DEMO_FILE_ID, fileType, validateUpload } from '@/lib/projects';
 
 export function Workspace() {
-  const [view, setView] = useState<View>('documents');
-  const [page, setPage] = useState(18);
-  const [selected, setSelected] = useState<number | null>(1);
+  const { view, page, projectId: activeProjectId, findingId, navigate } = useWorkspaceNavigation(documentInfo.pages);
+  const setView = (view: View) => navigate({ view });
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const {projects, statuses, rules} = workspace;
   const name = projects.find(project=>project.id===DEMO_PROJECT_ID)?.files.find(file=>file.id===DEMO_FILE_ID)?.name ?? documentInfo.name;
-  const [activeProjectId, setActiveProjectId] = useState(DEMO_PROJECT_ID);
   const [draftName, setDraftName] = useState(name);
   const [restored, setRestored] = useState(false);
   const [storageWarning, setStorageWarning] = useState('');
@@ -41,6 +40,7 @@ export function Workspace() {
   const searchRef = useRef<HTMLInputElement>(null);
   const eventCounter = useRef(0);
   const activeFindings = useMemo(() => applyRules(findings, rules), [rules]);
+  const selected = activeFindings.some(finding => finding.id === findingId) ? findingId : null;
   const activeProject = projects.find(project=>project.id===activeProjectId) ?? projects[0];
   const categories = [...new Set(rules.map(rule => rule.category))];
 
@@ -60,6 +60,12 @@ export function Workspace() {
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace)); setStorageWarning(''); }
     catch { setStorageWarning('Не удалось сохранить изменения в браузере. Не закрывайте вкладку.'); }
   }, [workspace, restored]);
+
+  useEffect(() => {
+    if (restored && (view === 'project' || view === 'document') && !projects.some(project => project.id === activeProjectId)) {
+      navigate({ view: 'documents' }, true);
+    }
+  }, [restored, projects, view, activeProjectId, navigate]);
 
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => {
@@ -90,8 +96,11 @@ export function Workspace() {
     addHistory('Статус замечания изменён', `${rules.find(rule => rule.id === id)?.title} · ${statusLabels[status]}`);
     setToast(`Статус: ${statusLabels[status].toLowerCase()}`);
   }
-  function selectFinding(finding: Finding) { setActiveProjectId(DEMO_PROJECT_ID); setPage(finding.page); setSelected(finding.id); setView('document'); }
-  function navigatePage(value: number) { setActiveProjectId(DEMO_PROJECT_ID); setPage(Math.min(documentInfo.pages, Math.max(1, Math.round(value)))); setSelected(null); setView('document'); }
+  function selectFinding(finding: Finding) { navigate({ projectId: DEMO_PROJECT_ID, page: finding.page, findingId: finding.id, view: 'document' }); }
+  function navigatePage(value: number) {
+    if (!Number.isFinite(value)) return;
+    navigate({ projectId: DEMO_PROJECT_ID, page: Math.min(documentInfo.pages, Math.max(1, Math.round(value))), findingId: null, view: 'document' });
+  }
   function exportReport() { downloadReport(name, activeFindings, statuses); setToast('Отчёт CSV скачан'); addHistory('Отчёт скачан', `${activeFindings.length} правил · формат CSV`); }
   function saveRule(draft: RuleDraft) {
     if (!ruleDialog || ruleDialog.mode === 'delete') return;
@@ -109,15 +118,15 @@ export function Workspace() {
       const nextStatuses = {...previous.statuses}; delete nextStatuses[rule.id];
       return {...previous,rules:previous.rules.filter(item=>item.id!==rule.id),statuses:nextStatuses};
     });
-    if (selected === rule.id) setSelected(null);
+    if (selected === rule.id) navigate({ findingId: null }, true);
     addHistory('Правило удалено',rule.title); setRuleDialog(null); setToast('Правило удалено');
   }
   function toggleRule(rule: CheckRule) {
     setWorkspace(previous=>({...previous,rules:previous.rules.map(item=>item.id===rule.id?{...item,enabled:!item.enabled}:item)}));
     addHistory(rule.enabled?'Правило отключено':'Правило включено',rule.title);
   }
-  function openProject(project: Project) { setActiveProjectId(project.id); setView('project'); setSearch(''); setPopover(null); }
-  function openDemo() { setActiveProjectId(DEMO_PROJECT_ID); setView('document'); setPage(18); setSelected(1); setSearch(''); }
+  function openProject(project: Project) { navigate({ projectId: project.id, view: 'project' }); setSearch(''); setPopover(null); }
+  function openDemo() { navigate({ projectId: DEMO_PROJECT_ID, view: 'document', page: 18, findingId: 1 }); setSearch(''); }
   function createProject(draft: ProjectDraft): string | void {
     if (projects.some(project=>project.title.toLocaleLowerCase('ru')===draft.title.toLocaleLowerCase('ru'))) return 'Проект с таким названием уже существует.';
     const project: Project = {...draft,id:crypto.randomUUID(),updatedAt:Date.now(),files:[]};
@@ -144,7 +153,7 @@ export function Workspace() {
   useWorkspaceTools({ page, activeFindings, statuses, navigatePage, selectFinding, changeStatus });
 
   return <div className="app-shell">
-    <a className="skip-link" href="#main-content">К содержимому</a>
+    <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>К содержимому</a>
     <div ref={headerRef}>
       <header className="topbar">
         <button className="brand" onClick={() => setView('documents')} aria-label="B2B AntiRisk — все проекты">
@@ -183,8 +192,8 @@ export function Workspace() {
       </section>}
     </div>
 
-    <main id="main-content" className="main-content">
-      {view === 'documents' && <ProjectsView projects={projects} onOpen={openProject} onCreate={()=>setModal('create-project')} riskCount={activeFindings.filter(f=>f.severity!=='ok').length} />}
+    <main id="main-content" className="main-content" tabIndex={-1}>
+      {view === 'documents' && <ProjectsView projects={projects} onOpen={openProject} onCreate={()=>setModal('create-project')} riskCount={activeFindings.filter(f=>f.severity!=='ok').length} checkedCount={activeFindings.length} />}
       {view === 'project' && <ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDemo={openDemo} />}
       {view === 'document' && <DocumentWorkspace page={page} selected={selected} search={search} findings={activeFindings} statuses={statuses} onPage={navigatePage} onSelect={selectFinding} onStatus={changeStatus} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})} />}
       {view === 'rules' && <RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule} />}

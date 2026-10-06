@@ -664,3 +664,19 @@
     .project-breadcrumb > span { max-width: 55vw; }
   }
 }
+
+@layer components {
+  /* Shared readable secondary text and visible keyboard focus. */
+  .view-title p, .rule-card p, .rule-card small, .timeline p,
+  .timeline time, .timeline-label, .eyebrow, .statusbar,
+  .info-content p, .info-tip, .detail-disclaimer, .finding-detail > p,
+  .empty-state p { color: #626b5d; }
+  .field-search:focus-within { border-color: var(--red); box-shadow: 0 0 0 3px #bc302a14; }
+  .form-input:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+  .project-breadcrumb { min-width: 0; }
+  .project-breadcrumb > span, .project-breadcrumb > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .view-title > div { min-width: 0; }
+  .view-title h1, .timeline h3, .timeline p { overflow-wrap: anywhere; }
+  .main-content:focus { outline: none; }
+  .rule-card:focus-within { border-color: #cdb5ac; }
+}
