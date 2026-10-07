@@ -18,6 +18,10 @@ x-backend-env: &backend-env
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
   EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
   OCR_THREADS: ${OCR_THREADS:-4}
+  HEURISTIC_ENGINE: ${HEURISTIC_ENGINE:-nli}
+  NLI_MODEL_NAME: ${NLI_MODEL_NAME:-cointegrated/rubert-base-cased-nli-threeway}
+  NLI_THRESHOLD: ${NLI_THRESHOLD:-0.5}
+  NLI_QUANTIZE: ${NLI_QUANTIZE:-true}
 
 x-backend-build: &backend-build
   context: .

@@ -282,3 +282,119 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict]) -> list[F
             source="HEURISTIC",
         ))
     return drafts
+
+
+# ---------- NLI режим (анализ противоречий без внешней LLM) ----------
+
+def _rule_hypothesis(rule: RiskRule) -> str:
+    """Формулирует гипотезу риска для NLI модели из описания правила."""
+    desc = rule.description.strip().rstrip(".")
+    return f"{desc}."
+
+
+def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[FindingDraft]:
+    """Семантический NLI-анализ противоречий и рисков через модель (например, rubert-base-cased-nli-threeway).
+
+    Модель оценивает отношение между текстом фрагментов договора (Premise) и утверждением риска (Hypothesis):
+    - При вероятности entailment >= nli_threshold: фиксируется замечание с цитатой и подсветкой.
+    - Если преобладает neutral или contradiction: замечание снимается (GREEN).
+    - При ошибке загрузки модели или пакетов: плавный откат к evaluate_heuristic.
+    """
+    from app.services.nli import get_nli_classifier
+
+    try:
+        classifier = get_nli_classifier()
+    except Exception as exc:
+        log.warning("Не удалось инициализировать NLI модель (%s), откат к поиску по стеммам: %s", type(exc).__name__, exc)
+        return evaluate_heuristic(contexts, pages)
+
+    # Собираем пары (фрагмент, гипотеза) для пакетного инференса
+    pair_meta: list[tuple[RuleContext, RetrievedChunk, str]] = []
+    pairs_to_predict: list[tuple[str, str]] = []
+
+    for ctx in contexts:
+        rule = ctx.rule
+        if not ctx.chunks:
+            continue
+        hypothesis = _rule_hypothesis(rule)
+        for chunk in ctx.chunks:
+            pair_meta.append((ctx, chunk, hypothesis))
+            pairs_to_predict.append((chunk.content[:1500], hypothesis))
+
+    if not pairs_to_predict:
+        return [_green(ctx.rule, "Релевантных фрагментов в документе не найдено.", source="NLI") for ctx in contexts]
+
+    try:
+        predictions = classifier.predict(pairs_to_predict)
+    except Exception as exc:
+        log.warning("Ошибка NLI инференса (%s), откат к поиску по стеммам: %s", type(exc).__name__, exc)
+        return evaluate_heuristic(contexts, pages)
+
+    rule_results: dict[str, list[tuple[RetrievedChunk, dict[str, float]]]] = {}
+    for (ctx, chunk, _), preds in zip(pair_meta, predictions):
+        rule_results.setdefault(ctx.rule.id, []).append((chunk, preds))
+
+    threshold = settings.nli_threshold
+    drafts: list[FindingDraft] = []
+
+    for ctx in contexts:
+        rule = ctx.rule
+        chunk_preds = rule_results.get(rule.id, [])
+        if not chunk_preds:
+            drafts.append(_green(rule, "Релевантных условий в документе не найдено.", source="NLI"))
+            continue
+
+        risk_chunks = [
+            (chunk, p.get("entailment", 0.0), p.get("contradiction", 0.0))
+            for chunk, p in chunk_preds
+            if p.get("entailment", 0.0) >= threshold
+        ]
+        risk_chunks.sort(key=lambda x: x[1], reverse=True)
+
+        if not risk_chunks:
+            best_contra = max((p.get("contradiction", 0.0) for _, p in chunk_preds), default=0.0)
+            reason = (
+                "Условия договора соответствуют требованиям (риск опровергнут семантическим NLI-анализом)."
+                if best_contra > 0.5
+                else "Семантический NLI-анализ не выявил противоречий и нарушений по данному правилу."
+            )
+            drafts.append(_green(rule, reason, source="NLI"))
+            continue
+
+        seen_quotes: set[str] = set()
+        rule_drafts: list[FindingDraft] = []
+
+        for chunk, ent_score, _ in risk_chunks[:2]:
+            sentences = [s for s in _SENTENCE.split(chunk.content.replace("\n", " ")) if len(s) > 20] or [chunk.content]
+            query_stems = _stems(rule.semantic_query)
+            sentence = max(sentences, key=lambda s: len(_stems(s) & query_stems))
+
+            match = locate_quote(pages, sentence[:400], _page_hint(chunk))
+            if match.verified and match.text in seen_quotes:
+                continue
+            if match.verified:
+                seen_quotes.add(match.text)
+
+            severity = rule.severity if ent_score >= 0.75 else weaker(rule.severity, "YELLOW")
+
+            rule_drafts.append(FindingDraft(
+                rule=rule,
+                severity=severity,
+                title=rule.title,
+                short_description=_short(f"{rule.title}: обнаружен риск") or rule.description,
+                comment=f"{rule.description}. Семантический NLI-анализ подтвердил риск (уверенность {round(ent_score * 100)}%). "
+                        f"{rule.llm_prompt}",
+                counter_proposal=rule.legal_reference,
+                page_number=match.page_number or chunk.page_number,
+                clause=_clause_label(match.clause, chunk),
+                exact_quote=match.text if match.verified else sentence[:400],
+                highlights=match.highlights,
+                quote_verified=match.verified,
+                confidence=round(ent_score if match.verified else ent_score * 0.7, 2),
+                source="NLI",
+            ))
+
+        drafts.extend(rule_drafts or [_green(rule, "Нарушений не выявлено.", source="NLI")])
+
+    return drafts
+
