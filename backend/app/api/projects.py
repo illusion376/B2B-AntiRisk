@@ -94,7 +94,7 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: U
 
 
 @router.post("/{project_id}/files", response_model=UploadResult, status_code=status.HTTP_202_ACCEPTED,
-             summary="Загрузить один или несколько файлов в проект (PDF, TXT, ZIP, DOCX...)")
+             summary="Загрузить один или несколько файлов в проект (PDF, DOCX, ZIP, RAR, 7Z...)")
 def upload_files(
     project_id: uuid.UUID,
     request: Request,

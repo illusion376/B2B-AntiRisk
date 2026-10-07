@@ -6,12 +6,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app \
-    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
+    TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata \
+    OMP_THREAD_LIMIT=1
 
-# tesseract (rus+eng) — OCR сканов; libreoffice-writer — docx/doc/rtf -> pdf; шрифты с кириллицей
+# tesseract (rus+eng) — OCR сканов; libreoffice-writer — docx/doc/rtf -> pdf;
+# unar — распаковка RAR; шрифты с кириллицей.
+# OMP_THREAD_LIMIT=1: процессы tesseract идут параллельно, внутренние потоки OpenMP им только мешают
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng \
         libreoffice-writer-nogui \
+        unar \
         fonts-dejavu fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/*
 

@@ -1,7 +1,8 @@
 import type { ProcessingState, ProjectFile } from './types';
 
 export const MAX_FILE_BYTES = 100 * 1024 * 1024;
-export const SUPPORTED_FILE_TYPES = ['pdf', 'txt', 'zip', 'docx', 'doc', 'rtf', 'odt', 'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp'] as const;
+export const SUPPORTED_FILE_TYPES = ['pdf', 'txt', 'zip', 'rar', '7z', 'docx', 'doc', 'rtf', 'odt', 'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp'] as const;
+export const ARCHIVE_FILE_TYPES: readonly string[] = ['zip', 'rar', '7z'];
 export const UPLOAD_ACCEPT = SUPPORTED_FILE_TYPES.map(type => `.${type}`).join(',');
 
 export function fileType(name: string): string | null {
@@ -10,7 +11,7 @@ export function fileType(name: string): string | null {
 }
 
 export function validateUpload(file: Pick<File, 'name' | 'size'>, existing: ProjectFile[]): string | null {
-  if (!fileType(file.name)) return 'Поддерживаются PDF, TXT, ZIP, DOCX, DOC, RTF, ODT и изображения PNG, JPEG, TIFF, BMP.';
+  if (!fileType(file.name)) return 'Поддерживаются PDF, DOCX, DOC, RTF, ODT, TXT, изображения PNG, JPEG, TIFF, BMP и архивы ZIP, RAR, 7Z.';
   if (!file.name.trim() || file.name.length > 255) return 'Название файла должно содержать от 1 до 255 символов.';
   if (file.size === 0) return 'Файл пустой. Выберите файл с содержимым.';
   if (file.size > MAX_FILE_BYTES) return 'Размер файла превышает 100 МБ.';

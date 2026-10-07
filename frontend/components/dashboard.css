@@ -168,7 +168,7 @@
 .dashboard-shell .file-type-icon svg { width: 18px; height: 18px; }
 .dashboard-shell .file-type-icon small { font-size: 9px; }
 .dashboard-shell .file-type-icon.pdf { color: #b07367; background: #f8f1ed; }
-.dashboard-shell .file-type-icon.zip { color: #a59563; background: #f9f6eb; }
+.dashboard-shell .file-type-icon.zip, .dashboard-shell .file-type-icon.archive { color: #a59563; background: #f9f6eb; }
 .dashboard-shell .project-file-name h3 { font-size: .75rem; font-weight: 500; }
 .dashboard-shell .project-file-name p { font-size: .6875rem; color: #a0a0a0; }
 .dashboard-shell .file-processing { width: auto; }

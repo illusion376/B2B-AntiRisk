@@ -23,9 +23,11 @@ class Settings(BaseSettings):
     # --- OCR ---
     ocr_enabled: bool = True
     ocr_languages: str = "rus+eng"
-    ocr_dpi: int = 300
+    ocr_dpi: int = 300  # для векторных страниц; сканы рендерятся в своём родном разрешении
     ocr_threads: int = 4
     ocr_min_text_chars: int = 40  # меньше символов на странице -> считаем страницу сканом
+    # скан со штампом ЭП/колонтитулом: страница почти целиком картинка и текста меньше N -> OCR
+    ocr_scan_max_text_chars: int = 300
     tessdata_prefix: str | None = None
 
     # --- Конвертация docx/doc/rtf -> pdf ---

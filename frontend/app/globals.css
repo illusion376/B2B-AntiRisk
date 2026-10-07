@@ -619,7 +619,7 @@
   .file-type-icon { flex-shrink: 0; width: 45px; height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 5px; background: #f7eae6; color: #b25948; }
   .file-type-icon small { font-size: .6rem; font-weight: 600; letter-spacing: 1px; }
   .file-type-icon.txt { background: #f0f2eb; color: #6a765e; }
-  .file-type-icon.zip { background: #fbf3df; color: #a47c24; }
+  .file-type-icon.zip, .file-type-icon.archive { background: #fbf3df; color: #a47c24; }
   .project-file-name { min-width: 0; flex: 1; }
   .project-file-name h3 { font-size: .875rem; font-weight: 500; overflow-wrap: anywhere; line-height: 1.5; }
   .project-file-name p { color: #8a9181; font-size: .75rem; margin-top: 4px; line-height: 1.5; }

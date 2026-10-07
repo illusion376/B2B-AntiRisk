@@ -67,7 +67,7 @@ def refresh_analysis(db: Session, analysis_id: uuid.UUID) -> None:
         analysis.analysis_status = "FAILED"
         analysis.progress = 100
         analysis.error_message = (
-            "В загруженном файле нет документов поддерживаемых форматов (PDF, DOCX, DOC, RTF, изображения)"
+            "В загруженном файле нет документов, которые можно проверить (PDF, DOCX, DOC, RTF, изображения)"
         )
         analysis.completed_at = func.now()
         return

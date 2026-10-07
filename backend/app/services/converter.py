@@ -28,6 +28,8 @@ def to_pdf(source: Path, target: Path) -> Path:
         return source
     if ext in IMAGES:
         return _image_to_pdf(source, target)
+    if ext == ".txt":
+        return _text_to_pdf(source, target)
     if ext in NEEDS_CONVERSION:
         return _office_to_pdf(source, target)
     raise ConversionError(f"Формат {ext} не поддерживается")
@@ -55,27 +57,60 @@ def _image_to_pdf(source: Path, target: Path) -> Path:
     return target
 
 
-def _office_to_pdf(source: Path, target: Path) -> Path:
+def _soffice_convert(source: Path, out_dir: Path, target_format: str) -> Path:
     soffice = shutil.which(settings.soffice_bin)
     if not soffice:
-        raise ConversionError("LibreOffice не установлен — конвертация в PDF недоступна")
+        raise ConversionError("LibreOffice не установлен — конвертация документа недоступна")
+    # Отдельный профиль на каждый вызов: иначе параллельные конвертации блокируют друг друга
+    profile = (out_dir / "profile").as_uri()
+    cmd = [
+        soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore",
+        "--convert-to", target_format, "--outdir", str(out_dir), str(source),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=settings.convert_timeout_s, check=False)
+    except subprocess.TimeoutExpired as exc:
+        raise ConversionError("Превышено время конвертации документа") from exc
 
+    produced = out_dir / f"{source.stem}.{target_format}"
+    if proc.returncode != 0 or not produced.exists():
+        log.error("soffice failed: %s %s", proc.stdout[-500:], proc.stderr[-500:])
+        raise ConversionError("Не удалось сконвертировать документ (файл повреждён или защищён паролем)")
+    return produced
+
+
+def _office_to_pdf(source: Path, target: Path) -> Path:
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        # Отдельный профиль на каждый вызов: иначе параллельные конвертации блокируют друг друга
-        profile = (tmp_path / "profile").as_uri()
-        cmd = [
-            soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore",
-            "--convert-to", "pdf", "--outdir", str(tmp_path), str(source),
-        ]
-        try:
-            proc = subprocess.run(cmd, capture_output=True, timeout=settings.convert_timeout_s, check=False)
-        except subprocess.TimeoutExpired as exc:
-            raise ConversionError("Превышено время конвертации документа") from exc
+        produced = _soffice_convert(source, Path(tmp), "pdf")
+        shutil.move(str(produced), target)
+    return target
 
-        produced = tmp_path / f"{source.stem}.pdf"
-        if proc.returncode != 0 or not produced.exists():
-            log.error("soffice failed: %s %s", proc.stdout[-500:], proc.stderr[-500:])
-            raise ConversionError("Не удалось сконвертировать документ в PDF")
+
+# ---------- TXT ----------
+
+def decode_text(raw: bytes) -> str:
+    """Текст в UTF-8/UTF-16 или в одной из русских однобайтовых кодировок."""
+    for bom, encoding in ((b"\xef\xbb\xbf", "utf-8-sig"), (b"\xff\xfe", "utf-16"), (b"\xfe\xff", "utf-16")):
+        if raw.startswith(bom):
+            return raw.decode(encoding, errors="replace")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    from charset_normalizer import from_bytes
+
+    best = from_bytes(raw, cp_isolation=["cp1251", "koi8_r", "cp866"]).best()
+    return str(best) if best else raw.decode("cp1251", errors="replace")
+
+
+def _text_to_pdf(source: Path, target: Path) -> Path:
+    # LibreOffice читает .txt в системной кодировке и превращает cp1251 в мусор —
+    # перекодируем в UTF-8 с BOM, который он распознаёт однозначно
+    with tempfile.TemporaryDirectory() as tmp:
+        utf8 = Path(tmp) / f"{source.stem}.txt"
+        utf8.write_text(decode_text(source.read_bytes()), encoding="utf-8-sig")
+        out_dir = Path(tmp) / "out"
+        out_dir.mkdir()
+        produced = _soffice_convert(utf8, out_dir, "pdf")
         shutil.move(str(produced), target)
     return target

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, Info, LoaderCircle, RotateCw, Search, UploadCloud, X } from 'lucide-react';
 import type { DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
-import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
+import { ARCHIVE_FILE_TYPES, formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
@@ -74,7 +74,7 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }:
       <FileDropzone onUpload={onUpload} disabled={rerunning} onBusyChange={setUploading} />
       <div className="processing-notice">
         <Info size={17} />
-        <p>Документы проверяются на сервере. ZIP-архивы распаковываются, результаты доступны отдельно для каждого документа.</p>
+        <p>Документы проверяются на сервере. Архивы ZIP, RAR и 7Z распаковываются, результаты доступны отдельно для каждого документа.</p>
       </div>
       <div className="project-files-heading">
         <h2>Загруженные файлы <span>{project.files.length}</span></h2>
@@ -109,7 +109,7 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }:
       {filtered.length > 0 ? (
         <div className="project-file-list">
           {filtered.map(file => {
-            const isArchive = file.type === 'zip';
+            const isArchive = ARCHIVE_FILE_TYPES.includes(file.type);
             const Icon = isArchive ? Archive : FileText;
             const singleDocument = !isArchive && file.documents.length === 1 ? file.documents[0] : null;
             const processingState = singleDocument ?? file;
@@ -117,7 +117,7 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }:
             return (
               <div className="project-upload-group" key={file.id}>
                 <article className="project-file-row">
-                  <span className={`file-type-icon ${file.type}`}><Icon size={24} /><small>{file.type.toUpperCase()}</small></span>
+                  <span className={`file-type-icon ${file.type}${isArchive ? ' archive' : ''}`}><Icon size={24} /><small>{file.type.toUpperCase()}</small></span>
                   <div className="project-file-name">
                     <h3>{file.name}</h3>
                     <p>{formatFileSize(file.size)} · {formatProjectDate(file.addedAt)}{isArchive ? ` · Документов: ${file.documents.length}` : ''}</p>
@@ -245,7 +245,7 @@ function FileDropzone({ onUpload, disabled, onBusyChange }: FileDropzoneProps) {
         <div className="dropzone-copy">
           <h2>{uploading ? 'Загружаем файлы на сервер…' : dragging && !blocked ? 'Отпустите файлы для загрузки' : 'Загрузите документы'}</h2>
           <p>{uploading ? 'После загрузки проверка начнётся автоматически.' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
-          <small id="file-upload-help">PDF, TXT, DOCX, DOC, RTF, ODT, ZIP, PNG, JPEG, TIFF, BMP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
+          <small id="file-upload-help">PDF, DOCX, DOC, RTF, ODT, TXT, PNG, JPEG, TIFF, BMP, ZIP, RAR, 7Z · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
         </div>
         <input
           ref={input} type="file" hidden multiple disabled={blocked} accept={UPLOAD_ACCEPT} aria-label="Выберите документы"

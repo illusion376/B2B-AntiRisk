@@ -37,11 +37,12 @@ LLM и эмбеддинги — любой OpenAI-совместимый API, н
 ## Как это работает
 
 ```
-Проект ─ загрузка файлов (PDF, TXT, ZIP, DOCX… до 100 МБ) ─ API отвечает сразу 202 + содержимое ZIP
+Проект ─ загрузка файлов (PDF, DOCX, ZIP/RAR/7Z… до 100 МБ) ─ API отвечает сразу 202 + содержимое архива
         │
         ▼  Celery: одна задача на документ, параллельно
-Подготовка   docx/txt/doc/rtf → PDF (LibreOffice), изображения → PDF
-Распознавание текстовый слой PDF; страницы-сканы → Tesseract rus+eng, 300 DPI, в несколько потоков
+Подготовка   docx/doc/rtf/odt → PDF (LibreOffice), txt → UTF-8 → PDF, изображения → PDF
+Распознавание текстовый слой PDF; сканы (в т. ч. со штампом ЭП в текстовом слое) → Tesseract rus+eng
+             в родном разрешении скана, в несколько процессов
 Индексация   разделы («6. ОТВЕТСТВЕННОСТЬ СТОРОН») и пункты («6.2.»), чанки по пунктам, эмбеддинги → pgvector
 Проверка     для каждого включённого правила: гибридный поиск (вектор + полнотекстовый) → LLM (JSON) →
              сверка цитаты с текстом страницы → номер пункта и координаты подсветки
@@ -53,8 +54,8 @@ LLM и эмбеддинги — любой OpenAI-совместимый API, н
 | 50+ страниц без 504 | загрузка отвечает `202` сразу, обработка — в Celery; прогресс в `GET /api/projects/{id}` или SSE `/api/analyses/{id}/events` |
 | Новое правило без изменения кода | правила в БД, CRUD `/api/rules`; правилу из интерфейса достаточно названия, описания и степени риска |
 | UX для не-технических пользователей | API отдаёт готовые подписи («Распознавание текста · 52%», «Проверка документа завершена»), группы и фильтры как в интерфейсе |
-| OCR | Tesseract LSTM, rus+eng, 300 DPI; уверенность по странице и документу, качество зависит от исходника |
-| Время обработки | зависит от документа/LLM; правила параллельны (`LLM_CONCURRENCY`), OCR — в `OCR_THREADS` потоков |
+| OCR | Tesseract LSTM, rus+eng; 99,4% символов на тестовом скане 20 стр. (200 DPI, шум, перекос); уверенность по странице и документу |
+| Время обработки | OCR 20 страниц скана ≈ 22 с на 2 ядрах (`OCR_THREADS` процессов, `OMP_THREAD_LIMIT=1`); правила параллельны (`LLM_CONCURRENCY`) |
 | Цитирование | цитата сверяется с документом; у замечания — `clause`, `page`, `highlights` |
 | docker compose up --build | единая конфигурация backend, worker, frontend, БД и очереди |
 
@@ -123,6 +124,23 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8000/api/rules
 curl -OJ "http://localhost:8000/api/documents/<document_id>/report?mode=protocol&format=docx"
 ```
 
+### Форматы и архивы
+
+| Что загружено | Что происходит |
+|---|---|
+| PDF | постранично: текстовый слой или OCR; скан со штампом «Документ подписан ЭП» и битый текстовый слой тоже уходят в OCR |
+| DOCX, DOC, RTF, ODT | LibreOffice → PDF (номера страниц как в Word) |
+| TXT | кодировка определяется (UTF-8, cp1251, KOI8-R, cp866) → PDF |
+| PNG, JPEG, TIFF, BMP | → PDF → OCR |
+| ZIP, RAR, 7Z, вложенные до `MAX_ARCHIVE_DEPTH` | имена из Windows (cp866) исправляются; лимиты на число файлов и объём (zip-бомбы); `..` и абсолютные пути отбрасываются |
+
+Файл, который не будет проверен, не пропадает молча: он виден в проекте со статусом и причиной
+(«Формат не поддерживается», «Файл в архиве защищён паролем», «Вложенный архив повреждён»).
+Один зашифрованный файл не отклоняет весь архив — остальные документы обрабатываются.
+
+`OCR_THREADS` × `WORKER_CONCURRENCY` — сколько процессов Tesseract работает одновременно; лучше держать
+их произведение не больше числа ядер.
+
 ## Проверка работоспособности
 
 ```bash
@@ -142,7 +160,7 @@ database/
 backend/app/
   main.py, config.py, db.py, models.py, schemas.py, vocab.py (словарь фронтенда), celery_app.py, tasks.py
   api/        projects, analyses, documents, findings, rules, reports, history, system
-  services/   uploads, archive (ZIP), converter (→PDF), extraction (текст+OCR), structure (пункты, страницы),
+  services/   uploads, archive (ZIP, RAR, 7Z), converter (→PDF), extraction (текст+OCR), structure (пункты, страницы),
               embeddings, retrieval, llm, analyzer, quotes (проверка цитат), scoring, pipeline, search,
               pdf_tools, reports/ (DOCX, CSV, PDF с пометками, JSON)
 frontend/                     Next.js (см. frontend/README.md), Dockerfile + nginx.conf

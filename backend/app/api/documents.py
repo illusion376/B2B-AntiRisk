@@ -15,7 +15,7 @@ from app.models import DocumentPage, RiskFinding, User, visible_findings
 from app.schemas import (
     DocumentOut, DocumentUpdate, FindingGroup, FindingsResponse, OutlineSection, PageContent, SearchResponse,
 )
-from app.services import pdf_tools
+from app.services import pdf_tools, storage
 from app.services.audit import log_action
 from app.services.search import search_pages
 from app.services.pipeline import refresh_analysis
@@ -60,7 +60,7 @@ def rename_document(document_id: uuid.UUID, body: DocumentUpdate, db: Session = 
     if doc.relative_path:
         parent = str(Path(doc.relative_path).parent)
         doc.relative_path = doc.file_name if parent in ("", ".") else f"{parent}/{doc.file_name}"
-    if doc.analysis.file_type != "zip":  # одиночный файл: имя файла в проекте = имя документа
+    if f".{doc.analysis.file_type}" not in storage.ARCHIVES:  # одиночный файл: имя файла в проекте = имя документа
         doc.analysis.original_filename = doc.file_name
     log_action(db, user.id, "DOCUMENT_RENAMED", "document", doc.id, {"from": old_name, "to": doc.file_name})
     db.commit()

@@ -78,7 +78,7 @@ class ProjectFileOut(BaseModel):
     """Загруженный файл проекта (ProjectFile во фронтенде). Для ZIP — documents содержит файлы архива."""
     id: uuid.UUID  # = id анализа
     name: str
-    type: str  # pdf, txt, zip, docx...
+    type: str  # pdf, txt, zip, rar, 7z, docx...
     size: int | None
     added_at: datetime
     phase: Phase

@@ -49,7 +49,7 @@ def check_content_length(request: Request) -> None:
              summary="Загрузить документ или ZIP-архив на проверку")
 def create_analysis(
     request: Request,
-    file: UploadFile = File(..., description=".zip, .pdf, .txt, .docx, .doc, .rtf, .odt или изображение, до 100 МБ"),
+    file: UploadFile = File(..., description=".pdf, .docx, .doc, .rtf, .odt, .txt, изображение или архив .zip/.rar/.7z, до 100 МБ"),
     law_type: Literal["AUTO", "44-FZ", "223-FZ"] = Form("AUTO"),
     title: str | None = Form(None),
     project_id: uuid.UUID | None = Form(None),
