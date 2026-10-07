@@ -53,10 +53,22 @@ export function DocumentWorkspace({ rules, onManageRules, onEditRule, page, sele
     setPageInput(String(page));
     if (previousPage.current !== page) scrollRef.current?.scrollTo({ top: 0, left: 0 });
     previousPage.current = page;
-    thumbnailRef.current?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const thumbnail = thumbnailRef.current;
+    const thumbnails = thumbnail?.parentElement;
+    if (thumbnail && thumbnails) {
+      const top = thumbnails.scrollTop + thumbnail.getBoundingClientRect().top - thumbnails.getBoundingClientRect().top;
+      thumbnails.scrollTo({ top: top - (thumbnails.clientHeight - thumbnail.clientHeight) / 2 });
+    }
     if (selected !== null) {
       const element = scrollRef.current?.querySelector(`[data-finding="${selected}"]`);
-      element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const viewport = scrollRef.current;
+      if (element && viewport) {
+        const target = element.getBoundingClientRect();
+        const bounds = viewport.getBoundingClientRect();
+        if (target.top < bounds.top || target.bottom > bounds.bottom) {
+          viewport.scrollTo({ top: viewport.scrollTop + target.top - bounds.top - 16, behavior: 'smooth' });
+        }
+      }
     }
   }, [page, selected]);
   useEffect(() => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, BookOpenCheck, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Download, EllipsisVertical, FileText, Files, History, Info, Pencil, Search, ShieldCheck, SlidersHorizontal, X } from 'lucide-react';
+import { Bell, BookOpenCheck, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Download, EllipsisVertical, FileText, Files, History, Info, Menu, Pencil, Search, ShieldCheck, SlidersHorizontal, X } from 'lucide-react';
 import { documentInfo, findings, getPageSections, statusLabels } from '@/lib/mock-data';
 import type { CheckRule, Finding, HistoryEntry, Project, ProjectDraft, ProjectFile, ReviewStatus, RuleDraft, View } from '@/lib/types';
 import { downloadReport } from '@/lib/report';
@@ -12,6 +12,8 @@ import { applyRules, initialWorkspace, parseWorkspace, STORAGE_KEY } from '@/lib
 import { RulesManager, RuleEditor, DeleteRuleDialog } from './rules-manager';
 import { ProjectsView, NewProjectDialog } from './projects-view';
 import { ProjectFilesView } from './project-files';
+import { DashboardSidebar } from './dashboard-sidebar';
+import './dashboard.css';
 import { useWorkspaceNavigation } from './use-workspace-navigation';
 import { DEMO_PROJECT_ID, DEMO_FILE_ID, fileType, validateUpload } from '@/lib/projects';
 
@@ -31,6 +33,8 @@ export function Workspace() {
     { id: 'opened', title: 'Документ добавлен', detail: 'Проект контракта.pdf · 54 страницы', time: '12:34' },
   ]);
   const [search, setSearch] = useState('');
+  const [dashboardQuery, setDashboardQuery] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [popover, setPopover] = useState<'notifications' | 'profile' | 'document' | null>(null);
   const [modal, setModal] = useState<'rename' | 'info' | 'create-project' | null>(null);
@@ -71,7 +75,7 @@ export function Workspace() {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); searchRef.current?.focus(); }
-      if (e.key === 'Escape') { setPopover(null); setSearchOpen(false); }
+      if (e.key === 'Escape') { setPopover(null); setSearchOpen(false); setSidebarOpen(false); }
     };
     const click = (e: MouseEvent) => {
       if (!headerRef.current?.contains(e.target as Node)) { setPopover(null); setSearchOpen(false); }
@@ -152,18 +156,13 @@ export function Workspace() {
   }
   useWorkspaceTools({ page, activeFindings, statuses, navigatePage, selectFinding, changeStatus });
 
-  return <div className="app-shell">
+  const shell = <div className={`app-shell dashboard-shell${view === 'document' ? ' analysis-shell' : ''}`}>
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>К содержимому</a>
-    <div ref={headerRef}>
+    <DashboardSidebar view={view} projectCount={projects.length} ruleCount={rules.length} open={sidebarOpen} onClose={()=>setSidebarOpen(false)} onNavigate={setView} onCreate={()=>setModal('create-project')} onHelp={()=>setModal('info')} />
+    <div ref={headerRef} className="dashboard-header">
       <header className="topbar">
-        <button className="brand" onClick={() => setView('documents')} aria-label="B2B AntiRisk — все проекты">
-          <span className="traffic-logo" aria-hidden="true"><i /><i /><i /></span>
-          <span><strong>B2B AntiRisk</strong></span>
-        </button>
-        <nav className="main-nav" aria-label="Основная навигация">
-          {([{id:'documents',label:'Документы',Icon:Files},{id:'rules',label:'Правила',Icon:BookOpenCheck},{id:'history',label:'История',Icon:History}] as const).map(item => <button key={item.id} className={view === item.id || ((view === 'project' || view === 'document') && item.id === 'documents') ? 'active' : ''} aria-current={view === item.id || ((view === 'project' || view === 'document') && item.id === 'documents') ? 'page' : undefined} onClick={() => setView(item.id)}><item.Icon size={18} /><span>{item.label}</span></button>)}
-        </nav>
-        <div className="topbar-right">
+        <button className="dashboard-menu-button" aria-label="Открыть меню" aria-controls="workspace-sidebar" aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(!sidebarOpen)}><Menu size={20}/></button>
+        {view !== 'document' && <label className="dashboard-search"><Search size={15} aria-hidden="true"/><input ref={searchRef} aria-label="Поиск проектов и документов" placeholder="Поиск проектов и документов" value={dashboardQuery} onChange={event=>{setDashboardQuery(event.target.value);if(view!=='documents')setView('documents');}}/><kbd>⌘ K</kbd>{dashboardQuery && <button type="button" aria-label="Очистить поиск" onClick={()=>setDashboardQuery('')}><X size={13}/></button>}</label>}
           {view === 'document' && <div className="global-search">
             <Search size={17} aria-hidden="true" />
             <input ref={searchRef} placeholder="Поиск по документу..." aria-label="Поиск по документу" value={search} onFocus={() => setSearchOpen(true)} onChange={e => { setSearch(e.target.value); setSearchOpen(true); }} />
@@ -174,6 +173,16 @@ export function Workspace() {
               {searchResults.length === 0 && <p className="muted empty-small">Ничего не найдено. Попробуйте другое слово.</p>}
             </div>}
           </div>}
+        <span className="dashboard-topbar-caption">{view === 'document' ? 'ПРОВЕРКА ДОКУМЕНТА' : 'РАБОЧЕЕ ПРОСТРАНСТВО'} <span>/</span> {view === 'document' ? '02' : '01'}</span>
+
+        <button className="brand" onClick={() => setView('documents')} aria-label="B2B AntiRisk — все проекты">
+          <span className="traffic-logo" aria-hidden="true"><i /><i /><i /></span>
+          <span><strong>B2B AntiRisk</strong></span>
+        </button>
+        <nav className="main-nav" aria-label="Основная навигация">
+          {([{id:'documents',label:'Документы',Icon:Files},{id:'rules',label:'Правила',Icon:BookOpenCheck},{id:'history',label:'История',Icon:History}] as const).map(item => <button key={item.id} className={view === item.id || ((view === 'project' || view === 'document') && item.id === 'documents') ? 'active' : ''} aria-current={view === item.id || ((view === 'project' || view === 'document') && item.id === 'documents') ? 'page' : undefined} onClick={() => setView(item.id)}><item.Icon size={18} /><span>{item.label}</span></button>)}
+        </nav>
+        <div className="topbar-right">
           <div className="popover-anchor"><IconButton label="Уведомления" active={popover === 'notifications'} onClick={() => { setPopover(popover === 'notifications' ? null : 'notifications'); setUnread(false); }}><Bell size={20} />{unread && <span className="notification-dot" />}</IconButton>
             {popover === 'notifications' && <div className="popover notifications"><div className="popover-heading">Уведомления <CheckCheck size={16} /></div><button onClick={() => { openDemo(); setPopover(null); }}><span className="notification-icon"><ShieldCheck size={21} /></span><span><strong>Проверка завершена</strong><small>В проекте контракта замечаний: {activeFindings.filter(f=>f.severity!=='ok').length}.</small><em>4 октября, 12:36 · демо</em></span></button></div>}
           </div>
@@ -185,7 +194,7 @@ export function Workspace() {
       {(view === 'project' || view === 'document') && <div className="project-breadcrumb"><button onClick={()=>setView('documents')}><Files size={14} />Документы</button><ChevronRight size={13} />{view==='document'?<><button onClick={()=>setView('project')}>{activeProject.title}</button><ChevronRight size={13}/><span>Просмотр документа</span></>:<span>{activeProject.title}</span>}</div>}
       {view === 'document' && <section className="document-heading" aria-label="Текущий документ">
         <div className="document-icon"><FileText size={29} strokeWidth={1.4} /><span>PDF</span></div>
-        <div className="document-heading-text"><div className="document-title-line"><h1>{name}</h1><span className="demo-badge">Демо</span></div><p>54 страницы <span>·</span> Проверено по {activeFindings.length} правилам</p><small>4 октября, 12:36</small></div>
+        <div className="document-heading-text"><span className="analysis-eyebrow">РЕЗУЛЬТАТЫ АНАЛИЗА</span><div className="document-title-line"><h1>{name}</h1><span className="demo-badge">Демо</span></div><p>54 страницы <span>·</span> Проверено по {activeFindings.length} правилам</p><small>4 октября, 12:36</small></div>
         <div className="document-actions"><button className="primary-button" onClick={exportReport}><Download size={17} /><span>Скачать отчёт</span></button><div className="popover-anchor"><IconButton label="Действия с документом" className="outlined" onClick={() => setPopover(popover === 'document' ? null : 'document')}><EllipsisVertical size={20} /></IconButton>
           {popover === 'document' && <div className="popover document-menu"><button onClick={() => { setDraftName(name.replace(/\.pdf$/i, '')); setModal('rename'); setPopover(null); }}><Pencil size={16} />Переименовать</button><button onClick={() => { setModal('info'); setPopover(null); }}><Info size={16} />О документе</button></div>}
         </div></div>
@@ -193,7 +202,7 @@ export function Workspace() {
     </div>
 
     <main id="main-content" className="main-content" tabIndex={-1}>
-      {view === 'documents' && <ProjectsView projects={projects} onOpen={openProject} onCreate={()=>setModal('create-project')} riskCount={activeFindings.filter(f=>f.severity!=='ok').length} checkedCount={activeFindings.length} />}
+      {view === 'documents' && <ProjectsView projects={projects} onOpen={openProject} onCreate={()=>setModal('create-project')} riskCount={activeFindings.filter(f=>f.severity!=='ok').length} checkedCount={activeFindings.length} query={dashboardQuery} onQueryChange={setDashboardQuery} />}
       {view === 'project' && <ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDemo={openDemo} />}
       {view === 'document' && <DocumentWorkspace page={page} selected={selected} search={search} findings={activeFindings} statuses={statuses} onPage={navigatePage} onSelect={selectFinding} onStatus={changeStatus} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})} />}
       {view === 'rules' && <RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule} />}
@@ -209,4 +218,5 @@ export function Workspace() {
     {modal === 'rename' && <Modal title="Переименовать документ" onClose={() => setModal(null)}><form onSubmit={e => { e.preventDefault(); const value = draftName.trim().replace(/\.pdf$/i, ''); if (!value) return; setWorkspace(previous=>({...previous,projects:previous.projects.map(project=>project.id===DEMO_PROJECT_ID?{...project,updatedAt:Date.now(),files:project.files.map(file=>file.id===DEMO_FILE_ID?{...file,name:`${value}.pdf`}:file)}:project)})); addHistory('Документ переименован', `${value}.pdf`); setModal(null); setToast('Название документа изменено'); }}><label className="form-label" htmlFor="document-name">Название документа</label><div className="name-input"><input id="document-name" autoFocus required maxLength={100} value={draftName} onChange={e => setDraftName(e.target.value)} /><span>.pdf</span></div><div className="modal-actions"><button type="button" className="secondary-button" onClick={() => setModal(null)}>Отмена</button><button className="primary-button" disabled={!draftName.trim()}>Сохранить</button></div></form></Modal>}
     {modal === 'info' && <Modal title="О рабочем пространстве" onClose={() => setModal(null)}><div className="info-content"><div className="info-file"><FileText size={34} /><div><strong>{name}</strong><span>54 страницы · демонстрационный пример</span></div></div><p>B2B AntiRisk — рабочее пространство для проектов и проверки документов. Текст документа и результаты проверки — тестовые данные.</p><p>Нажмите на замечание, чтобы перейти к нужному фрагменту. В меню замечания можно посмотреть подробности и изменить статус. Поиск работает по тексту всех страниц.</p><div className="info-tip"><SlidersHorizontal size={20} /><span>Проекты, сведения о файлах, правила и статусы сохраняются в текущем браузере. Содержимое файлов не отправляется на сервер. Обработка PDF, TXT и ZIP имитируется; результаты анализа не формируются. История доступна в текущей сессии.</span></div></div><div className="modal-actions"><button className="primary-button" onClick={() => setModal(null)}>Понятно</button></div></Modal>}
   </div>;
+  return <div className={`dashboard-canvas${view === 'document' ? ' analysis-canvas' : ''}`}>{shell}</div>;
 }

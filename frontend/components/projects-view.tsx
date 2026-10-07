@@ -1,22 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import {
-  ArrowDownWideNarrow,
-  ArrowUpRight,
-  FileText,
-  FolderOpen,
-  LoaderCircle,
-  Plus,
-  Search,
-  ShieldAlert,
-  X,
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, FileText, FolderOpen, Plus } from 'lucide-react';
 import type { Project, ProjectDraft } from '@/lib/types';
 import { DEMO_PROJECT_ID, formatProjectDate, getProcessing } from '@/lib/projects';
 import { Modal } from './ui';
 import { useProcessingClock } from './use-processing-clock';
-import './project-enhancements.css';
 
 interface ProjectsViewProps {
   projects: Project[];
@@ -24,165 +13,44 @@ interface ProjectsViewProps {
   onCreate: () => void;
   riskCount: number;
   checkedCount: number;
+  query: string;
+  onQueryChange: (query: string) => void;
 }
 
-type ProjectSort = 'recent' | 'name';
+type ProjectFilter = 'all' | 'processing' | 'ready' | 'empty';
+const PAGE_SIZE = 8;
 
-export function ProjectsView({
-  projects,
-  onOpen,
-  onCreate,
-  riskCount,
-  checkedCount,
-}: ProjectsViewProps) {
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<ProjectSort>('recent');
-  const files = useMemo(() => projects.flatMap(project => project.files), [projects]);
+export function ProjectsView({ projects,onOpen,onCreate,riskCount,checkedCount,query,onQueryChange }: ProjectsViewProps) {
+  const [sort,setSort] = useState('recent');
+  const [filter,setFilter] = useState<ProjectFilter>('all');
+  const [page,setPage] = useState(0);
+  const files = useMemo(()=>projects.flatMap(project=>project.files),[projects]);
   const now = useProcessingClock(files);
-  const pendingCount = files.filter(file => getProcessing(file, now).phase !== 'ready').length;
   const normalizedQuery = query.trim().toLocaleLowerCase('ru');
-  const filtered = projects
-    .filter(project => [project.title, project.description, ...project.files.map(file => file.name)]
-      .join(' ')
-      .toLocaleLowerCase('ru')
-      .includes(normalizedQuery))
-    .sort((left, right) => sort === 'recent'
-      ? right.updatedAt - left.updatedAt
-      : left.title.localeCompare(right.title, 'ru', { numeric: true }));
+  const projectState = (project:Project): Exclude<ProjectFilter,'all'> => !project.files.length ? 'empty' : project.files.some(file=>getProcessing(file,now).phase!=='ready') ? 'processing' : 'ready';
+  const filtered = projects.filter(project=>(filter==='all' || projectState(project)===filter) && [project.title,project.description,...project.files.map(file=>file.name)].join(' ').toLocaleLowerCase('ru').includes(normalizedQuery)).sort((a,b)=>sort==='recent'?b.updatedAt-a.updatedAt:a.title.localeCompare(b.title,'ru',{numeric:true}));
+  const pageCount = Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+  const currentPage = Math.min(page,pageCount-1);
+  const visible = filtered.slice(currentPage*PAGE_SIZE,(currentPage+1)*PAGE_SIZE);
+  useEffect(()=>setPage(0),[query,filter,sort]);
+  const filters: {id:ProjectFilter;label:string;count:number}[] = [
+    {id:'all',label:'Все проекты',count:projects.length},
+    {id:'processing',label:'В обработке',count:projects.filter(project=>projectState(project)==='processing').length},
+    {id:'ready',label:'Готовые',count:projects.filter(project=>projectState(project)==='ready').length},
+    {id:'empty',label:'Без файлов',count:projects.filter(project=>projectState(project)==='empty').length},
+  ];
 
-  return (
-    <section className="secondary-view projects-view">
-      <div className="view-title">
-        <div>
-          <span className="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span>
-          <h1>Документы</h1>
-          <p>Все проекты и результаты проверки в одном месте.</p>
-        </div>
-        <button className="primary-button" onClick={onCreate}>
-          <Plus size={18} />Новый проект
-        </button>
-      </div>
-
-      <dl className="workspace-summary" aria-label="Сводка рабочего пространства">
-        <div className="workspace-summary-card">
-          <dt><span className="summary-icon"><FolderOpen size={19} /></span>Проекты</dt>
-          <dd>{projects.length}</dd>
-          <dd className="summary-caption">В рабочем пространстве</dd>
-        </div>
-        <div className="workspace-summary-card">
-          <dt><span className="summary-icon"><FileText size={19} /></span>Документы</dt>
-          <dd>{files.length}</dd>
-          <dd className="summary-caption">Во всех проектах</dd>
-        </div>
-        <div className={`workspace-summary-card ${pendingCount ? 'summary-processing' : ''}`}>
-          <dt><span className="summary-icon"><LoaderCircle size={19} className={pendingCount ? 'spin' : ''} /></span>В обработке</dt>
-          <dd>{pendingCount}</dd>
-          <dd className="summary-caption">{pendingCount ? 'Демонстрационная обработка' : 'Нет файлов в очереди'}</dd>
-        </div>
-        <div className={`workspace-summary-card ${checkedCount && riskCount ? 'summary-attention' : ''}`}>
-          <dt><span className="summary-icon"><ShieldAlert size={19} /></span>Замечания</dt>
-          <dd>{checkedCount ? riskCount : '—'}</dd>
-          <dd className="summary-caption">{checkedCount ? 'В демонстрационном документе' : 'Нет результатов проверки'}</dd>
-        </div>
-      </dl>
-
-      <div className="projects-toolbar">
-        <div className="projects-toolbar-title">
-          <h2>Все проекты <span>{projects.length}</span></h2>
-          <p>Выберите проект, чтобы продолжить работу</p>
-        </div>
-        <div className="project-list-controls">
-          <div className="field-search project-search">
-            <Search size={17} aria-hidden="true" />
-            <input
-              aria-label="Поиск по названию, описанию проекта или документу"
-              placeholder="Найти проект или документ"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-            />
-            {query && (
-              <button type="button" className="search-clear" aria-label="Очистить поиск проектов" onClick={() => setQuery('')}>
-                <X size={16} />
-              </button>
-            )}
-          </div>
-          <label className="project-sort">
-            <ArrowDownWideNarrow size={17} aria-hidden="true" />
-            <span className="sr-only">Сортировка проектов</span>
-            <select value={sort} onChange={event => setSort(event.target.value as ProjectSort)}>
-              <option value="recent">Сначала новые</option>
-              <option value="name">По названию</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      {normalizedQuery && (
-        <p className="project-search-result" role="status">Найдено проектов: {filtered.length} из {projects.length}</p>
-      )}
-
-      {filtered.length > 0 ? (
-        <div className="projects-grid">
-          {filtered.map(project => {
-            const pending = project.files.filter(file => getProcessing(file, now).phase !== 'ready').length;
-            const first = project.files[0];
-            const isDemo = project.id === DEMO_PROJECT_ID;
-
-            return (
-              <button key={project.id} className="project-card" onClick={() => onOpen(project)} aria-label={`Открыть проект «${project.title}»`}>
-                <div className="project-card-top">
-                  <span className="project-folder"><FolderOpen size={26} strokeWidth={1.6} /></span>
-                  <span className="project-type">{isDemo ? 'Демопроект' : 'Проект'}</span>
-                  <ArrowUpRight size={18} className="project-card-arrow" aria-hidden="true" />
-                </div>
-                <h3>{project.title}</h3>
-                <p>{project.description || 'Добавьте документы для проверки.'}</p>
-                <div className="project-document">
-                  <FileText size={20} />
-                  <span>
-                    <strong>{first?.name ?? 'Пока нет документов'}</strong>
-                    <small>{first ? `Файлов в проекте: ${project.files.length}` : 'PDF, TXT или ZIP'}</small>
-                  </span>
-                </div>
-                <div className="project-card-footer">
-                  <span className={pending ? 'project-processing' : isDemo && checkedCount && riskCount ? 'project-risk' : 'project-neutral'}>
-                    {pending ? (
-                      <><LoaderCircle size={13} className="spin" />В обработке: {pending}</>
-                    ) : isDemo ? (
-                      !checkedCount ? 'Нет результатов проверки' : riskCount ? `Замечаний: ${riskCount}` : 'Без замечаний'
-                    ) : first ? 'Обработано · демо' : 'Ожидает файлов'}
-                  </span>
-                  <time dateTime={new Date(project.updatedAt).toISOString()} title="Последнее обновление проекта">
-                    {formatProjectDate(project.updatedAt)}
-                  </time>
-                </div>
-              </button>
-            );
-          })}
-          {!normalizedQuery && (
-            <button className="project-create-card" onClick={onCreate}>
-              <span><Plus size={25} strokeWidth={1.5} /></span>
-              <strong>Новый проект</strong>
-              <p>Соберите документы одной сделки<br />и работайте с ними в одном месте</p>
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="empty-state projects-empty-state">
-          <span className="project-empty-icon"><FolderOpen size={32} strokeWidth={1.5} /></span>
-          <h3>{projects.length ? 'По вашему запросу ничего не найдено' : 'Начните с первого проекта'}</h3>
-          <p>{projects.length
-            ? 'Попробуйте другое название, описание или имя документа.'
-            : 'Создайте проект и добавьте документы, с которыми хотите работать.'}</p>
-          {projects.length ? (
-            <button className="secondary-button" onClick={() => setQuery('')}>Сбросить поиск</button>
-          ) : (
-            <button className="primary-button" onClick={onCreate}><Plus size={17} />Создать проект</button>
-          )}
-        </div>
-      )}
-    </section>
-  );
+  return <section className="secondary-view projects-view">
+    <div className="view-title"><div><span className="eyebrow">ОБЗОР / ДОКУМЕНТЫ</span><h1>Рабочее пространство</h1><p>Проекты, документы и проверка рисков — в одном месте.</p></div><button className="primary-button" onClick={onCreate}><Plus size={16}/>Новый проект</button></div>
+    <div className="dashboard-list-toolbar"><div className="dashboard-filter-tabs" role="group" aria-label="Фильтр проектов по статусу">{filters.map(item=><button key={item.id} aria-pressed={filter===item.id} onClick={()=>setFilter(item.id)}>{item.label}<span>{item.count}</span></button>)}</div><label className="dashboard-sort"><ArrowDownWideNarrow size={14}/><span className="sr-only">Сортировка проектов</span><select value={sort} onChange={event=>setSort(event.target.value)}><option value="recent">Сначала новые</option><option value="name">По названию</option></select></label></div>
+    {normalizedQuery && <p className="dashboard-search-result" role="status">По запросу «{query.trim()}» найдено: {filtered.length}<button onClick={()=>onQueryChange('')}>Сбросить поиск</button></p>}
+    {filtered.length ? <><div className="dashboard-table-scroll"><table className="dashboard-project-table"><thead><tr><th scope="col">Проект</th><th scope="col">Статус</th><th scope="col">Файлы</th><th scope="col">Замечания</th><th scope="col">Обновлён</th><th scope="col"><span className="sr-only">Открыть</span></th></tr></thead><tbody>{visible.map(project=>{
+      const state=projectState(project);
+      const isDemo=project.id===DEMO_PROJECT_ID;
+      return <tr key={project.id}><td><button className="dashboard-project-name" onClick={()=>onOpen(project)}><span className="dashboard-file-symbol"><FolderOpen size={17}/></span><span><strong>{project.title}</strong><small>{project.description || 'Документы проекта'}</small></span></button></td><td><span className={`dashboard-state ${state}`}><i/>{state==='processing'?'В обработке':state==='empty'?'Ожидает файлов':isDemo?'Демопроект':'Готово · демо'}</span></td><td><span className="dashboard-file-count"><FileText size={13}/>{project.files.length}</span></td><td><span className={isDemo && checkedCount && riskCount?'dashboard-risk-value':''}>{isDemo && checkedCount?riskCount:'—'}</span></td><td><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td><td><button className="dashboard-row-action" aria-label={`Открыть проект «${project.title}»`} onClick={()=>onOpen(project)}><ArrowUpRight size={16}/></button></td></tr>;
+    })}</tbody></table></div><div className="dashboard-table-footer"><span>{currentPage*PAGE_SIZE+1}–{Math.min((currentPage+1)*PAGE_SIZE,filtered.length)} из {filtered.length} проектов</span><nav aria-label="Страницы списка проектов"><button aria-label="Предыдущая страница" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}><ChevronLeft size={15}/></button><span aria-current="page">{currentPage+1}</span><small>/ {pageCount}</small><button aria-label="Следующая страница" disabled={currentPage+1>=pageCount} onClick={()=>setPage(currentPage+1)}><ChevronRight size={15}/></button></nav></div></> : <div className="empty-state dashboard-empty"><FolderOpen size={29}/><h3>Проекты не найдены</h3><p>Измените поисковый запрос или выбранный статус.</p><button className="secondary-button" onClick={()=>{onQueryChange('');setFilter('all');}}>Сбросить фильтры</button></div>}
+    <div className="dashboard-list-note"><span className="workspace-online-dot"/>Изменения сохраняются в этом браузере<span>PDF / TXT / ZIP</span></div>
+  </section>;
 }
 
 interface NewProjectDialogProps {
