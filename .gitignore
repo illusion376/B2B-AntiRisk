@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Данные и загрузки
+storage/
+backend/storage/
+backend/tests/.storage/
+
+# Переменные окружения и секреты
+.env
+.env.local
+
+# IDE и системные файлы
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,37 @@
+/* Рабочая область документа: контекст выбранного замечания, счётчики фильтров, прогресс просмотра. */
+@layer components {
+  .selected-finding-context { display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-height: 44px; padding: 5px 9px 5px 13px; border-bottom: 1px solid var(--line); background: #fdfcfb; border-left: 3px solid #d7d9d1; }
+  .selected-finding-context.critical { border-left-color: #e2322c; background: #fffaf8; }
+  .selected-finding-context.warning { border-left-color: #f2ac00; background: #fffcf3; }
+  .selected-finding-context.low, .selected-finding-context.ok { border-left-color: var(--green); background: #f8fbf8; }
+  .selected-finding-context .risk-dot { flex-shrink: 0; }
+  .selected-finding-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 3px 0; text-align: left; }
+  .selected-finding-title > span { font-size: .6875rem; color: #7c8471; }
+  .selected-finding-title > strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8125rem; font-weight: 600; }
+  .selected-finding-title:hover > strong { color: var(--red); }
+  .return-to-findings { display: none; width: 32px; height: 32px; align-items: center; justify-content: center; color: #6f7865; border-radius: 4px; }
+  .return-to-findings:hover { background: #f0f1ec; }
+
+  .filter-count { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: .6875rem; font-weight: 600; }
+  .filter-summary-note { color: #8e9583; }
+
+  .finding-mobile-meta { display: none; margin-top: 3px; font-size: .6875rem; color: #7c8471; }
+
+  .review-progress-wrap { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: #6f7865; }
+}
+
+@layer responsive {
+  @media (max-width: 960px) {
+    .return-to-findings { display: inline-flex; }
+  }
+  @media (max-width: 700px) {
+    /* Пункт и страница переезжают под заголовок замечания. Ячейки не убираем (display: none
+       сдвинул бы остальные ячейки относительно <col>), а схлопываем до нулевой ширины */
+    .finding-mobile-meta { display: block; }
+    .col-clause, .col-page { width: 0; }
+    .findings-table th:nth-child(4), .findings-table td:nth-child(4),
+    .findings-table th:nth-child(5), .findings-table td:nth-child(5) {
+      display: table-cell; width: 0; padding: 0; border: 0; overflow: hidden; font-size: 0; visibility: hidden;
+    }
+  }
+}

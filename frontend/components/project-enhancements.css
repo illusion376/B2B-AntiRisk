@@ -1,0 +1,66 @@
+/* Раздел «Документы» и файлы проекта: сводка, поиск, сортировка, фильтры статуса. */
+@layer components {
+  .workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 26px 0 0; }
+  .workspace-summary-card { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 2px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+  .workspace-summary-card dt { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; font-size: .8125rem; color: #626b5d; margin-bottom: 8px; }
+  .workspace-summary-card dd { margin: 0; }
+  .workspace-summary-card dd:not(.summary-caption) { font-size: 1.5rem; font-weight: 600; line-height: 1.1; color: var(--text); }
+  .summary-caption { grid-column: 1 / -1; font-size: .75rem; color: #7c8471; }
+  .summary-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: #f2f3ee; color: #6f7865; }
+  .summary-processing .summary-icon { background: #fbf3dc; color: #9a7318; }
+  .summary-attention { border-color: #ecc9c2; }
+  .summary-attention .summary-icon { background: var(--red-light); color: var(--red); }
+  .summary-attention dd:not(.summary-caption) { color: var(--red); }
+
+  .projects-toolbar-title { min-width: 0; }
+  .projects-toolbar-title p { margin-top: 5px; font-size: .8125rem; color: #626b5d; }
+  .project-list-controls { display: flex; align-items: center; gap: 10px; }
+  .projects-toolbar .project-search { width: 300px; }
+  .project-search { position: relative; }
+  .search-clear { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; margin-right: -6px; color: #838b78; border-radius: 4px; }
+  .search-clear:hover { background: #f0f1ec; color: var(--text); }
+  .project-sort { position: relative; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line); background: #fff; border-radius: 5px; color: #838b78; }
+  .project-sort:focus-within { border-color: var(--red); box-shadow: 0 0 0 3px #bc302a14; }
+  .project-sort select { appearance: none; border: 0; background: none; padding: 10px 2px; font-size: .8125rem; cursor: pointer; }
+  .project-sort select:focus { outline: 0; }
+  .project-search-result { margin: -6px 0 14px; font-size: .8125rem; color: #626b5d; }
+
+  .project-card-top .project-type { margin-right: auto; }
+  .project-card-arrow { color: #b5b9ad; transition: color .14s, transform .14s; }
+  .project-card:hover .project-card-arrow, .project-card:focus-visible .project-card-arrow { color: var(--red); transform: translate(2px, -2px); }
+
+  .project-create-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 236px; padding: 23px; text-align: center; border: 1px dashed #d4d6cd; border-radius: 8px; background: transparent; color: #6f7865; }
+  .project-create-card > span { width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #fff; border: 1px solid var(--line); color: var(--red); }
+  .project-create-card strong { font-size: .9375rem; font-weight: 600; color: var(--text); }
+  .project-create-card p { font-size: .8125rem; line-height: 1.5; color: #626b5d; }
+  .project-create-card:hover { border-color: #d2a39b; background: #fffaf8; }
+
+  .projects-empty-state { border: 1px dashed #d4d6cd; border-radius: 8px; background: #fff; }
+  .project-empty-icon { width: 64px; height: 64px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #f2f3ee; color: #8d9580; }
+  .projects-empty-state .primary-button { margin-top: 20px; }
+
+  .project-files-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+  .project-files-toolbar .project-search { width: 280px; }
+  .file-status-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .file-status-filters button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; font-size: .8125rem; color: #626b5d; border: 1px solid var(--line); background: #fff; }
+  .file-status-filters button > span { padding: 1px 6px; border-radius: 4px; background: #f0f1ec; color: #7c8471; font-size: .75rem; }
+  .file-status-filters button:hover { border-color: #cfd2c7; }
+  .file-status-filters button[aria-pressed='true'] { border-color: #e3b4ac; background: var(--red-light); color: var(--red); }
+  .file-status-filters button[aria-pressed='true'] > span { background: #fff; color: var(--red); }
+}
+
+@layer responsive {
+  @media (max-width: 1100px) {
+    .workspace-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 700px) {
+    .workspace-summary { gap: 10px; margin-top: 20px; }
+    .workspace-summary-card { padding: 13px 14px; }
+    .workspace-summary-card dd:not(.summary-caption) { font-size: 1.25rem; }
+    .project-list-controls { flex-direction: column; align-items: stretch; }
+    .projects-toolbar .project-search, .project-files-toolbar .project-search { width: 100%; }
+    .project-sort select { width: 100%; }
+    .project-create-card { min-height: 160px; }
+    .project-files-toolbar { flex-direction: column; align-items: stretch; }
+  }
+}
