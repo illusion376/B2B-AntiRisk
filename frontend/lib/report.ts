@@ -1,34 +1,28 @@
-import { documentInfo, statusLabels } from './mock-data';
-import type { Finding, ReviewStatus } from './types';
-
-function quoteCell(value: string | number): string {
-  const text = String(value);
-  // CSV quoting does not stop spreadsheet formulas. Keep user-controlled cells
-  // as text, including formulas concealed behind leading whitespace or controls.
-  const formulaLike = typeof value === 'string' && /^(?:[\s\u0000-\u001f]*[=+\-@]|[\t\r\n])/u.test(text);
-  const safeText = formulaLike ? `'${text}` : text;
-  return `"${safeText.replaceAll('"', '""')}"`;
+/** Decode a server-supplied attachment name without trusting path components. */
+export function reportFilename(disposition: string | null, fallback = 'report.docx'): string {
+  let name: string | undefined;
+  const encoded = disposition?.match(/(?:^|;)\s*filename\*\s*=\s*(?:"?UTF-8'[^']*')([^;\"]+)/i);
+  if (encoded) {
+    try { name = decodeURIComponent(encoded[1].trim()); } catch { /* Try the ordinary filename. */ }
+  }
+  if (!name) {
+    const quoted = disposition?.match(/(?:^|;)\s*filename\s*=\s*"((?:\\.|[^"\\])*)"/i);
+    const plain = disposition?.match(/(?:^|;)\s*filename\s*=\s*([^;]+)/i);
+    name = quoted ? quoted[1].replace(/\\(.)/g, '$1') : plain?.[1].trim();
+  }
+  const safe = (name ?? fallback).split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return safe && safe !== '.' && safe !== '..' ? safe : fallback;
 }
 
-export function buildReportCsv(name: string, items: Finding[], statuses: Record<number, ReviewStatus>): string {
-  const rows = [
-    ['Документ', name], ['Режим', 'Демонстрационные данные; автоматический анализ не выполнялся'],
-    ['Страниц', documentInfo.pages], [],
-    ['№', 'Уровень', 'Замечание', 'Описание', 'Пункт', 'Страница', 'Статус', 'Комментарий к проверке'],
-    ...items.map(f => [f.id, {critical:'Критический',warning:'Требует внимания',low:'Низкий риск',ok:'Без замечаний'}[f.severity], f.title, f.description, f.clause, f.page, statusLabels[statuses[f.id] ?? 'unseen'], f.recommendation]),
-  ];
-  // UTF-8 BOM and semicolons keep Russian text readable in spreadsheet applications.
-  return `\uFEFF${rows.map(row => row.map(quoteCell).join(';')).join('\r\n')}`;
-}
-
-export function downloadReport(name: string, items: Finding[], statuses: Record<number, ReviewStatus>) {
-  const blob = new Blob([buildReportCsv(name, items, statuses)], { type: 'text/csv;charset=utf-8' });
+export function saveDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${name.replace(/\.pdf$/i, '')} — отчёт.csv`;
+  link.download = filename;
   document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try { link.click(); } finally {
+    link.remove();
+    // Keep the URL alive while the browser starts consuming the download.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }

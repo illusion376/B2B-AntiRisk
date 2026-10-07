@@ -7,7 +7,7 @@ export function IconButton({ label, children, active, className = '', ...props }
   return <button type="button" aria-label={label} title={label} className={`icon-button ${active ? 'is-active' : ''} ${className}`} {...props}>{children}</button>;
 }
 
-export function Modal({ title, children, onClose, wide = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+export function Modal({ title, children, onClose, wide = false, closeDisabled = false }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; closeDisabled?: boolean }) {
   const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef(onClose);
@@ -19,12 +19,12 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
     dialog?.addEventListener('close', close);
     return () => { dialog?.removeEventListener('close', close); dialog?.close(); };
   }, []);
-  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} onClick={e => {
-    if (e.target !== e.currentTarget) return;
+  return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}`} onCancel={e => { if (closeDisabled) e.preventDefault(); }} onClick={e => {
+    if (closeDisabled || e.target !== e.currentTarget) return;
     const bounds = e.currentTarget.getBoundingClientRect();
     if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) onClose();
   }} aria-labelledby={titleId}>
-    <div className="modal-header"><h2 id={titleId}>{title}</h2><IconButton label="Закрыть окно" onClick={onClose}><X size={20} /></IconButton></div>
+    <div className="modal-header"><h2 id={titleId}>{title}</h2><IconButton label="Закрыть окно" disabled={closeDisabled} onClick={onClose}><X size={20} /></IconButton></div>
     {children}
   </dialog>;
 }

@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { defaultRoute, normalizeRoute, parseRoute, serializeRoute, type WorkspaceRoute } from '@/lib/navigation';
 
-export function useWorkspaceNavigation(totalPages: number) {
-  const [route, setRoute] = useState<WorkspaceRoute>(defaultRoute);
+export function useWorkspaceNavigation(totalPages?: number) {
+  const [route, setRoute] = useState<WorkspaceRoute>({ ...defaultRoute });
   const current = useRef(route);
 
   useEffect(() => {
     const restore = () => {
-      current.current = parseRoute(window.location.hash, totalPages);
-      setRoute(current.current);
+      const next = parseRoute(window.location.hash, totalPages);
+      const hash = serializeRoute(next);
+      if (window.location.hash !== hash) window.history.replaceState(window.history.state, '', hash);
+      current.current = next;
+      setRoute(next);
     };
     restore();
     window.addEventListener('hashchange', restore);
@@ -25,7 +28,7 @@ export function useWorkspaceNavigation(totalPages: number) {
     const next = normalizeRoute({ ...current.current, ...patch }, totalPages);
     const hash = serializeRoute(next);
     if (window.location.hash !== hash) {
-      window.history[replace ? 'replaceState' : 'pushState'](null, '', hash);
+      window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', hash);
     }
     current.current = next;
     setRoute(next);

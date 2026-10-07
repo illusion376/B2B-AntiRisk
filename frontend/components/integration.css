@@ -1,0 +1,14 @@
+.dashboard-shell .api-error { display:flex; align-items:center; gap:12px; margin:16px 24px; padding:14px 18px; color:#922b29; background:#fff0ed; border:1px solid #efcbc5; border-radius:8px; }
+.dashboard-shell .api-error>span { flex:1; overflow-wrap:anywhere; }
+.dashboard-shell .api-state { min-height:240px; padding:40px 24px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; text-align:center; }
+.dashboard-shell .report-description { color:#70766f; line-height:1.6; margin:10px 0 22px; }
+.dashboard-shell .report-option { display:flex; gap:10px; align-items:center; margin-top:22px; }
+.dashboard-shell .modal .form-select { width:100%; }
+.dashboard-shell .spin { animation:api-spin 1s linear infinite; }
+.dashboard-shell .timeline time { white-space:nowrap; }
+@keyframes api-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .dashboard-shell .spin { animation:none; } }
+@media (max-width:640px) { .dashboard-shell .api-error { flex-wrap:wrap; margin:12px; } .dashboard-shell .timeline time { white-space:normal; } }
+.dashboard-shell.analysis-shell .main-content { flex-direction:column; }
+.dashboard-shell.analysis-shell .api-error { flex-shrink:0; }
+.dashboard-shell.analysis-shell .api-state { flex:1; }

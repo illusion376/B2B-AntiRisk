@@ -12,7 +12,15 @@ interface Tool {
   execute: (input: unknown) => unknown;
 }
 interface ModelDocument extends Document { modelContext?: { registerTool: (tool: Tool, options?: { signal?: AbortSignal }) => void | Promise<void> } }
-type State = { page: number; activeFindings: Finding[]; statuses: Record<number, ReviewStatus>; navigatePage: (page: number) => void; selectFinding: (finding: Finding) => void; changeStatus: (id: number, status: ReviewStatus) => void };
+type State = {
+  documentId?: string | null;
+  page: number;
+  activeFindings: Finding[];
+  statuses: Record<string, ReviewStatus>;
+  navigatePage?: (page: number) => void;
+  selectFinding: (finding: Finding) => void;
+  changeStatus: (id: string, status: ReviewStatus) => Promise<void>;
+};
 
 export function useWorkspaceTools(state: State) {
   const latest = useRef(state);
@@ -23,19 +31,32 @@ export function useWorkspaceTools(state: State) {
     const controller = new AbortController();
     const tools: Tool[] = [
       {
-        name: 'read_document_findings', description: 'Read the current page and enabled demonstration findings with review statuses. No real analysis is performed.',
+        name: 'read_document_findings', description: 'Read findings returned by the backend for the current document, with their review statuses.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false }, annotations: {readOnlyHint: true, untrustedContentHint: true},
-        execute: () => ({ page: latest.current.page, demo: true, findings: latest.current.activeFindings.map(f => ({id:f.id, title:f.title, severity:f.severity, page:f.page, status:latest.current.statuses[f.id] ?? 'unseen'})) }),
+        execute: () => ({ documentId: latest.current.documentId ?? null, page: latest.current.page, findings: latest.current.activeFindings.map(f => ({id:f.id, number:f.number, title:f.title, severity:f.severity, page:f.page, source:f.source, quoteVerified:f.quoteVerified, status:latest.current.statuses[f.id] ?? f.status})) }),
       },
       {
-        name: 'navigate_to_finding', description: 'Open an enabled finding’s document page and highlight the relevant paragraph.',
-        inputSchema: {type:'object',properties:{id:{type:'integer',minimum:1,maximum:20}},required:['id'],additionalProperties:false}, annotations:{readOnlyHint:false,untrustedContentHint:false},
-        execute: input => { const id = (input as {id?:unknown} | null)?.id; const f = latest.current.activeFindings.find(f => f.id === id); if (!f) throw new Error('Finding not available'); flushSync(() => latest.current.selectFinding(f)); return {id:f.id,page:f.page}; },
+        name: 'navigate_to_finding', description: 'Select a finding in the current document and open its page when a page is available.',
+        inputSchema: {type:'object',properties:{id:{type:'string',minLength:1}},required:['id'],additionalProperties:false}, annotations:{readOnlyHint:false,untrustedContentHint:false},
+        execute: input => {
+          const id = (input as {id?:unknown} | null)?.id;
+          const finding = latest.current.activeFindings.find(f => f.id === id);
+          if (!finding) throw new Error('Finding not available in the current document');
+          flushSync(() => latest.current.selectFinding(finding));
+          return {id:finding.id,documentId:finding.documentId,page:finding.page};
+        },
       },
       {
-        name: 'set_finding_review_status', description: 'Change a finding review status, save it in this browser, and add an entry to the current session history.',
-        inputSchema:{type:'object',properties:{id:{type:'integer',minimum:1,maximum:20},status:{type:'string',enum:['unseen','accepted','dismissed']}},required:['id','status'],additionalProperties:false}, annotations:{readOnlyHint:false,untrustedContentHint:false},
-        execute: input => { const value = input as {id?:unknown; status?:unknown} | null; const f = latest.current.activeFindings.find(f => f.id === value?.id); if (!f || !['unseen','accepted','dismissed'].includes(String(value?.status))) throw new Error('Invalid finding or status'); const status = value!.status as ReviewStatus; flushSync(() => latest.current.changeStatus(f.id, status)); return {id:f.id,status:latest.current.statuses[f.id] ?? 'unseen'}; },
+        name: 'set_finding_review_status', description: 'Persist a finding review status through the backend API and return only after the save succeeds.',
+        inputSchema:{type:'object',properties:{id:{type:'string',minLength:1},status:{type:'string',enum:['unseen','accepted','dismissed']}},required:['id','status'],additionalProperties:false}, annotations:{readOnlyHint:false,untrustedContentHint:false},
+        execute: async input => {
+          const value = input as {id?:unknown; status?:unknown} | null;
+          const finding = latest.current.activeFindings.find(f => f.id === value?.id);
+          if (!finding || !['unseen','accepted','dismissed'].includes(String(value?.status))) throw new Error('Invalid finding or status');
+          const status = value!.status as ReviewStatus;
+          await latest.current.changeStatus(finding.id, status);
+          return {id:finding.id,documentId:finding.documentId,status};
+        },
       },
     ];
     for (const tool of tools) {

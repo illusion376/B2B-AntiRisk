@@ -1,3 +1,28 @@
+# Фиксированное имя проекта: контейнеры и тома не зависят от названия папки
+name: b2b-antirisk
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://postgres:secret_password@db:5432/b2b_procurement
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_DIR: /data/storage
+  CORS_ORIGINS: ${CORS_ORIGINS:-*}
+  # LLM и эмбеддинги — любой OpenAI-совместимый API. Пусто -> работа без внешних сервисов
+  # (эвристический анализ + локальные хэш-эмбеддинги). Значения берутся из .env
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
+  LLM_CONCURRENCY: ${LLM_CONCURRENCY:-6}
+  LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+  EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
+  OCR_THREADS: ${OCR_THREADS:-4}
+
+x-backend-build: &backend-build
+  context: .
+  dockerfile: backend/Dockerfile
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -5,17 +30,97 @@ services:
     restart: always
     environment:
       POSTGRES_DB: b2b_procurement
-      POSTGRES_USER: postgres 
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret_password
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d b2b_procurement"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: b2b_redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: *backend-build
+    image: b2b-antirisk-backend
+    container_name: b2b_backend
+    restart: always
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build: *backend-build
+    image: b2b-antirisk-backend
+    container_name: b2b_worker
+    restart: always
+    command: celery -A app.celery_app:celery_app worker --loglevel=INFO --concurrency=${WORKER_CONCURRENCY:-2}
+    environment: *backend-env
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Интерфейс: статическая сборка Next.js за nginx; /api/* проксируется в backend
+  frontend:
+    build: ./frontend
+    container_name: b2b_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Локальная LLM и эмбеддинги без внешних API: docker compose --profile local-llm up --build
+  # и в .env: LLM_BASE_URL=http://ollama:11434/v1, EMBEDDING_BASE_URL=http://ollama:11434/v1
+  ollama:
+    image: ollama/ollama:latest
+    container_name: b2b_ollama
+    profiles: ["local-llm"]
+    restart: always
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull ${EMBEDDING_MODEL:-bge-m3} && ollama pull ${LLM_MODEL:-qwen2.5:7b-instruct}"]
+    restart: "no"
+
 volumes:
   pgdata:
+  storage:
+  ollama:

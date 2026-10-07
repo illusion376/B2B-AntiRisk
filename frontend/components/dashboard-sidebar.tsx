@@ -1,10 +1,11 @@
 'use client';
 
 import { BookOpenCheck, ChevronRight, CircleHelp, History, LayoutDashboard, Plus, ShieldCheck, X } from 'lucide-react';
-import type { View } from '@/lib/types';
+import type { User, View } from '@/lib/types';
 
 interface Props {
   view: View;
+  user: User | null;
   projectCount: number;
   ruleCount: number;
   open: boolean;
@@ -14,7 +15,7 @@ interface Props {
   onHelp: () => void;
 }
 
-export function DashboardSidebar({view,projectCount,ruleCount,open,onClose,onNavigate,onCreate,onHelp}: Props) {
+export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,onNavigate,onCreate,onHelp}: Props) {
   const items = [
     {view:'documents' as const,label:'Документы',Icon:LayoutDashboard,count:projectCount},
     {view:'rules' as const,label:'Правила проверки',Icon:BookOpenCheck,count:ruleCount},
@@ -30,7 +31,7 @@ export function DashboardSidebar({view,projectCount,ruleCount,open,onClose,onNav
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
         return <button key={item.view} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>{onNavigate(item.view);onClose();}}><item.Icon size={16} strokeWidth={1.5}/><span>{item.label}</span>{item.count!==null && <small>{item.count}</small>}</button>;
       })}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-demo"><span className="sidebar-demo-label"><ShieldCheck size={15}/>Демо-пространство</span><p>Документы под контролем.<br/>Решения — за вами.</p></div><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">ИА</span><span><strong>Иван Александров</strong><small>Демонстрационный профиль</small></span></div></div>
+      <div className="sidebar-bottom"><div className="sidebar-demo"><span className="sidebar-demo-label"><ShieldCheck size={15}/>Проверка документов</span><p>Документы под контролем.<br/>Решения — за вами.</p></div><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong>{user?.fullName || 'Загрузка профиля…'}</strong><small>{user?.email || 'Подключение к серверу'}</small></span></div></div>
     </aside>
   </>;
 }
