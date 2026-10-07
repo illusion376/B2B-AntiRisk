@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 4
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
 
+    # --- Оффлайн-анализ (без LLM) ---
+    # "nli" (анализ противоречий через NLI-модель) или "keyword" (поиск по стеммам)
+    heuristic_engine: str = "nli"
+    nli_model_name: str = "cointegrated/rubert-base-cased-nli-threeway"
+    nli_threshold: float = 0.5  # минимальная вероятность entailment для фиксации риска
+    nli_batch_size: int = 16
+    nli_device: str = "cpu"
+    nli_quantize: bool = True  # dynamic INT8 квантование (экономит память в пределах 2 ГБ ОЗУ)
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024

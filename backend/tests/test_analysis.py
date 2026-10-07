@@ -134,3 +134,69 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     assert drafts[1].source == "ERROR"  # сбой одного правила не роняет весь документ
     assert len(calls) == 2  # правило без релевантных фрагментов в LLM не отправляется
     assert "44-ФЗ" in calls[0] and "[F1] (стр. 1" in calls[0]
+
+
+def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
+    from unittest.mock import MagicMock
+    from app.services import analyzer, nli
+
+    pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
+    rule = _rule()
+    chunk = _chunk("6.2. Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта за каждый день "
+                   "просрочки исполнения обязательств, но не ограниченной общей суммой Контракта.")
+
+    fake_classifier = MagicMock()
+    # Возвращаем высокий entailment для рискованного чанка
+    fake_classifier.predict.return_value = [{"entailment": 0.88, "neutral": 0.08, "contradiction": 0.04}]
+    monkeypatch.setattr(nli, "get_nli_classifier", lambda: fake_classifier)
+
+    r2 = _rule()
+    r2.id = "r2_no_chunks"
+    drafts = analyzer.evaluate_nli([RuleContext(rule, [chunk]), RuleContext(r2, [])], pages)
+    assert len(drafts) == 2
+    assert drafts[0].severity == "RED"
+    assert drafts[0].source == "NLI"
+    assert drafts[0].quote_verified
+    assert drafts[0].clause == "6.2"
+    assert drafts[0].confidence == 0.88
+    assert "Семантический NLI-анализ подтвердил риск" in drafts[0].comment
+    assert drafts[1].severity == "GREEN"
+
+
+def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
+    from unittest.mock import MagicMock
+    from app.services import analyzer, nli
+
+    pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
+    rule = _rule()
+    chunk = _chunk("6.2. Размер штрафа ограничен ценой контракта в строгом соответствии с 44-ФЗ.")
+
+    fake_classifier = MagicMock()
+    # Возвращаем высокий contradiction (риск опровергнут текстом)
+    fake_classifier.predict.return_value = [{"entailment": 0.05, "neutral": 0.15, "contradiction": 0.80}]
+    monkeypatch.setattr(nli, "get_nli_classifier", lambda: fake_classifier)
+
+    drafts = analyzer.evaluate_nli([RuleContext(rule, [chunk])], pages)
+    assert len(drafts) == 1
+    assert drafts[0].severity == "GREEN"
+    assert drafts[0].source == "NLI"
+    assert "риск опровергнут" in drafts[0].comment
+
+
+def test_nli_fallback_to_heuristic(contract_pdf, monkeypatch):
+    from app.services import analyzer, nli
+
+    pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
+    rule = _rule()
+    chunk = _chunk("6.2. Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта за каждый день "
+                   "просрочки исполнения обязательств, но не ограниченной общей суммой Контракта.")
+
+    def failing_classifier():
+        raise RuntimeError("torch out of memory")
+
+    monkeypatch.setattr(nli, "get_nli_classifier", failing_classifier)
+
+    drafts = analyzer.evaluate_nli([RuleContext(rule, [chunk])], pages)
+    assert len(drafts) == 1
+    assert drafts[0].source == "HEURISTIC"  # откатился к эвристике
+    assert drafts[0].quote_verified

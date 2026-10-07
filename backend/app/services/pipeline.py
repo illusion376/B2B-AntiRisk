@@ -16,7 +16,7 @@ from app.config import settings
 from app.db import session_scope
 from app.models import Analysis, AuditLog, Document, DocumentChunk, DocumentPage, Project, RiskFinding, RiskRule
 from app.services import storage
-from app.services.analyzer import FindingDraft, RuleContext, evaluate_heuristic, evaluate_with_llm
+from app.services.analyzer import FindingDraft, RuleContext, evaluate_heuristic, evaluate_nli, evaluate_with_llm
 from app.services.converter import ConversionError, to_pdf
 from app.services.embeddings import EmbeddingError, embed_texts
 from app.services.extraction import PageContent, extract_pages
@@ -195,8 +195,11 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
 
     if settings.llm_enabled:
         drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type))
+    elif settings.heuristic_engine == "nli":
+        drafts = evaluate_nli(contexts, pages)
     else:
         drafts = evaluate_heuristic(contexts, pages)
+
 
     with session_scope() as db:
         stmt = delete(RiskFinding).where(RiskFinding.document_id == document_id)
