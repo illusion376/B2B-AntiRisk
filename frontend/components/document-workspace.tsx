@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
-import { analysisModeLabels, findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
+import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
 import { riskLabels } from '@/lib/rules';
 import { HighlightedText, IconButton, Modal } from './ui';
-import { FindingEvidenceBadges, UnknownResultsBadge } from './shared-badges';
+import { FindingEvidenceBadges } from './shared-badges';
 import './review-enhancements.css';
 import './live-document.css';
 
@@ -306,10 +306,6 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
     {!expanded && <aside className="review-panel" aria-label="Проверка документа">
       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
-        {(document.analysisMode || unknownCount > 0) && <div className="analysis-result-context">
-          {document.analysisMode && <span>Выбранный режим: {analysisModeLabels[document.analysisMode]}</span>}
-          <UnknownResultsBadge count={unknownCount} />
-        </div>}
         <div className="filters">
           <label><span className="sr-only">Категория</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
           <label><span className="sr-only">Статус проверки</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>

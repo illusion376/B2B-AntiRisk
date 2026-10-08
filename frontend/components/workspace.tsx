@@ -13,6 +13,7 @@ import {DashboardSidebar} from './dashboard-sidebar';
 import {useWorkspaceNavigation} from './use-workspace-navigation';
 import {useLiveDocument,useWorkspaceData} from './use-workspace-data';
 import {useAnalysisModes} from './use-analysis-modes';
+import {SettingsView} from './settings-view';
 import './dashboard.css';
 import './integration.css';
 
@@ -24,8 +25,7 @@ export function Workspace() {
   const {view,page,projectId,documentId,findingId,navigate}=useWorkspaceNavigation();
   const data=useWorkspaceData();
   const analysisModes=useAnalysisModes();
-  const [projectAnalysisModes,setProjectAnalysisModes]=useState<Record<string,AnalysisMode>>({});
-  const selectedAnalysisMode=projectAnalysisModes[projectId]??analysisModes.config?.defaultMode??null;
+  const selectedAnalysisMode=analysisModes.selectedMode;
   const {projects,rules,history,user,reportModes}=data;
   const live=useLiveDocument(view==='document'?documentId:null,page);
   const activeDocument=live.document;
@@ -116,11 +116,12 @@ export function Workspace() {
     </div>
     <main id="main-content" className="main-content" tabIndex={-1}>
       {data.error&&<ErrorNotice message={data.error} onRetry={data.refresh}/>}{actionError&&<ErrorNotice message={actionError}/>}
-      {data.loading?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
+      {data.loading&&view!=='settings'?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
       {view==='documents'&&(!data.error||projects.length>0)&&<ProjectsView projects={projects} onOpen={openProject} onCreate={()=>openModal('create-project')} query={dashboardQuery} onQueryChange={setDashboardQuery}/>}
-      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onAnalysisModeChange={mode=>setProjectAnalysisModes(previous=>({...previous,[projectId]:mode}))}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
+      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
       {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {activeDocument?.phase==='ready'&&activeDocument.errorMessage&&<ErrorNotice message={`${live.findings.length?'Повторная проверка не удалась. Показаны предыдущие результаты. ':''}${activeDocument.errorMessage}`}/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={live.findings} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
       {view==='rules'&&<RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule}/>}
+      {view==='settings'&&<SettingsView config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError}/>}
       {view==='history'&&<section className="secondary-view history-view"><div className="view-title"><div><span className="eyebrow">ЖУРНАЛ ДЕЙСТВИЙ</span><h1>История действий</h1><p>Последние проверки, решения и скачанные отчёты.</p></div><span className="count-chip"><Clock3 size={16}/>Последние 100 событий</span></div>{!history.length?<div className="api-state">Действий пока нет. Создайте проект и загрузите документы.</div>:<ol className="timeline">{history.map((entry,index)=><li key={entry.id}><span className={`timeline-icon ${index===0?'latest':''}`}><History size={18}/></span><div><h3>{entry.title}</h3><p>{entry.detail}</p></div><time dateTime={entry.time}>{dateTime(entry.time)}</time></li>)}</ol>}</section>}
       </>}
     </main>

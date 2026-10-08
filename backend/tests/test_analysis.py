@@ -118,6 +118,10 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     calls = []
 
     class FakeClient:
+        def __init__(self, *, response_schema):
+            assert response_schema["additionalProperties"] is False
+            assert set(response_schema["required"]) == {"verdict", "issues", "evidence", "explanation"}
+
         async def __aenter__(self):
             return self
 

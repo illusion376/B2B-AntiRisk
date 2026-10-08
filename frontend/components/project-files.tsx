@@ -4,8 +4,6 @@ import { useRef, useState } from 'react';
 import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
-import { analysisModeLabels } from '@/lib/labels';
-import { AnalysisModeSelector } from './analysis-mode-selector';
 import { UnknownResultsBadge } from './shared-badges';
 import './project-enhancements.css';
 
@@ -20,7 +18,7 @@ interface ProjectFilesViewProps {
   analysisModesError: string | null;
   onRetryAnalysisModes: () => void;
   selectedAnalysisMode: AnalysisMode | null;
-  onAnalysisModeChange: (mode: AnalysisMode) => void;
+  onOpenSettings: () => void;
 }
 
 type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
@@ -38,7 +36,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 export function ProjectFilesView({
   project, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
-  selectedAnalysisMode, onAnalysisModeChange,
+  selectedAnalysisMode, onOpenSettings,
 }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
@@ -92,16 +90,11 @@ export function ProjectFilesView({
         <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
       </div>
       <FileDropzone onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
-      <AnalysisModeSelector
-        modes={analysisModes?.modes ?? []}
-        selectedMode={selectedAnalysisMode}
-        onChange={mode => { setStartError(''); onAnalysisModeChange(mode); }}
-        loading={analysisModesLoading}
-        error={analysisModesError}
-        onRetry={onRetryAnalysisModes}
-        configuredModel={analysisModes?.configuredModel ?? null}
-        disabled={starting}
-      />
+      {!modeReady && <div className="project-analysis-summary">
+        <span role="status">{analysisModesLoading ? 'Загружаем настройки…' : analysisModesError ? 'Не удалось загрузить настройки.' : 'Выбранный режим недоступен. Выберите другой в настройках.'}</span>
+        {analysisModesError && <button onClick={onRetryAnalysisModes}>Повторить</button>}
+        {!analysisModesLoading && <button onClick={onOpenSettings}>Открыть настройки</button>}
+      </div>}
       <div className="project-files-heading">
         <h2>Загруженные файлы <span>{project.files.length}</span></h2>
         <div className="project-files-heading-actions">
@@ -155,7 +148,6 @@ export function ProjectFilesView({
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
                     {processingState.phase === 'ready' && <UnknownResultsBadge count={file.counts.unknown} />}
-                    {singleDocument?.analysisMode && <small>Выбранный режим: {analysisModeLabels[singleDocument.analysisMode]}</small>}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
                   </div>
                   {canOpen && (
@@ -180,7 +172,6 @@ export function ProjectFilesView({
                           <ProcessingStatus item={document} name={document.name} />
                           {document.phase === 'ready' && <small>{document.rulesChecked > 0 ? `Проверено правил: ${document.rulesChecked} · Замечаний: ${riskCount(document.counts)}` : 'Нет результатов проверки правил'}</small>}
                           {document.phase === 'ready' && <UnknownResultsBadge count={document.counts.unknown} />}
-                          {document.analysisMode && <small>Выбранный режим: {analysisModeLabels[document.analysisMode]}</small>}
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
                         </div>
                         {document.phase === 'ready' && document.hasPreview && (

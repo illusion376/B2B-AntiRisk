@@ -295,7 +295,7 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
         return []
     semaphore = asyncio.Semaphore(settings.llm_concurrency)
     try:
-        async with LLMClient() as client:
+        async with LLMClient(response_schema=LLMResult.model_json_schema()) as client:
             results = await asyncio.gather(
                 *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type) for ctx in contexts),
                 return_exceptions=True,

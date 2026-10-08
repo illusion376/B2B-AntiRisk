@@ -12,7 +12,7 @@ class AnalysisModeError(ValueError):
 
 
 def _llm_available() -> bool:
-    return settings.llm_enabled and bool(settings.llm_model.strip())
+    return settings.llm_enabled
 
 
 def default_analysis_mode() -> AnalysisMode:
@@ -24,11 +24,17 @@ def default_analysis_mode() -> AnalysisMode:
 def resolve_analysis_mode(requested: str | None = None) -> AnalysisMode:
     mode = default_analysis_mode() if requested is None else requested
     if mode not in ("llm", "nli", "keyword"):
-        raise AnalysisModeError("invalid_analysis_mode", "Выберите режим llm, nli или keyword", mode)
+        raise AnalysisModeError("invalid_analysis_mode", "Неизвестный режим анализа. Выберите llm или keyword.", mode)
+    if mode == "nli":
+        raise AnalysisModeError(
+            "analysis_mode_unavailable",
+            "Локальная NLI-модель отключена. Выберите LLM через ProxyAPI или ключевые слова.",
+            mode,
+        )
     if mode == "llm" and not _llm_available():
         raise AnalysisModeError(
             "analysis_mode_unavailable",
-            "LLM не настроена: администратору нужно указать LLM_BASE_URL и LLM_MODEL на сервере",
+            "LLM недоступна: настройте LLM_API_KEY от ProxyAPI, LLM_BASE_URL и LLM_MODEL на сервере.",
             mode,
         )
     return mode
@@ -43,16 +49,20 @@ def analysis_mode_or_422(requested: str | None = None) -> AnalysisMode:
 
 def capabilities() -> AnalysisModesOut:
     # available означает наличие конфигурации, не результат запроса к провайдеру.
-    # Модели NLI могут загружаться при первом запуске; сбой не меняет выбранный режим.
+    modes = [
+        AnalysisModeOut(id="llm", label="LLM · ProxyAPI", available=_llm_available(),
+                        description=("Анализ условий документа языковой моделью через серверный API."
+                                     if _llm_available() else
+                                     "Для анализа настройте LLM_API_KEY от ProxyAPI, LLM_BASE_URL и LLM_MODEL на сервере.")),
+        AnalysisModeOut(id="keyword", label="Ключевые слова", available=True,
+                        description="Предварительный поиск совпадений по словам. Не определяет наличие нарушения."),
+    ]
+    # Недоступный default старой установки остаётся видимым: нужен явный новый выбор.
+    if default_analysis_mode() == "nli":
+        modes.append(AnalysisModeOut(id="nli", label="NLI (отключён)", available=False,
+                                    description="Локальные модели исключены из сборки. Выберите LLM или ключевые слова."))
     return AnalysisModesOut(
         default_mode=default_analysis_mode(),
-        configured_model=settings.llm_model if _llm_available() else None,
-        modes=[
-            AnalysisModeOut(id="llm", label="LLM", available=_llm_available(),
-                            description="Анализ условий и правил языковой моделью через настроенный серверный API."),
-            AnalysisModeOut(id="nli", label="NLI", available=True,
-                            description="Локальная модель проверяет смысловое соответствие фрагментов правилам. Возможны неточные выводы."),
-            AnalysisModeOut(id="keyword", label="Ключевые слова", available=True,
-                            description="Предварительный поиск совпадений по словам. Не определяет наличие нарушения."),
-        ],
+        configured_model=settings.llm_model.strip() if _llm_available() else None,
+        modes=modes,
     )

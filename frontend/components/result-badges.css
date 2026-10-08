@@ -11,7 +11,6 @@
 .document-workspace .finding-row.unknown-row.selected-row { background: #f1f3f5; }
 .document-workspace .finding-row.unknown-row.selected-row td:first-child { box-shadow: inset 3px 0 #8a919b; color: #626972; }
 .document-workspace .finding-row.unknown-row.selected-row .finding-link strong { color: #4d555f; }
-.document-workspace .analysis-result-context { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 10px; color: #7c7e82; }
 .document-workspace .unknown-result-explanation { margin: 12px 0; padding: 11px 13px; border: 1px solid #dfe1e4; border-radius: 6px; background: #f3f4f5; color: #626972; font-size: 12px; line-height: 1.6; }
 .document-workspace .unverified-quote { border-color: #a0a5ad; background: #f5f5f6; color: #717780; }
 .document-workspace .quote-evidence-note { font-size: 11px; line-height: 1.6; color: #7f8388; }

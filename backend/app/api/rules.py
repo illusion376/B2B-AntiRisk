@@ -16,7 +16,8 @@ from app.config import settings
 from app.db import get_db
 from app.models import DocumentPage, RiskFinding, RiskRule, User
 from app.schemas import RuleCreate, RuleOut, RuleTestRequest, RuleTestResult, RuleUpdate
-from app.services.analyzer import RuleContext, evaluate_heuristic, evaluate_nli, evaluate_with_llm
+from app.services.analysis_modes import analysis_mode_or_422
+from app.services.analyzer import RuleContext, evaluate_heuristic, evaluate_with_llm
 from app.services.audit import log_action
 from app.services.pipeline import ensure_rule_embeddings
 from app.services.retrieval import hybrid_search
@@ -149,6 +150,7 @@ def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depend
 
 
 def _run_rule(db: Session, rule: RiskRule, document_id: uuid.UUID) -> RuleTestResult:
+    mode = analysis_mode_or_422()
     ensure_rule_embeddings(db, [rule])
     chunks = hybrid_search(db, document_id, rule.semantic_query, list(rule.query_embedding), settings.retrieval_top_k)
     pages = [
@@ -158,10 +160,8 @@ def _run_rule(db: Session, rule: RiskRule, document_id: uuid.UUID) -> RuleTestRe
     ]
     contexts = [RuleContext(rule, chunks)]
     doc_name = str(document_id)
-    if settings.llm_enabled:
+    if mode == "llm":
         drafts = asyncio.run(evaluate_with_llm(contexts, pages, doc_name, None))
-    elif settings.heuristic_engine == "nli":
-        drafts = evaluate_nli(contexts, pages)
     else:
         drafts = evaluate_heuristic(contexts, pages)
     findings = []

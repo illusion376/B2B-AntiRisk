@@ -20,7 +20,7 @@ from app.services import analysis_modes, pipeline, uploads
 
 @pytest.fixture
 def mode_settings(monkeypatch):
-    config = Settings(_env_file=None, analysis_engine="auto", heuristic_engine="nli", llm_base_url=None)
+    config = Settings(_env_file=None, analysis_engine="auto", heuristic_engine="keyword", llm_base_url=None, llm_api_key="test-key")
     monkeypatch.setattr(analysis_modes, "settings", config)
     monkeypatch.setattr(pipeline, "settings", config)
     return config
@@ -37,7 +37,12 @@ def test_config_resolves_legacy_auto_and_explicit_modes(mode_settings, engine, u
     mode_settings.analysis_engine = engine
     mode_settings.llm_base_url = url
     mode_settings.heuristic_engine = heuristic
-    assert analysis_modes.resolve_analysis_mode() == expected
+    assert analysis_modes.default_analysis_mode() == expected
+    if expected == "nli":
+        with pytest.raises(analysis_modes.AnalysisModeError, match="NLI-модель отключена"):
+            analysis_modes.resolve_analysis_mode()
+    else:
+        assert analysis_modes.resolve_analysis_mode() == expected
 
 
 def test_invalid_environment_engine_is_rejected():
@@ -53,9 +58,10 @@ def test_invalid_engine_limits_are_rejected(field):
         Settings(_env_file=None, **{field: 0})
 
 
-def test_blank_model_is_unavailable_without_silent_auto_downgrade(mode_settings):
+def test_blank_model_is_unavailable_for_explicit_llm_default(mode_settings):
     mode_settings.llm_base_url = "http://provider/v1"
     mode_settings.llm_model = "  "
+    mode_settings.analysis_engine = "llm"
     assert analysis_modes.capabilities().default_mode == "llm"
     assert not analysis_modes.capabilities().modes[0].available
     with pytest.raises(analysis_modes.AnalysisModeError):
@@ -90,7 +96,7 @@ def test_public_capabilities_have_no_provider_url_or_key(mode_settings):
     assert body["default_mode"] == "llm"
     assert body["configured_model"] == "configured-model"
     assert {mode["id"]: mode["available"] for mode in body["modes"]} == {
-        "llm": True, "nli": True, "keyword": True,
+        "llm": True, "keyword": True,
     }
     assert "private-provider" not in response.text and "secret-api-key" not in response.text
     mode_settings.llm_base_url = None
@@ -122,11 +128,12 @@ def api_client(monkeypatch, mode_settings):
         app.dependency_overrides.clear()
 
 
+@pytest.mark.parametrize("requested", ["llm", "nli"])
 @pytest.mark.parametrize("path", ["projects/{id}/start", "projects/{id}/rerun", "analyses/{id}/rerun",
                                   "documents/{id}/reanalyze"])
-def test_api_rejects_unconfigured_llm_before_mutation_or_enqueue(api_client, path):
+def test_api_rejects_unavailable_modes_before_mutation_or_enqueue(api_client, path, requested):
     client, db, doc, enqueue = api_client
-    response = client.post("/api/" + path.format(id=uuid.uuid4()), json={"analysis_mode": "llm"})
+    response = client.post("/api/" + path.format(id=uuid.uuid4()), json={"analysis_mode": requested})
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "analysis_mode_unavailable"
     assert doc.status == "COMPLETED" and doc.analysis_mode == "keyword"
@@ -155,7 +162,7 @@ def test_project_start_accepts_optional_body_and_persists_before_enqueue(api_cli
 
     def on_enqueue(session, docs):
         assert docs == [doc]
-        assert doc.analysis_mode == ("keyword" if body else "nli")
+        assert doc.analysis_mode == "keyword"
         assert doc.status == "QUEUED"
         db.commit.assert_called_once()
 
@@ -210,6 +217,13 @@ def test_worker_dispatches_persisted_engine(mode_settings, monkeypatch, stored, 
                   "keyword": MagicMock(return_value=[])}
     for name, mode in (("evaluate_with_llm", "llm"), ("evaluate_nli", "nli"), ("evaluate_heuristic", "keyword")):
         monkeypatch.setattr(pipeline, name, evaluators[mode])
+    if expected == "nli":
+        with pytest.raises(analysis_modes.AnalysisModeError, match="NLI-модель отключена"):
+            pipeline.analyze_document(doc.id)
+        for evaluate in evaluators.values():
+            evaluate.assert_not_called()
+        db.execute.assert_not_called()
+        return
     pipeline.analyze_document(doc.id)
     assert doc.analysis_mode == expected
     for mode, evaluate in evaluators.items():

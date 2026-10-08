@@ -15,9 +15,9 @@
 }
 
 @layer base {
-  :root { --bg: #efefed; --surface: #fdfcfb; --paper: #fff; --text: #252725; --muted: #797c78; --line: #e5e5e1; --red: #bc302a; --red-hover: #a62620; --red-light: #fae8e5; --green: #278452; --amber: #e9a80f; --shadow: 0 6px 28px #2729220c; }
+  :root { --font-sans: Arial, Helvetica, sans-serif; --bg: #efefed; --surface: #fdfcfb; --paper: #fff; --text: #252725; --muted: #797c78; --line: #e5e5e1; --red: #bc302a; --red-hover: #a62620; --red-light: #fae8e5; --green: #278452; --amber: #e9a80f; --shadow: 0 6px 28px #2729220c; }
   html { font-size: 16px; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: var(--text); background: var(--bg); font-size: .875rem; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--font-sans); color: var(--text); background: var(--bg); font-size: .875rem; -webkit-font-smoothing: antialiased; }
   ::selection { background: #f7d5d1; }
   :focus-visible { outline: 2px solid #c84c42; outline-offset: 3px; }
   input:focus, select:focus { outline: 2px solid #bc302a44; outline-offset: 0; }
@@ -40,7 +40,7 @@
   .traffic-logo i { width: 15px; height: 15px; border-radius: 50%; background: #df332a; box-shadow: inset 0 -.5px 1px #0001; }
   .traffic-logo i:nth-child(2) { background: #efb515; }
   .traffic-logo i:nth-child(3) { background: #268356; }
-  .brand strong { display: block; font-family: Georgia, 'Times New Roman', serif; font-size: 1.3rem; font-weight: 700; letter-spacing: -.6px; }
+  .brand strong { display: block; font-family: var(--font-sans); font-size: 1.3rem; font-weight: 700; letter-spacing: -.6px; }
   .brand small { display: block; color: #686c65; font-size: .75rem; line-height: 1.5; }
   .main-nav { display: flex; align-self: stretch; gap: 20px; }
   .main-nav button { display: flex; align-items: center; gap: 8px; position: relative; padding: 0 7px; color: #65685f; font-weight: 500; border-radius: 0; }
@@ -67,7 +67,7 @@
   .document-icon > span { font-size: .75rem; letter-spacing: 1px; margin-top: 2px; color: #8d9186; }
   .document-heading-text { min-width: 0; }
   .document-title-line { display: flex; align-items: center; gap: 12px; }
-  .document-heading h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 1.38rem; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .document-heading h1 { font-family: var(--font-sans); font-size: 1.38rem; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .demo-badge { font-size: .75rem; font-weight: 500; background: #efefeb; color: #82867c; padding: 3px 6px; border-radius: 3px; letter-spacing: .2px; }
   .document-heading p { color: #6c7267; font-size: .75rem; margin-top: 6px; }
   .document-heading p span { margin: 0 7px; }
@@ -112,9 +112,9 @@
   .paper-scroll { flex: 1; min-height: 0; overflow: auto; padding: 16px 17px 28px; overscroll-behavior: contain; scrollbar-gutter: stable; }
   .hand-mode { cursor: grab; user-select: none; touch-action: none; }
   .hand-mode:active { cursor: grabbing; }
-  .document-paper { background: var(--paper); min-height: 100%; padding: 25px 37px 24px 41px; font-family: 'Times New Roman', Times, serif; line-height: 1.35; box-shadow: 0 1px 8px #262d2407; color: #232720; position: relative; }
-  .paper-running-header { display: flex; align-items: center; justify-content: space-between; font-family: Arial, sans-serif; font-size: .48em; letter-spacing: 1.1px; color: #c1c4ba; padding-bottom: 20px; }
-  .contract-section h2 { font-family: 'Times New Roman', Times, serif; font-size: 1.02em; margin: 0 0 17px; text-align: center; font-weight: 700; }
+  .document-paper { background: var(--paper); min-height: 100%; padding: 25px 37px 24px 41px; font-family: var(--font-sans); line-height: 1.35; box-shadow: 0 1px 8px #262d2407; color: #232720; position: relative; }
+  .paper-running-header { display: flex; align-items: center; justify-content: space-between; font-family: var(--font-sans); font-size: .48em; letter-spacing: 1.1px; color: #c1c4ba; padding-bottom: 20px; }
+  .contract-section h2 { font-family: var(--font-sans); font-size: 1.02em; margin: 0 0 17px; text-align: center; font-weight: 700; }
   .contract-section + .contract-section { margin-top: 26px; }
   .contract-paragraph { display: flex; gap: 9px; margin-bottom: 10px; padding: 2px 0; position: relative; }
   .clause-number { min-width: 22px; flex-shrink: 0; }
@@ -123,7 +123,7 @@
   .annotation.critical { background: #fbe2df; border-color: #ed3a30; }
   .annotation.warning { background: #fff4d9; border-color: #efb223; }
   .annotation.focused { box-shadow: 0 0 0 1px #df3d2f10; }
-  .annotation-marker { position: absolute; left: -34px; top: 11px; height: 24px; width: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 14px; font-family: 'Segoe UI', sans-serif; background: #e53024; padding: 0; }
+  .annotation-marker { position: absolute; left: -34px; top: 11px; height: 24px; width: 24px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 14px; font-family: var(--font-sans); background: #e53024; padding: 0; }
   .annotation-marker::after { content: ''; position: absolute; left: 24px; width: 8px; height: 1px; background: #e53024; }
   .annotation.warning .annotation-marker, .annotation.warning .annotation-marker::after { background: #e7a900; }
   .paper-signatures { display: flex; justify-content: space-between; gap: 15px; margin-top: 46px; font-size: .8em; color: #777e70; }
@@ -304,7 +304,7 @@
   .detail-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 21px; }
   .detail-meta span { background: #f0f4e9; color: #82906f; padding: 5px 7px; font-size: .75rem; border-radius: 4px; }
   .finding-detail h4 { font-size: .8125rem; font-weight: 600; margin: 19px 0 10px; }
-  .finding-detail blockquote { margin: 0; border-left: 3px solid #d4ab99; background: #f7f1eb; border-radius: 0 4px 4px 0; padding: 12px 16px; font-family: Georgia, serif; font-size: .875rem; color: #676e5d; line-height: 1.65; }
+  .finding-detail blockquote { margin: 0; border-left: 3px solid #d4ab99; background: #f7f1eb; border-radius: 0 4px 4px 0; padding: 12px 16px; font-family: var(--font-sans); font-size: .875rem; color: #676e5d; line-height: 1.65; }
   .detail-disclaimer { color: #a3ac94; font-size: .75rem; display: block; line-height: 1.5; margin-top: 13px; }
   .info-file { display: flex; gap: 15px; align-items: center; padding: 15px; background: #f1f5e9; border-radius: 6px; color: #889573; margin-bottom: 20px; }
   .info-file strong { display: block; font-size: .875rem; color: #536444; overflow-wrap: anywhere; }
@@ -511,7 +511,7 @@
 }
 
 @layer components {
-  .brand strong { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 1.2rem; font-weight: 700; letter-spacing: -.6px; white-space: nowrap; }
+  .brand strong { font-family: var(--font-sans); font-size: 1.2rem; font-weight: 700; letter-spacing: -.6px; white-space: nowrap; }
   .view-title h1 { font-size: 1.5rem; margin-top: 8px; font-weight: 600; letter-spacing: -.5px; }
   .project-breadcrumb { display: flex; align-items: center; gap: 10px; height: 34px; margin: 0 3px 8px; font-size: .8125rem; color: #737970; }
   .project-breadcrumb button { display: flex; align-items: center; gap: 7px; padding: 4px 0; }

@@ -7,11 +7,10 @@ x-backend-env: &backend-env
   STORAGE_DIR: /data/storage
   CORS_ORIGINS: ${CORS_ORIGINS:-*}
   ANALYSIS_ENGINE: ${ANALYSIS_ENGINE:-auto}
-  # LLM и эмбеддинги — любой OpenAI-совместимый API. Пусто -> работа без внешних сервисов
-  # (эвристический анализ + локальные хэш-эмбеддинги). Значения берутся из .env
-  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  # Все языковые модели — через ProxyAPI. Без ключа доступен поиск по словам.
+  LLM_BASE_URL: ${LLM_BASE_URL-https://api.proxyapi.ru/v1}
   LLM_API_KEY: ${LLM_API_KEY:-}
-  LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
+  LLM_MODEL: ${LLM_MODEL-openai/gpt-4.1-mini}
   LLM_CONCURRENCY: ${LLM_CONCURRENCY:-6}
   LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
   LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
@@ -22,10 +21,7 @@ x-backend-env: &backend-env
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
   EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
   OCR_THREADS: ${OCR_THREADS:-4}
-  HEURISTIC_ENGINE: ${HEURISTIC_ENGINE:-nli}
-  NLI_MODEL_NAME: ${NLI_MODEL_NAME:-cointegrated/rubert-base-cased-nli-threeway}
-  NLI_THRESHOLD: ${NLI_THRESHOLD:-0.5}
-  NLI_QUANTIZE: ${NLI_QUANTIZE:-true}
+  HEURISTIC_ENGINE: ${HEURISTIC_ENGINE:-keyword}
 
 x-backend-build: &backend-build
   context: .
@@ -106,29 +102,6 @@ services:
       backend:
         condition: service_healthy
 
-  # Локальная LLM и эмбеддинги без внешних API: docker compose --profile local-llm up --build
-  # и в .env: LLM_BASE_URL=http://ollama:11434/v1, EMBEDDING_BASE_URL=http://ollama:11434/v1
-  ollama:
-    image: ollama/ollama:latest
-    container_name: b2b_ollama
-    profiles: ["local-llm"]
-    restart: always
-    volumes:
-      - ollama:/root/.ollama
-    ports:
-      - "11434:11434"
-
-  ollama-pull:
-    image: ollama/ollama:latest
-    profiles: ["local-llm"]
-    depends_on:
-      - ollama
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull ${EMBEDDING_MODEL:-bge-m3} && ollama pull ${LLM_MODEL:-qwen2.5:7b-instruct}"]
-    restart: "no"
-
 volumes:
   pgdata:
   storage:
-  ollama:

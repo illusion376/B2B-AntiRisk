@@ -149,7 +149,7 @@ def test_one_unsupported_issue_does_not_discard_a_separate_verified_risk():
 
 def test_client_initialization_failure_yields_unknown_without_changing_mode(monkeypatch):
     class BrokenClient:
-        def __init__(self): raise RuntimeError("Unavailable")
+        def __init__(self, **kwargs): raise RuntimeError("Unavailable")
     monkeypatch.setattr(analyzer, "LLMClient", BrokenClient)
     finding = asyncio.run(analyzer.evaluate_with_llm([RuleContext(rule(), [chunk()])], pages(RISK_TEXT), "contract.pdf", "44-FZ"))[0]
     assert finding.severity == "UNKNOWN" and finding.source == "ERROR"
