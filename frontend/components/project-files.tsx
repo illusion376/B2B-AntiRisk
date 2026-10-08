@@ -246,7 +246,7 @@ function FileDropzone({ onUpload, disabled, onBusyChange }: FileDropzoneProps) {
         <div className="dropzone-copy">
           <h2>{uploading ? 'Загружаем файлы на сервер…' : dragging && !blocked ? 'Отпустите файлы для загрузки' : 'Загрузите документы'}</h2>
           <p>{uploading ? 'Сохраняем файлы. Анализ можно будет запустить кнопкой «Начать анализ».' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
-          <small id="file-upload-help">PDF, TXT, DOCX, DOC, RTF, ODT, ZIP, PNG, JPEG, TIFF, BMP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
+          <small id="file-upload-help">DOCX, PDF, ZIP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
         </div>
         <input
           ref={input} type="file" hidden multiple disabled={blocked} accept={UPLOAD_ACCEPT} aria-label="Выберите документы"

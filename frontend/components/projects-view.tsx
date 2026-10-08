@@ -161,7 +161,6 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
       )}
       <div className="dashboard-list-note">
         <span className="workspace-online-dot" />Проекты и результаты сохраняются на сервере
-        <span>PDF / DOCX / TXT / ZIP</span>
       </div>
     </section>
   );
