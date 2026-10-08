@@ -85,9 +85,10 @@ def _counts(db: Session, group_column, filter_clause) -> dict:
             func.count().filter(RiskFinding.severity == "GREEN"),
             func.count().filter(RiskFinding.severity != "GREEN", RiskFinding.review_status == "NEW"),
             func.count(func.distinct(RiskFinding.rule_id)),
+            func.count().filter(RiskFinding.severity == "UNKNOWN", active),
         ).where(filter_clause, visible_findings()).group_by(group_column)
     ).all()
-    return {r[0]: (SeverityCounts(critical=r[1], warning=r[2], low=r[3], ok=r[4], unseen=r[5]), r[6]) for r in rows}
+    return {r[0]: (SeverityCounts(critical=r[1], warning=r[2], low=r[3], ok=r[4], unseen=r[5], unknown=r[7]), r[6]) for r in rows}
 
 
 def counts_by_document(db: Session, document_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[SeverityCounts, int]]:
@@ -108,13 +109,14 @@ def _sum(counts: list[SeverityCounts]) -> SeverityCounts:
 
 def _has_results(counts: SeverityCounts, rules_checked: int) -> bool:
     # После отклонения всех замечаний счётчики рисков обнуляются, но проверки остаются.
-    return rules_checked > 0 or any((counts.critical, counts.warning, counts.low, counts.ok))
+    return rules_checked > 0 or any((counts.critical, counts.warning, counts.low, counts.unknown, counts.ok))
 
 
 def light(counts: SeverityCounts, finished: bool, rules_checked: int) -> str | None:
     if not finished or not _has_results(counts, rules_checked):
         return None
-    return SEVERITY_TO_API[traffic_light(["RED"] * counts.critical + ["YELLOW"] * counts.warning)]
+    return SEVERITY_TO_API[traffic_light(["RED"] * counts.critical + ["YELLOW"] * counts.warning
+                                       + ["UNKNOWN"] * counts.unknown)]
 
 
 # ---------- сборка ответов ----------
@@ -130,6 +132,7 @@ def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None
     # и отклонённые замечания не должны оставлять устаревший индекс риска.
     out.risk_score = risk_score(
         ["RED"] * severity_counts.critical + ["YELLOW"] * severity_counts.warning + ["LOW"] * severity_counts.low
+        + ["UNKNOWN"] * severity_counts.unknown
     ) if out.traffic_light is not None else None
     out.has_preview = bool(doc.preview_path)
     return out
@@ -183,7 +186,7 @@ def project_files_out(db: Session, analyses: list[Analysis]) -> list[ProjectFile
             progress=analysis.progress,
             status=analysis.analysis_status,
             error_message=analysis.error_message,
-            risk_score=max(scores) if finished and scores else None,
+            risk_score=max(scores) if finished and scores and len(scores) == len(supported) else None,
             traffic_light=light(severity_counts, finished, rules_checked),
             counts=severity_counts,
             rules_checked=rules_checked,

@@ -29,18 +29,21 @@ def test_parse_json_response_variants():
 
 def test_llm_answer_to_drafts(contract_pdf):
     pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
-    chunk = _chunk("6.2. Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта ...")
+    quote = "Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта за каждый день просрочки"
+    chunk = _chunk(f"6.2. {quote} исполнения обязательств, но не ограниченной общей суммой Контракта.")
     answer = {
         "verdict": "RISK",
         "issues": [{
             "fragment": "F1",
-            "quote": "Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта за каждый день просрочки",
+            "quote": quote,
             "severity": "RED",
             "summary": "Размер штрафа не ограничен суммой контракта",
             "comment": "Пеня не ограничена",
             "recommendation": "Ограничить общий размер неустойки ценой контракта",
             "confidence": 0.9,
         }],
+        "evidence": [],
+        "explanation": "Найдено условие о начислении штрафа.",
     }
     rule = _rule()
     drafts = _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)
@@ -49,8 +52,10 @@ def test_llm_answer_to_drafts(contract_pdf):
     assert d.severity == "RED" and d.quote_verified and d.page_number == 1 and d.clause == "6.2"
     assert d.highlights and d.counter_proposal and d.confidence == 0.9
 
-    ok = _build_drafts(rule, RuleContext(rule, [chunk]), {"verdict": "OK", "explanation": "Всё в норме"}, pages)
-    assert ok[0].severity == "GREEN" and ok[0].comment == "Всё в норме"
+    no_evidence = _build_drafts(rule, RuleContext(rule, [chunk]), {
+        "verdict": "OK", "issues": [], "evidence": [], "explanation": "Всё в норме",
+    }, pages)
+    assert no_evidence[0].severity == "UNKNOWN"
 
     # Модель может понизить критичность, но не повысить жёлтое правило до красного
     yellow_rule = _rule("YELLOW")
@@ -67,10 +72,11 @@ def test_llm_answer_to_drafts(contract_pdf):
     assert _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)[0].severity == "LOW"
     answer["issues"][0]["severity"] = "RED"
 
-    # Цитата, которой нет в документе: замечание остаётся, но помечено как непроверенное
+    # Отсутствующая цитата не может подтверждать риск.
     answer["issues"][0]["quote"] = "Совершенно другой текст, которого нет"
     unverified = _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)
-    assert not unverified[0].quote_verified and unverified[0].confidence < 0.9
+    assert unverified[0].severity == "UNKNOWN" and not unverified[0].quote_verified
+    assert unverified[0].confidence is None and unverified[0].exact_quote is None
 
 
 def test_heuristic_mode(contract_pdf):
@@ -80,7 +86,7 @@ def test_heuristic_mode(contract_pdf):
                    "просрочки исполнения обязательств, но не ограниченной общей суммой Контракта.")
     drafts = evaluate_heuristic([RuleContext(rule, [chunk]), RuleContext(_rule(), [])], pages)
     assert drafts[0].severity == "YELLOW" and drafts[0].source == "HEURISTIC" and drafts[0].quote_verified
-    assert drafts[1].severity == "GREEN"
+    assert drafts[1].severity == "UNKNOWN"
 
 
 def test_hash_embedding_similarity():
@@ -122,15 +128,17 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
             calls.append(user)
             if "СЛОМАННОЕ" in user:
                 raise RuntimeError("provider down")
-            return {"verdict": "OK", "issues": [], "explanation": "Нарушений нет"}
+            return {"verdict": "OK", "issues": [], "evidence": [{
+                "fragment": "F1", "quote": "Стороны несут ответственность за неисполнение обязательств",
+            }], "explanation": "Предусмотрена ответственность сторон."}
 
     monkeypatch.setattr(analyzer, "LLMClient", FakeClient)
     good, broken = _rule(), _rule()
     broken.title = "СЛОМАННОЕ правило"
-    chunk = _chunk("6.2. Поставщик уплачивает штраф")
+    chunk = _chunk("6.1. Стороны несут ответственность за неисполнение обязательств")
     drafts = asyncio.run(analyzer.evaluate_with_llm(
         [RuleContext(good, [chunk]), RuleContext(broken, [chunk]), RuleContext(_rule(), [])], pages, "doc.pdf", "44-FZ"))
-    assert [d.severity for d in drafts] == ["GREEN", "YELLOW", "GREEN"]
+    assert [d.severity for d in drafts] == ["GREEN", "UNKNOWN", "UNKNOWN"]
     assert drafts[1].source == "ERROR"  # сбой одного правила не роняет весь документ
     assert len(calls) == 2  # правило без релевантных фрагментов в LLM не отправляется
     assert "44-ФЗ" in calls[0] and "[F1] (стр. 1" in calls[0]
@@ -160,7 +168,7 @@ def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
     assert drafts[0].clause == "6.2"
     assert drafts[0].confidence == 0.88
     assert "Семантический NLI-анализ подтвердил риск" in drafts[0].comment
-    assert drafts[1].severity == "GREEN"
+    assert drafts[1].severity == "UNKNOWN"
 
 
 def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
@@ -183,7 +191,7 @@ def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
     assert "риск опровергнут" in drafts[0].comment
 
 
-def test_nli_fallback_to_heuristic(contract_pdf, monkeypatch):
+def test_nli_failure_does_not_change_explicit_mode(contract_pdf, monkeypatch):
     from app.services import analyzer, nli
 
     pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
@@ -198,5 +206,6 @@ def test_nli_fallback_to_heuristic(contract_pdf, monkeypatch):
 
     drafts = analyzer.evaluate_nli([RuleContext(rule, [chunk])], pages)
     assert len(drafts) == 1
-    assert drafts[0].source == "HEURISTIC"  # откатился к эвристике
-    assert drafts[0].quote_verified
+    assert drafts[0].source == "ERROR"
+    assert drafts[0].severity == "UNKNOWN"
+    assert not drafts[0].quote_verified

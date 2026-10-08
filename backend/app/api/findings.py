@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user, finding_out, get_document_or_404
 from app.db import get_db
-from app.models import Analysis, Document, RiskFinding, User
+from app.models import Document, RiskFinding, User
 from app.schemas import FindingOut, FindingUpdate
 from app.services.audit import log_action
 from app.services.scoring import risk_score
+from app.services.pipeline import refresh_analysis
 from app.vocab import REVIEW_FROM_API, REVIEW_LABELS
 
 router = APIRouter(prefix="/api/findings", tags=["Замечания"])
@@ -51,11 +52,7 @@ def update_finding(finding_id: uuid.UUID, body: FindingUpdate, db: Session = Dep
         RiskFinding.document_id == finding.document_id, RiskFinding.review_status != "DISMISSED")).all()
     db.execute(update(Document).where(Document.id == finding.document_id)
                .values(risk_score=risk_score(severities)))
-    db.execute(update(Analysis).where(Analysis.id == finding.analysis_id).values(
-        risk_score=select(func.max(Document.risk_score))
-        .where(Document.analysis_id == finding.analysis_id, Document.status == "COMPLETED")
-        .scalar_subquery()
-    ))
+    refresh_analysis(db, finding.analysis_id)
     db.commit()
     db.refresh(finding)
     return finding_out(finding)

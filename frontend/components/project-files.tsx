@@ -2,16 +2,25 @@
 
 import { useRef, useState } from 'react';
 import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
-import type { DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
+import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
+import { analysisModeLabels } from '@/lib/labels';
+import { AnalysisModeSelector } from './analysis-mode-selector';
+import { UnknownResultsBadge } from './shared-badges';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
   project: Project;
   onUpload: (files: File[]) => Promise<string[]>;
   onOpenDocument: (document: DocumentInfo) => void;
-  onStart: () => Promise<void>;
-  onRerun?: () => Promise<void>;
+  onStart: (mode: AnalysisMode) => Promise<void>;
+  onRerun?: (mode: AnalysisMode) => Promise<void>;
+  analysisModes: AnalysisModes | null;
+  analysisModesLoading: boolean;
+  analysisModesError: string | null;
+  onRetryAnalysisModes: () => void;
+  selectedAnalysisMode: AnalysisMode | null;
+  onAnalysisModeChange: (mode: AnalysisMode) => void;
 }
 
 type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
@@ -26,13 +35,19 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
   return 'ready';
 }
 
-export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, onRerun }: ProjectFilesViewProps) {
+export function ProjectFilesView({
+  project, onUpload, onOpenDocument, onStart, onRerun,
+  analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
+  selectedAnalysisMode, onAnalysisModeChange,
+}: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
   const [uploading, setUploading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
   const startLock = useRef(false);
+  const selectedModeInfo = analysisModes?.modes.find(mode => mode.id === selectedAnalysisMode);
+  const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true;
   const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
   const pending = project.files.filter(file => fileState(file) === 'processing').length;
   const documentCount = project.files.reduce((total, file) => total + file.documents.length, 0);
@@ -52,12 +67,12 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, o
 
   async function runAnalysis() {
     const action = waiting > 0 ? onStart : onRerun;
-    if (!action || startLock.current || uploading || (waiting === 0 && pending > 0)) return;
+    if (!action || startLock.current || uploading || (waiting === 0 && pending > 0) || !modeReady || !selectedAnalysisMode) return;
     startLock.current = true;
     setStarting(true);
     setStartError('');
     try {
-      await action();
+      await action(selectedAnalysisMode);
     } catch (cause) {
       setStartError(cause instanceof Error ? cause.message : 'Не удалось запустить анализ. Попробуйте ещё раз.');
     } finally {
@@ -77,12 +92,22 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, o
         <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
       </div>
       <FileDropzone onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
+      <AnalysisModeSelector
+        modes={analysisModes?.modes ?? []}
+        selectedMode={selectedAnalysisMode}
+        onChange={mode => { setStartError(''); onAnalysisModeChange(mode); }}
+        loading={analysisModesLoading}
+        error={analysisModesError}
+        onRetry={onRetryAnalysisModes}
+        configuredModel={analysisModes?.configuredModel ?? null}
+        disabled={starting}
+      />
       <div className="project-files-heading">
         <h2>Загруженные файлы <span>{project.files.length}</span></h2>
         <div className="project-files-heading-actions">
           {pending > 0 && <span className="processing-count" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
           {(waiting > 0 || (onRerun && project.files.some(file => file.documents.some(document => document.phase === 'ready' || document.phase === 'failed')))) && (
-            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={starting || uploading || (waiting === 0 && pending > 0)} onClick={() => void runAnalysis()}>
+            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={starting || uploading || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
               {starting ? <LoaderCircle size={15} className="spin" /> : waiting > 0 ? <Play size={15} /> : <RotateCw size={14} />}
               {starting ? 'Запускаем анализ…' : waiting > 0 ? 'Начать анализ' : 'Проверить заново'}
             </button>
@@ -124,10 +149,13 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, o
                     <p>{formatFileSize(file.size)} · {formatProjectDate(file.addedAt)}{isArchive ? ` · Документов: ${file.documents.length}` : ''}</p>
                     {file.errorMessage && <p className="processing-error-text">{file.errorMessage}</p>}
                     {singleDocument?.errorMessage && singleDocument.errorMessage !== file.errorMessage && <p className="processing-error-text">{singleDocument.errorMessage}</p>}
+                    {(singleDocument?.errorMessage || file.errorMessage) && file.rulesChecked > 0 && <p>Предыдущие результаты проверки сохранены.</p>}
                   </div>
                   <div className="file-processing">
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
+                    {processingState.phase === 'ready' && <UnknownResultsBadge count={file.counts.unknown} />}
+                    {singleDocument?.analysisMode && <small>Выбранный режим: {analysisModeLabels[singleDocument.analysisMode]}</small>}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
                   </div>
                   {canOpen && (
@@ -146,10 +174,13 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, o
                           {document.relativePath && document.relativePath !== document.name && <p>{document.relativePath}</p>}
                           <p>{document.type?.toUpperCase() ?? 'Файл'}{document.size !== null ? ` · ${formatFileSize(document.size)}` : ''}{document.totalPages > 0 ? ` · Страниц: ${document.totalPages}` : ''}</p>
                           {document.errorMessage && <p className="processing-error-text">{document.errorMessage}</p>}
+                          {document.errorMessage && document.rulesChecked > 0 && <p>Предыдущие результаты проверки сохранены.</p>}
                         </div>
                         <div className="file-processing">
                           <ProcessingStatus item={document} name={document.name} />
                           {document.phase === 'ready' && <small>{document.rulesChecked > 0 ? `Проверено правил: ${document.rulesChecked} · Замечаний: ${riskCount(document.counts)}` : 'Нет результатов проверки правил'}</small>}
+                          {document.phase === 'ready' && <UnknownResultsBadge count={document.counts.unknown} />}
+                          {document.analysisMode && <small>Выбранный режим: {analysisModeLabels[document.analysisMode]}</small>}
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
                         </div>
                         {document.phase === 'ready' && document.hasPreview && (

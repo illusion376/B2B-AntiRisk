@@ -13,11 +13,12 @@ from app.services.reports.data import ReportData, ReportDocument, ReportFinding
 from app.vocab import REVIEW_LABELS, SEVERITY_SHORT_LABELS
 
 LIGHT_LABEL = {"RED": "Красный — критичные риски", "YELLOW": "Жёлтый — требует внимания",
-               "GREEN": "Зелёный — без рисков", "UNKNOWN": "Нет оценки"}
+               "GREEN": "Зелёный — без рисков", "UNKNOWN": "Недостаточно данных"}
 SEVERITY_LABEL = SEVERITY_SHORT_LABELS
 SEVERITY_FILL = {"RED": "F8D7D5", "YELLOW": "FDEFC8", "LOW": "E8F5E9", "GREEN": "DDF0DE", "UNKNOWN": "EDEDED"}
 SEVERITY_TEXT = {"RED": RGBColor(0xB7, 0x1C, 0x1C), "YELLOW": RGBColor(0x9A, 0x67, 0x00),
-                 "LOW": RGBColor(0x2E, 0x7D, 0x32), "GREEN": RGBColor(0x2E, 0x7D, 0x32)}
+                 "LOW": RGBColor(0x2E, 0x7D, 0x32), "GREEN": RGBColor(0x2E, 0x7D, 0x32),
+                 "UNKNOWN": RGBColor(0x55, 0x55, 0x55)}
 REVIEW_LABEL = REVIEW_LABELS
 LAW_LABEL = {"44-FZ": "44-ФЗ", "223-FZ": "223-ФЗ"}
 VERDICT = {
@@ -25,7 +26,7 @@ VERDICT = {
            "протокол разногласий до подачи заявки / подписания контракта.",
     "YELLOW": "Критичных условий не выявлено, но есть пункты, требующие внимания при расчёте цены и планировании исполнения.",
     "GREEN": "Существенных рисков по проверенным правилам не выявлено.",
-    "UNKNOWN": "Оценка рисков недоступна. Есть документы без завершённой проверки по действующим правилам.",
+    "UNKNOWN": "Оценка рисков недоступна: не по всем правилам достаточно данных для вывода. Требуется проверка специалистом.",
 }
 DISCLAIMER = ("Отчёт сформирован автоматически ИИ-ассистентом «Светофор рисков» и не является юридическим "
               "заключением. Замечания необходимо проверить специалисту.")
@@ -152,6 +153,9 @@ def _summary(doc, data: ReportData) -> None:
         _cell_text(cell, text, bold=True)
         _shade(cell, fill)
     doc.add_paragraph(VERDICT[light])
+    unknown = sum(f.severity == "UNKNOWN" for f in findings)
+    if unknown:
+        doc.add_paragraph(f"Недостаточно данных по проверкам: {unknown}. Эти результаты не означают отсутствие риска.")
 
 
 def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
@@ -171,6 +175,8 @@ def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
 def _assessment_note(rd: ReportDocument) -> str:
     if rd.status != "COMPLETED":
         return f"Документ не проверен: {rd.error_message or rd.status}."
+    if any(f.severity == "UNKNOWN" and f.review_status != "DISMISSED" for f in rd.findings):
+        return "Проверка выполнена частично: для части правил недостаточно подтверждённых данных."
     return "Нет результатов проверки по действующим правилам."
 
 
@@ -242,7 +248,7 @@ def build_detailed(data: ReportData, target: Path) -> Path:
                 _shade(cell, SEVERITY_FILL[f.severity])
                 if not f.quote_verified:
                     doc.add_paragraph("Цитата не найдена в тексте дословно — сверьте с документом.").runs[0].italic = True
-            _labeled(doc, "Почему это риск", f.comment)
+            _labeled(doc, "Почему нет оценки" if f.severity == "UNKNOWN" else "Почему это риск", f.comment)
             if f.counter_proposal:
                 _labeled(doc, "Рекомендация", f.counter_proposal)
             if f.legal_reference:
@@ -288,7 +294,7 @@ def build_protocol(data: ReportData, target: Path) -> Path:
     p = doc.add_paragraph(f"к проекту контракта (документы: {names})")
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Дата: {data.generated_at.strftime('%d.%m.%Y')}")
-    if data.light == "UNKNOWN":
+    if any(not rd.assessed for rd in data.documents):
         doc.add_paragraph(VERDICT["UNKNOWN"])
         for rd in data.documents:
             if not rd.assessed:
@@ -299,6 +305,8 @@ def build_protocol(data: ReportData, target: Path) -> Path:
     number = 0
     for rd in data.documents:
         for f in rd.issues:
+            if f.severity == "UNKNOWN":
+                continue
             if not (f.exact_quote or f.counter_proposal):
                 continue
             number += 1
@@ -308,7 +316,7 @@ def build_protocol(data: ReportData, target: Path) -> Path:
                 str(number), location, f.exact_quote or "Условие отсутствует",
                 f.counter_proposal or "Просим уточнить / исключить условие", justification,
             ], widths, size=9)
-    if number == 0 and data.light != "UNKNOWN":
+    if number == 0 and all(rd.assessed for rd in data.documents):
         doc.add_paragraph("Разногласий по проверенным правилам не выявлено.")
 
     doc.add_paragraph()

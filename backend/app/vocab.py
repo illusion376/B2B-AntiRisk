@@ -8,24 +8,24 @@ from typing import Literal
 
 from fastapi import HTTPException
 
-Severity = Literal["critical", "warning", "low", "ok"]
+Severity = Literal["critical", "warning", "low", "unknown", "ok"]
 RiskLevel = Literal["critical", "warning", "low"]
 ReviewStatus = Literal["unseen", "accepted", "dismissed"]
 
-SEVERITY_TO_API: dict[str, str] = {"RED": "critical", "YELLOW": "warning", "LOW": "low", "GREEN": "ok"}
+SEVERITY_TO_API: dict[str, str] = {"RED": "critical", "YELLOW": "warning", "LOW": "low", "UNKNOWN": "unknown", "GREEN": "ok"}
 SEVERITY_FROM_API: dict[str, str] = {v: k for k, v in SEVERITY_TO_API.items()}
 
 REVIEW_TO_API: dict[str, str] = {"NEW": "unseen", "CONFIRMED": "accepted", "RESOLVED": "accepted", "DISMISSED": "dismissed"}
 REVIEW_FROM_API: dict[str, str] = {"unseen": "NEW", "accepted": "CONFIRMED", "dismissed": "DISMISSED"}
 
 # Порядок групп замечаний и сила риска (для сравнения уровней)
-SEVERITY_ORDER = ["RED", "YELLOW", "LOW", "GREEN"]
+SEVERITY_ORDER = ["RED", "YELLOW", "LOW", "UNKNOWN", "GREEN"]
 SEVERITY_RANK = {"RED": 3, "YELLOW": 2, "LOW": 1, "GREEN": 0}
 
 SEVERITY_GROUP_LABELS = {  # как severityLabels во фронтенде
-    "RED": "Критические замечания", "YELLOW": "Требуют внимания", "LOW": "Низкий риск", "GREEN": "Без замечаний",
+    "RED": "Критические замечания", "YELLOW": "Требуют внимания", "LOW": "Низкий риск", "UNKNOWN": "Недостаточно данных", "GREEN": "Без замечаний",
 }
-SEVERITY_SHORT_LABELS = {"RED": "Критично", "YELLOW": "Внимание", "LOW": "Низкий риск", "GREEN": "Без замечаний"}
+SEVERITY_SHORT_LABELS = {"RED": "Критично", "YELLOW": "Внимание", "LOW": "Низкий риск", "UNKNOWN": "Недостаточно данных", "GREEN": "Без замечаний"}
 RISK_LEVEL_LABELS = {"RED": "Высокий риск", "YELLOW": "Средний риск", "LOW": "Низкий риск"}  # riskLabels
 REVIEW_LABELS = {"NEW": "Не просмотрено", "CONFIRMED": "Принято", "RESOLVED": "Принято", "DISMISSED": "Отклонено"}
 

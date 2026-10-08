@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from app.vocab import ReviewStatus, RiskLevel, Severity
 
 LawType = Literal["ALL", "44-FZ", "223-FZ"]
-TrafficLight = Literal["critical", "warning", "ok"]
+TrafficLight = Literal["critical", "warning", "ok", "unknown"]
+AnalysisMode = Literal["llm", "nli", "keyword"]
 # Стадия обработки файла для интерфейса (как getProcessing() во фронтенде) + ошибки
 Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
 
@@ -38,6 +39,7 @@ class SeverityCounts(BaseModel):
     warning: int = 0
     low: int = 0
     ok: int = 0
+    unknown: int = 0
     unseen: int = 0  # замечания (не «ok») со статусом «Не просмотрено»
 
 
@@ -51,6 +53,10 @@ class DocumentOut(ORM):
     file_type: str | None
     file_size: int | None
     status: str  # UPLOADED, QUEUED, CONVERTING, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED, UNSUPPORTED
+    analysis_mode: AnalysisMode | None = Field(default=None, description=(
+        "Последний выбранный режим. При частичной или неудачной повторной проверке могут сохраняться "
+        "предыдущие результаты; источник каждого замечания указан в source. NULL — старый запуск без записи режима."
+    ))
     phase: Phase = "queued"
     label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
     progress: int
@@ -321,8 +327,25 @@ class RuleTestResult(BaseModel):
     fragments: list[dict]
 
 
-class RerunRequest(BaseModel):
+class StartRequest(BaseModel):
+    analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")
+
+
+class RerunRequest(StartRequest):
     rule_ids: list[str] | None = Field(default=None, description="Только эти правила; по умолчанию — все активные")
+
+
+class AnalysisModeOut(BaseModel):
+    id: AnalysisMode
+    label: str
+    available: bool
+    description: str
+
+
+class AnalysisModesOut(BaseModel):
+    default_mode: AnalysisMode
+    modes: list[AnalysisModeOut]
+    configured_model: str | None = None
 
 
 # ---------- Отчёты и история ----------

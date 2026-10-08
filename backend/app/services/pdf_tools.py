@@ -33,13 +33,15 @@ def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path) -> Path:
     """Копия документа с подсветкой проблемных мест и всплывающими комментариями (для юриста)."""
     with PDF_LOCK, fitz.open(pdf_path) as doc:
         for f in findings:
+            if f["severity"] == "UNKNOWN":
+                continue
             color = _COLORS.get(f["severity"], _COLORS["YELLOW"])
             note = (
                 f"№{f['number']} {_SEVERITY_LABEL.get(f['severity'], '')}: {f['title']}\n\n{f['comment']}"
                 + (f"\n\nРекомендация: {f['counter_proposal']}" if f.get("counter_proposal") else "")
             )
             placed = False
-            for block in f.get("highlights") or []:
+            for block in (f.get("highlights") or []) if f.get("quote_verified") else []:
                 if not 1 <= block["page"] <= doc.page_count:
                     continue
                 page = doc[block["page"] - 1]

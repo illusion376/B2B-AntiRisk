@@ -1,14 +1,15 @@
 import type {
-  DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
+  AnalysisModesDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
   ProjectFileDto, RuleDto, UploadDto, UserDto,
 } from './api-types';
 import type {
-  CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project,
+  AnalysisMode, AnalysisModes, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
   ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 
 export interface RequestOptions { signal?: AbortSignal }
+export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode }
 export interface ReportOptions extends RequestOptions { mode?: string; format?: string; includeDismissed?: boolean }
 export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
 export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
@@ -40,6 +41,7 @@ function serverMessage(body: unknown, status: number): string {
   if (body && typeof body === 'object' && 'detail' in body) {
     const { detail } = body;
     if (typeof detail === 'string' && detail.trim()) return detail;
+    if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string' && detail.message.trim()) return detail.message;
     if (Array.isArray(detail)) {
       const messages = detail.flatMap(item => {
         if (!item || typeof item !== 'object' || typeof item.msg !== 'string') return [];
@@ -103,14 +105,34 @@ function id(value: string): string {
   return value;
 }
 
+function mapCounts(value: SeverityCounts): SeverityCounts {
+  return { ...value, unknown: value.unknown ?? 0 };
+}
+
+const isAnalysisMode = (value: unknown): value is AnalysisMode => value === 'llm' || value === 'nli' || value === 'keyword';
+
+export function mapAnalysisModes(value: AnalysisModesDto): AnalysisModes {
+  if (!isAnalysisMode(value.default_mode) || !Array.isArray(value.modes) || !value.modes.length) throw new Error('Invalid analysis modes');
+  const ids = new Set<string>();
+  for (const mode of value.modes) {
+    if (!isAnalysisMode(mode.id) || ids.has(mode.id) || typeof mode.label !== 'string' || !mode.label.trim()
+      || typeof mode.available !== 'boolean' || typeof mode.description !== 'string') throw new Error('Invalid analysis mode');
+    ids.add(mode.id);
+  }
+  if (!ids.has(value.default_mode) || (value.configured_model != null && typeof value.configured_model !== 'string')) throw new Error('Invalid analysis default');
+  return { defaultMode: value.default_mode, modes: value.modes, configuredModel: value.configured_model ?? null };
+}
+
 export function mapDocument(value: DocumentDto): DocumentInfo {
+  if (value.analysis_mode != null && !isAnalysisMode(value.analysis_mode)) throw new Error('Invalid document analysis mode');
   return {
     id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
+    analysisMode: value.analysis_mode ?? null,
     relativePath: value.relative_path, type: value.file_type, size: value.file_size,
     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
     totalPages: value.total_pages, isScanned: value.is_scanned, ocrPages: value.ocr_pages,
     ocrConfidence: value.ocr_confidence, lawType: value.law_type, riskScore: value.risk_score,
-    trafficLight: value.traffic_light, counts: value.counts, rulesChecked: value.rules_checked,
+    trafficLight: value.traffic_light, counts: mapCounts(value.counts), rulesChecked: value.rules_checked,
     errorMessage: value.error_message, processingMs: value.processing_ms, hasPreview: value.has_preview,
     createdAt: timestamp(value.created_at), updatedAt: nullableTime(value.updated_at),
   };
@@ -120,14 +142,14 @@ export function mapProjectFile(value: ProjectFileDto): ProjectFile {
     id: id(value.id), name: value.name, type: value.type, size: value.size, addedAt: timestamp(value.added_at),
     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
     errorMessage: value.error_message, riskScore: value.risk_score, trafficLight: value.traffic_light,
-    counts: value.counts, rulesChecked: value.rules_checked, documents: value.documents.map(mapDocument),
+    counts: mapCounts(value.counts), rulesChecked: value.rules_checked, documents: value.documents.map(mapDocument),
   };
 }
 export function mapProject(value: ProjectDto): Project {
   return {
     id: id(value.id), title: value.title, description: value.description, files: value.files.map(mapProjectFile),
     createdAt: timestamp(value.created_at), updatedAt: timestamp(value.updated_at), processingCount: value.processing_count,
-    counts: value.counts, trafficLight: value.traffic_light,
+    counts: mapCounts(value.counts), trafficLight: value.traffic_light,
   };
 }
 export function mapFinding(value: FindingDto): Finding {
@@ -184,6 +206,7 @@ export function documentFileUrl(documentId: string): string { return apiUrl(`/do
 export function documentOriginalUrl(documentId: string): string { return apiUrl(`/documents/${segment(documentId)}/original`); }
 
 export const api = {
+  getAnalysisModes: (options: RequestOptions = {}): Promise<AnalysisModes> => request('/analysis-modes', mapAnalysisModes, options),
   getProjects: (options: RequestOptions = {}): Promise<Project[]> => request<ProjectDto[], Project[]>('/projects', values => values.map(mapProject), options),
   getProject: (projectId: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, options),
   createProject: (draft: ProjectDraft, options: RequestOptions = {}): Promise<Project> => request('/projects', mapProject, { ...options, method: 'POST', ...json(draft) }),
@@ -225,15 +248,15 @@ export const api = {
     const blob = await response.blob();
     saveDownload(blob, reportFilename(response.headers.get('Content-Disposition'), `report.${format}`));
   },
-  startProjectAnalysis: (projectId: string, options: RequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
+  startProjectAnalysis: (projectId: string, options: AnalysisRequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
     return value;
-  }, { ...options, method: 'POST' }),
-  rerunProject: (projectId: string, options: RequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
+  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
+  rerunProject: (projectId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
     return value;
-  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds }) }),
-  reanalyzeDocument: (documentId: string, options: RequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { ...options, method: 'POST' }),
+  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode }) }),
+  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
   thumbnailUrl,
   documentFileUrl,
   documentOriginalUrl,

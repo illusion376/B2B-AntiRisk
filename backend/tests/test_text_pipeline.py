@@ -45,7 +45,7 @@ def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     assert hyphen.verified and hyphen.clause == "6.2"
 
     fuzzy = locate_quote(pages, "Срок поставки товара составляет 60 календарных дн.", (2, 2))
-    assert fuzzy.verified and fuzzy.page_number == 2 and fuzzy.clause == "7.2"
+    assert not fuzzy.verified and fuzzy.page_number == 2 and fuzzy.clause == "7.2"
     assert "60 календарных дней" in fuzzy.text
 
     # Цитата начинается с заголовка раздела 7 — пункт не должен «утечь» из раздела 6

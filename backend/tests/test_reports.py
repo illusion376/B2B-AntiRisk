@@ -166,3 +166,39 @@ def test_incomplete_package_does_not_inherit_green_from_its_completed_document()
 
     assert completed.light == "UNKNOWN"
     assert completed.risk_score is None
+
+
+@pytest.mark.parametrize("mode", ["brief", "detailed", "protocol"])
+def test_unknown_finding_is_not_reported_as_confirmed_disagreement(contract_pdf, tmp_path, mode):
+    data = _data(contract_pdf)
+    unknown = data.documents[0].findings[0]
+    unknown.severity = "UNKNOWN"
+    unknown.title = "Неподтверждённый вывод"
+    unknown.comment = "Цитата не подтверждена"
+    unknown.counter_proposal = "Не отправлять как правку"
+    unknown.quote_verified = False
+    data.documents[0].findings = [unknown]
+    data.documents[0].light = "UNKNOWN"
+    data.documents[0].risk_score = None
+
+    path = BUILDERS[mode](data, tmp_path / f"unknown-{mode}.docx")
+    document = DocxDocument(path)
+    text = "\n".join(p.text for p in document.paragraphs)
+    cells = "\n".join(c.text for t in document.tables for r in t.rows for c in r.cells)
+
+    assert data.light == "UNKNOWN" and data.risk_score is None
+    assert "Замечаний нет." not in text
+    assert "Разногласий по проверенным правилам не выявлено." not in text
+    if mode == "protocol":
+        assert "Не отправлять как правку" not in cells
+    else:
+        assert "Недостаточно данных" in cells + text
+
+
+def test_unknown_finding_cannot_be_exported_as_a_clean_annotated_pdf(contract_pdf):
+    data = _data(contract_pdf)
+    data.documents[0].findings = data.documents[0].findings[:1]
+    data.documents[0].findings[0].severity = "UNKNOWN"
+    data.documents[0].findings[0].quote_verified = False
+    with pytest.raises(reports.ReportError, match="недостаточно данных"):
+        reports.generate(data, "annotated", "pdf")

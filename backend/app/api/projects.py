@@ -11,8 +11,9 @@ from app.api.analyses import check_content_length, enqueue_documents, rerun
 from app.api.deps import current_user, get_project_or_404, project_files_out, projects_out
 from app.db import get_db
 from app.models import Analysis, Document, Project, User
-from app.schemas import ProjectCreate, ProjectOut, ProjectUpdate, RerunRequest, UploadError, UploadResult
+from app.schemas import ProjectCreate, ProjectOut, ProjectUpdate, RerunRequest, StartRequest, UploadError, UploadResult
 from app.services import uploads
+from app.services.analysis_modes import analysis_mode_or_422
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/projects", tags=["Проекты"])
@@ -132,8 +133,10 @@ def upload_files(
 
 @router.post("/{project_id}/start", status_code=status.HTTP_202_ACCEPTED,
              summary="Начать анализ загруженных, ещё не проверенных документов проекта")
-def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
+                  body: StartRequest | None = None):
     project = get_project_or_404(db, project_id, user)
+    mode = analysis_mode_or_422(body.analysis_mode if body else None)
     # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
     # или одновременном запуске из нескольких вкладок.
     analyses = list(db.scalars(select(Analysis).where(
@@ -146,10 +149,11 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
         raise HTTPException(409, "Нет документов, ожидающих запуска анализа")
     for doc in docs:
         doc.status, doc.progress, doc.error_message = "QUEUED", 0, None
+        doc.analysis_mode = mode
     for analysis in analyses:
         analysis.analysis_status, analysis.progress, analysis.error_message = "QUEUED", 0, None
         log_action(db, user.id, "ANALYSIS_STARTED", "analysis", analysis.id,
-                   {"file": analysis.original_filename, "project": project.title})
+                   {"file": analysis.original_filename, "project": project.title, "analysis_mode": mode})
     project.updated_at = func.now()
     db.commit()
     enqueue_documents(db, docs)
@@ -161,5 +165,6 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
 def rerun_project(project_id: uuid.UUID, body: RerunRequest | None = None, db: Session = Depends(get_db),
                   user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
-    documents = rerun(db, user, list(project.analyses), body.rule_ids if body else None)
+    documents = rerun(db, user, list(project.analyses), body.rule_ids if body else None,
+                      body.analysis_mode if body else None)
     return {"documents": documents}

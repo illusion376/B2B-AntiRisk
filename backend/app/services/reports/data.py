@@ -48,7 +48,9 @@ class ReportDocument:
 
     @property
     def assessed(self) -> bool:
-        return self.status == "COMPLETED" and self.light != "UNKNOWN" and (
+        return self.status == "COMPLETED" and self.light != "UNKNOWN" and not any(
+            f.severity == "UNKNOWN" and f.review_status != "DISMISSED" for f in self.findings
+        ) and (
             self.rules_checked > 0 or bool(self.findings)
         )
 
@@ -95,7 +97,8 @@ class ReportData:
 
     @property
     def light(self) -> str:
-        if not self.documents or not all(d.assessed for d in self.documents):
+        if not self.documents or not all(d.status == "COMPLETED" and (d.rules_checked or d.findings)
+                                        for d in self.documents):
             return "UNKNOWN"
         return traffic_light(f.severity for f in self.all_findings if f.review_status != "DISMISSED")
 

@@ -1,12 +1,25 @@
-export type Severity = 'critical' | 'warning' | 'low' | 'ok';
-export type RiskLevel = Exclude<Severity, 'ok'>;
+export type Severity = 'critical' | 'warning' | 'low' | 'ok' | 'unknown';
+export type RiskLevel = Exclude<Severity, 'ok' | 'unknown'>;
 export type ReviewStatus = 'unseen' | 'accepted' | 'dismissed';
 export type View = 'documents' | 'project' | 'document' | 'rules' | 'history';
 export type ProcessingPhase = 'uploaded' | 'queued' | 'processing' | 'ready' | 'failed' | 'unsupported';
-export type TrafficLight = 'critical' | 'warning' | 'ok';
+export type TrafficLight = 'critical' | 'warning' | 'ok' | 'unknown';
 export type LawType = 'ALL' | '44-FZ' | '223-FZ';
+export type AnalysisMode = 'llm' | 'nli' | 'keyword';
 
-export interface SeverityCounts { critical: number; warning: number; low: number; ok: number; unseen: number }
+export interface AnalysisModeOption {
+  id: AnalysisMode;
+  label: string;
+  available: boolean;
+  description: string;
+}
+export interface AnalysisModes {
+  defaultMode: AnalysisMode;
+  modes: AnalysisModeOption[];
+  configuredModel: string | null;
+}
+
+export interface SeverityCounts { critical: number; warning: number; low: number; ok: number; unknown: number; unseen: number }
 export interface CheckRule {
   id: string;
   title: string;
@@ -34,6 +47,7 @@ export interface ProcessingState {
 export interface DocumentInfo extends ProcessingState {
   id: string;
   analysisId: string;
+  analysisMode: AnalysisMode | null;
   name: string;
   relativePath: string | null;
   type: string | null;

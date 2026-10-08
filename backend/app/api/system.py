@@ -7,9 +7,16 @@ from app.api.deps import current_user
 from app.config import settings
 from app.db import get_db
 from app.models import User
-from app.schemas import UserOut
+from app.schemas import AnalysisModesOut, UserOut
+from app.services.analysis_modes import capabilities, default_analysis_mode
 
 router = APIRouter(tags=["Система"])
+
+
+@router.get("/api/analysis-modes", response_model=AnalysisModesOut, response_model_exclude_none=True,
+            summary="Доступные режимы анализа и режим по умолчанию")
+def analysis_modes():
+    return capabilities()
 
 
 @router.get("/api/health", summary="Проверка работоспособности")
@@ -35,6 +42,7 @@ def health(response: Response, db: Session = Depends(get_db)):
         "status": "ok" if healthy else "degraded",
         "database": database_ok,
         "queue": redis_ok,
+        "default_mode": default_analysis_mode(),
         "llm": settings.llm_model if settings.llm_enabled else "heuristic (LLM не настроена)",
         "embeddings": settings.embedding_model_id,
         "ocr": settings.ocr_enabled,

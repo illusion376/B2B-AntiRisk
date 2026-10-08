@@ -3,19 +3,20 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
-import { severityLabels, statusLabels } from '@/lib/labels';
+import { analysisModeLabels, findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
 import { riskLabels } from '@/lib/rules';
 import { HighlightedText, IconButton, Modal } from './ui';
+import { FindingEvidenceBadges, UnknownResultsBadge } from './shared-badges';
 import './review-enhancements.css';
 import './live-document.css';
 
 const reviewTabs = [
-  { id: 'findings', label: 'Замечания' },
+  { id: 'findings', label: 'Результаты' },
   { id: 'navigation', label: 'Навигация' },
   { id: 'rules', label: 'Правила проверки' },
 ] as const;
-const severityOrder: Severity[] = ['critical', 'warning', 'low', 'ok'];
+const severityOrder: Severity[] = ['critical', 'warning', 'low', 'unknown', 'ok'];
 const noPendingStatuses: ReadonlySet<string> = new Set();
 type ReviewTab = typeof reviewTabs[number]['id'];
 
@@ -41,7 +42,7 @@ export type DocumentWorkspaceProps = {
 };
 
 function findingLabel(finding: Finding) {
-  return finding.number === null ? 'Результат проверки' : `Замечание № ${finding.number}`;
+  return !isRiskSeverity(finding.severity) || finding.number === null ? 'Результат проверки правила' : `Замечание № ${finding.number}`;
 }
 
 function PageThumbnail({ documentId, page, hasPreview }: { documentId: string; page: number; hasPreview: boolean }) {
@@ -73,7 +74,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
   return <div className="live-pdf-page" style={{ width: `${zoom}%`, minWidth: `${zoom}%`, aspectRatio: hasDimensions ? `${width} / ${height}` : undefined }} aria-busy={imageState === 'loading'}>
     {imageState === 'loading' && <div className="pdf-loading-indicator" role="status"><LoaderCircle size={20} />Загрузка страницы…</div>}
     <img src={thumbnailUrl(documentId, page, 1200)} alt={`Страница ${page} документа`} draggable={false} onLoad={() => setImageState('ready')} onError={() => setImageState('error')} />
-    {imageState === 'ready' && hasDimensions && findings.filter(finding => finding.quoteVerified).flatMap(finding =>
+    {imageState === 'ready' && hasDimensions && findings.filter(finding => finding.quoteVerified && isRiskSeverity(finding.severity)).flatMap(finding =>
       finding.highlights.filter(highlight => highlight.page === page).flatMap((highlight, highlightIndex) => highlight.rects.map((rect, rectIndex) => {
         if (rect.length !== 4 || !rect.every(Number.isFinite)) return null;
         const left = Math.max(0, Math.min(width, rect[0]));
@@ -138,7 +139,9 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const hasFilters = activeFilterCount > 0;
   const selectedFinding = findings.find(finding => finding.id === selected);
   const detail = findings.find(finding => finding.id === detailId);
-  const riskFindings = findings.filter(finding => finding.severity !== 'ok');
+  const riskFindings = findings.filter(finding => isRiskSeverity(finding.severity));
+  const unknownCount = findings.filter(finding => finding.severity === 'unknown').length;
+  const visibleEvidence = filtered.filter(finding => finding.quoteVerified && isRiskSeverity(finding.severity));
   const reviewed = riskFindings.filter(finding => (statuses[finding.id] ?? finding.status) !== 'unseen').length;
   const reviewPercent = riskFindings.length ? Math.round(reviewed / riskFindings.length * 100) : 0;
   const hasText = sections.some(section => section.paragraphs.some(paragraph => paragraph.text.trim()));
@@ -219,7 +222,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   return <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
     <div className="mobile-pane-tabs" role="group" aria-label="Панель документа">
       <button aria-pressed={mobilePane === 'document'} className={mobilePane === 'document' ? 'active' : ''} onClick={() => setMobilePane('document')}><FileSearch size={16} />Документ</button>
-      <button aria-pressed={mobilePane === 'findings'} className={mobilePane === 'findings' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Замечания <span>{riskFindings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings'} className={mobilePane === 'findings' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
     </div>
 
     {showPages && <aside className="pages-sidebar" aria-label="Страницы документа">
@@ -264,7 +267,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
       {selectedFinding && <div className={`selected-finding-context ${selectedFinding.severity}`}>
         <span className={`risk-dot ${selectedFinding.severity}`} aria-hidden="true" />
         <button className="selected-finding-title" onClick={() => setDetailId(selectedFinding.id)} title={selectedFinding.title}>
-          <span>{findingLabel(selectedFinding)}{selectedFinding.clause ? ` · п. ${selectedFinding.clause}` : ''}{selectedFinding.page === null ? ' · без привязки к странице' : ''}</span><strong>{selectedFinding.title}</strong>
+          <span>{findingLabel(selectedFinding)}{selectedFinding.clause ? ` · п. ${selectedFinding.clause}` : ''}{selectedFinding.page === null ? ' · без привязки к странице' : ''}{selectedFinding.severity === 'unknown' ? ' · недостаточно данных' : isRiskSeverity(selectedFinding.severity) && !selectedFinding.quoteVerified ? ' · без подтверждённой цитаты' : ''}</span><strong>{selectedFinding.title}</strong>
         </button>
         <button className="return-to-findings" onClick={returnToFindings} aria-label="Вернуться к замечаниям"><List size={16} /></button>
         <IconButton label="Подробнее о выбранном замечании" onClick={() => setDetailId(selectedFinding.id)}><ChevronRight size={16} /></IconButton>
@@ -278,14 +281,14 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
           : pageLoading ? <div className="live-page-state" role="status"><LoaderCircle className="live-loading-spinner" size={28} /><h3>Загрузка страницы {page}…</h3></div>
           : pageError ? <div className="live-page-state" role="alert"><AlertCircle size={28} /><h3>Не удалось загрузить страницу</h3><p>{pageError}</p><button className="secondary-button" onClick={retryPage}><RotateCcw size={15} />Повторить</button></div>
           : !currentPage ? <div className="live-page-state"><FileSearch size={28} /><h3>Содержимое страницы недоступно</h3><button className="secondary-button" onClick={retryPage}>Загрузить страницу</button></div>
-          : viewerMode === 'pdf' && document.hasPreview ? <PdfPage key={`${document.id}-${page}-${previewRevision}`} documentId={document.id} pageContent={currentPage} page={page} zoom={zoom} findings={findings} selected={selected} onSelect={openFinding} onRetry={retryPage} />
+          : viewerMode === 'pdf' && document.hasPreview ? <PdfPage key={`${document.id}-${page}-${previewRevision}`} documentId={document.id} pageContent={currentPage} page={page} zoom={zoom} findings={visibleEvidence} selected={selected} onSelect={openFinding} onRetry={retryPage} />
           : !hasText ? <div className="live-page-state"><FileSearch size={28} /><h3>Текст страницы не распознан</h3><p>На этой странице нет доступного для поиска текста.</p>{document.hasPreview && <button className="secondary-button" onClick={() => setViewerMode('pdf')}>Показать PDF</button>}</div>
           : <article className="document-paper live-text-paper" style={{ width: `${zoom}%`, minWidth: `${zoom}%`, fontSize: `${zoom * .145}px` }} aria-label={`Текст страницы ${page}`}>
             <div className="paper-running-header"><span>{document.name}</span><span>{currentPage.isOcr ? 'РАСПОЗНАННЫЙ ТЕКСТ' : 'ТЕКСТ ДОКУМЕНТА'}</span></div>
             {sections.map((section, sectionIndex) => <section className="contract-section" key={`${sectionIndex}-${section.title}`}>
               {section.title && <h2>{section.title}</h2>}
               {section.paragraphs.map((paragraph, paragraphIndex) => {
-                const paragraphFindings = findings.filter(finding => paragraph.findingIds.includes(finding.id) && finding.severity !== 'ok');
+                const paragraphFindings = visibleEvidence.filter(finding => paragraph.findingIds.includes(finding.id));
                 const activeFinding = paragraphFindings.find(finding => finding.id === selected) ?? paragraphFindings[0];
                 return <div key={`${paragraphIndex}-${paragraph.clause}`} data-finding={activeFinding?.id} className={`contract-paragraph ${activeFinding ? `annotation ${activeFinding.severity}` : ''} ${activeFinding?.id === selected ? 'focused' : ''}`}>
                   {paragraphFindings.length > 0 && <span className="paragraph-finding-markers">{paragraphFindings.map(finding => <button key={finding.id} className={`annotation-marker ${finding.severity}`} aria-label={`${findingLabel(finding)}: ${finding.title}`} onClick={() => openFinding(finding)}>{finding.number ?? '!'}</button>)}</span>}
@@ -301,12 +304,16 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
     </section>
 
     {!expanded && <aside className="review-panel" aria-label="Проверка документа">
-      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{riskFindings.length}</span>}</button>)}</div>
+      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
+        {(document.analysisMode || unknownCount > 0) && <div className="analysis-result-context">
+          {document.analysisMode && <span>Выбранный режим: {analysisModeLabels[document.analysisMode]}</span>}
+          <UnknownResultsBadge count={unknownCount} />
+        </div>}
         <div className="filters">
           <label><span className="sr-only">Категория</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
           <label><span className="sr-only">Статус проверки</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
-          <label><span className="sr-only">Уровень риска</span><select value={severity} onChange={event => setSeverity(event.target.value)}><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
+          <label><span className="sr-only">Уровень риска</span><select value={severity} onChange={event => setSeverity(event.target.value)}><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="unknown">Недостаточно данных</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
           <button type="button" ref={searchToggleRef} className={`icon-button ${searchVisible ? 'is-active' : ''}`} aria-label={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} title={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} aria-expanded={searchVisible} aria-controls={searchVisible ? 'finding-search' : undefined} onClick={() => searchVisible ? closeSearch() : setSearchVisible(true)}><Search size={18} /></button>
         </div>
         {searchVisible && <div id="finding-search" className="finding-search field-search" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeSearch(); } }}><Search size={16} /><input autoFocus placeholder="Название, описание или цитата" aria-label="Поиск замечаний" value={filterText} onChange={event => setFilterText(event.target.value)} /><IconButton label="Очистить поиск замечаний" disabled={!filterText} onClick={() => setFilterText('')}><X size={15} /></IconButton></div>}
@@ -321,10 +328,10 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
               const isCollapsed = collapsed.includes(level);
               return <tbody key={level}>
                 <tr className="group-row"><th colSpan={7}><button onClick={() => setCollapsed(previous => previous.includes(level) ? previous.filter(item => item !== level) : [...previous, level])} aria-expanded={!isCollapsed}><span className={`group-bar ${level}`} /><span>{severityLabels[level]} <em>({group.length})</em></span><ChevronDown size={16} className={isCollapsed ? 'rotated' : ''} /></button></th></tr>
-                {!isCollapsed && group.map(finding => <tr key={finding.id} data-selected={selected === finding.id} className={`finding-row ${selected === finding.id ? 'selected-row' : ''}`}>
+                {!isCollapsed && group.map(finding => <tr key={finding.id} data-selected={selected === finding.id} className={`finding-row ${finding.severity === 'unknown' ? 'unknown-row' : ''} ${selected === finding.id ? 'selected-row' : ''}`}>
                   <td className="number-cell">{finding.number ?? '—'}</td>
                   <td className="severity-cell"><span className={`risk-dot ${finding.severity}`} title={severityLabels[finding.severity]} /><span className="sr-only">{severityLabels[finding.severity]}</span></td>
-                  <td className="finding-cell"><button onClick={() => select(finding)} className="finding-link" aria-current={selected === finding.id ? 'true' : undefined}><strong><HighlightedText text={finding.title} query={filterText} /></strong><span><HighlightedText text={finding.description} query={filterText} /></span>{finding.source === 'ERROR' && <small className="finding-source-error">Ошибка проверки</small>}<small className="finding-mobile-meta">{finding.clause ? `п. ${finding.clause} · ` : ''}{isLocated(finding) ? `стр. ${finding.page}` : 'Без привязки к странице'}</small></button></td>
+                  <td className="finding-cell"><button onClick={() => select(finding)} className="finding-link" aria-current={selected === finding.id ? 'true' : undefined}><strong><HighlightedText text={finding.title} query={filterText} /></strong><span><HighlightedText text={finding.description} query={filterText} /></span><FindingEvidenceBadges finding={finding} /><small className="finding-mobile-meta">{finding.clause ? `п. ${finding.clause} · ` : ''}{isLocated(finding) ? `стр. ${finding.page}` : 'Без привязки к странице'}</small></button></td>
                   <td className="clause-cell">{finding.clause ? <button onClick={() => select(finding)}>{finding.clause}</button> : '—'}</td>
                   <td className="page-cell">{isLocated(finding) ? <button onClick={() => select(finding)} aria-label={`Открыть страницу ${finding.page}`}>{finding.page}</button> : <span title="Страница не определена">—</span>}</td>
                   <td className="status-cell"><div className={`review-status ${reviewStatus(finding)}`} aria-busy={pendingIds.has(finding.id)}>
@@ -338,7 +345,10 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
           </table>
           {!filtered.length && <div className="empty-state"><FileSearch size={30} /><h3>{findings.length === 0 ? 'Нет результатов проверки' : 'Замечаний не найдено'}</h3><p>{findings.length === 0 ? 'Результаты появятся после проверки документа выбранными правилами.' : 'Попробуйте изменить условия фильтра.'}</p>{findings.length === 0 ? <button className="secondary-button" onClick={onManageRules}>Управление правилами</button> : hasFilters && <button className="secondary-button" onClick={resetFilters}>Сбросить фильтры</button>}</div>}
         </div>
-        <div className="review-footer"><span><Eye size={14} />Проверено <strong>{reviewed} из {riskFindings.length}</strong></span><div className="review-progress-wrap"><div className="review-progress" role="progressbar" aria-label="Прогресс проверки замечаний" aria-valuetext={`${reviewed} из ${riskFindings.length}, ${reviewPercent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewPercent}><i style={{ width: `${reviewPercent}%` }} /></div><span>{reviewPercent}%</span></div></div>
+        <div className="review-footer">
+          {riskFindings.length > 0 ? <><span><Eye size={14} />Рассмотрено замечаний <strong>{reviewed} из {riskFindings.length}</strong></span><div className="review-progress-wrap"><div className="review-progress" role="progressbar" aria-label="Прогресс рассмотрения замечаний" aria-valuetext={`${reviewed} из ${riskFindings.length}, ${reviewPercent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewPercent}><i style={{ width: `${reviewPercent}%` }} /></div><span>{reviewPercent}%</span></div></>
+            : <span>{unknownCount > 0 ? `Результатов без вывода: ${unknownCount}` : findings.length ? 'Замечаний по завершённым проверкам нет' : 'Нет результатов проверки'}</span>}
+        </div>
       </div>}
       {tab === 'navigation' && <div className="outline-pane" role="tabpanel" tabIndex={0} id="panel-navigation" aria-labelledby="tab-navigation">
         <div className="pane-heading"><List size={18} /><span>Содержание документа</span></div>
@@ -358,14 +368,16 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
     {detail && <Modal title={findingLabel(detail)} onClose={() => setDetailId(null)}>
       <div className="finding-detail">
         <span className={`severity-tag ${detail.severity}`}>{severityLabels[detail.severity]}</span>
+        {detail.severity === 'unknown' && <p className="unknown-result-explanation">По этому правилу пока нельзя сделать вывод о наличии или отсутствии риска. Проверьте причину и исходный документ.</p>}
         <h3>{detail.title}</h3><p>{detail.description}</p>
         <div className="detail-meta">{detail.clause && <span>Пункт {detail.clause}</span>}<span>{isLocated(detail) ? `Страница ${detail.page}` : 'Страница не определена'}</span>{detail.category && <span>{detail.category}</span>}</div>
-        <div className={`finding-evidence ${detail.source === 'ERROR' ? 'evidence-error' : ''}`}>
-          <span>Источник: <strong>{detail.source === 'LLM' ? 'LLM · анализ моделью' : detail.source === 'HEURISTIC' ? 'HEURISTIC · проверка по признакам' : detail.source === 'ERROR' ? 'ERROR · ошибка проверки' : detail.source || 'Не указан'}</strong></span>
-          {detail.quote && <span className={detail.quoteVerified ? 'quote-verified' : 'quote-unverified'}>{detail.quoteVerified ? <ShieldCheck size={14} /> : <AlertCircle size={14} />}{detail.quoteVerified ? 'Цитата найдена в документе' : 'Цитата не подтверждена в тексте документа'}</span>}
+        <div className={`finding-evidence ${detail.source === 'ERROR' ? 'evidence-error' : ''} ${detail.severity === 'unknown' ? 'evidence-unknown' : ''}`}>
+          <span>Источник: <strong>{findingSourceLabels[detail.source] ?? (detail.source || 'Не указан')}</strong></span>
+          {detail.quote && <span className={detail.quoteVerified ? detail.severity === 'unknown' ? 'quote-located-neutral' : 'quote-verified' : 'quote-unverified'}>{detail.quoteVerified ? <ShieldCheck size={14} /> : <AlertCircle size={14} />}{detail.quoteVerified ? detail.severity === 'unknown' ? 'Цитата найдена; вывод по правилу не определён' : 'Цитата найдена в документе' : 'Цитата не подтверждена в тексте документа'}</span>}
         </div>
         <h4>Фрагмент документа</h4>
-        {detail.quote ? <blockquote>{detail.quote}</blockquote> : <p className="missing-quote">Цитата для этого результата отсутствует.</p>}
+        {detail.quote ? <blockquote className={!detail.quoteVerified ? 'unverified-quote' : undefined}>{detail.quote}</blockquote> : <p className="missing-quote">Цитата для этого результата отсутствует.</p>}
+        {detail.quoteVerified && <p className="quote-evidence-note">Совпадение цитаты подтверждает её наличие в документе. Вывод по правилу приведён в обосновании ниже.</p>}
         {detail.comment && detail.comment !== detail.description && <><h4>Обоснование</h4><p>{detail.comment}</p></>}
         {detail.legalReference && <><h4>Ссылка на норму</h4><p>{detail.legalReference}</p></>}
         {detail.recommendation && <><h4>На что обратить внимание</h4><p>{detail.recommendation}</p></>}
@@ -373,7 +385,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
         <select id="detail-status" className="form-select" disabled={pendingIds.has(detail.id)} aria-busy={pendingIds.has(detail.id)} value={reviewStatus(detail)} onChange={event => onStatus(detail.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         {pendingIds.has(detail.id) && <small className="detail-saving-status" role="status">Сохранение статуса…</small>}
       </div>
-      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified ? 'К фрагменту' : 'К странице'}</button>}</div>
+      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>
     </Modal>}
   </div>;
 }

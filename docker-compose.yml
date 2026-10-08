@@ -6,6 +6,7 @@ x-backend-env: &backend-env
   REDIS_URL: redis://redis:6379/0
   STORAGE_DIR: /data/storage
   CORS_ORIGINS: ${CORS_ORIGINS:-*}
+  ANALYSIS_ENGINE: ${ANALYSIS_ENGINE:-auto}
   # LLM и эмбеддинги — любой OpenAI-совместимый API. Пусто -> работа без внешних сервисов
   # (эвристический анализ + локальные хэш-эмбеддинги). Значения берутся из .env
   LLM_BASE_URL: ${LLM_BASE_URL:-}
@@ -13,6 +14,9 @@ x-backend-env: &backend-env
   LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b-instruct}
   LLM_CONCURRENCY: ${LLM_CONCURRENCY:-6}
   LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
+  LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1500}
+  RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-4}
   EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
   EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}

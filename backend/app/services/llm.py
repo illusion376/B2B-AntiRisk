@@ -16,11 +16,24 @@ class LLMError(RuntimeError):
 
 
 class _Retryable(Exception):
-    pass
+    def __init__(self, status_code: int | None = None):
+        self.status_code = status_code
+        super().__init__(f"LLM HTTP {status_code}" if status_code is not None else "LLM retry requested")
+
+
+def failure_code(error: BaseException) -> str:
+    """Diagnostic code safe for logs: never includes URLs, bodies or contract text."""
+    if isinstance(error, httpx.HTTPStatusError):
+        return f"HTTP_{error.response.status_code}"
+    if isinstance(error, _Retryable) and error.status_code is not None:
+        return f"HTTP_{error.status_code}"
+    return type(error).__name__
 
 
 def parse_json_response(content: str) -> dict:
     """Достаёт JSON-объект из ответа модели (в т. ч. обёрнутый в ```json ... ```)."""
+    if not isinstance(content, str) or not content.strip():
+        raise LLMError("Модель не вернула текстовый JSON-ответ")
     content = content.strip()
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
     if fenced:
@@ -30,16 +43,32 @@ def parse_json_response(content: str) -> dict:
         if start != -1 and end > start:
             content = content[start:end + 1]
     try:
-        value = json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise LLMError(f"Модель вернула некорректный JSON: {content[:200]}") from exc
+        value = json.loads(content, object_pairs_hook=_unique_object, parse_constant=_reject_nonfinite)
+    except (json.JSONDecodeError, ValueError) as exc:
+        # Contract text can be sensitive. Do not include response bodies in errors or logs.
+        raise LLMError("Модель вернула некорректный JSON") from exc
     if not isinstance(value, dict):
         raise LLMError("Ожидался JSON-объект")
     return value
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON property")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite(value: str) -> None:
+    raise ValueError("Non-finite JSON number")
+
+
 class LLMClient:
     def __init__(self) -> None:
+        if not settings.llm_base_url or not settings.llm_base_url.strip():
+            raise LLMError("Для LLM-режима необходимо настроить LLM_BASE_URL")
         headers = {"Authorization": f"Bearer {settings.llm_api_key}"} if settings.llm_api_key else {}
         self._client = httpx.AsyncClient(
             base_url=(settings.llm_base_url or "").rstrip("/"),
@@ -55,15 +84,19 @@ class LLMClient:
         await self._client.aclose()
 
     async def complete_json(self, system: str, user: str) -> dict:
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception_type((_Retryable, httpx.TransportError, LLMError)),
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, max=15),
-            reraise=True,
-        ):
-            with attempt:
-                content = await self._chat(system, user)
-                return parse_json_response(content)
+        try:
+            async for attempt in AsyncRetrying(
+                retry=retry_if_exception_type((_Retryable, httpx.TransportError, LLMError)),
+                stop=stop_after_attempt(3),
+                wait=wait_exponential(multiplier=1, max=15),
+                reraise=True,
+            ):
+                with attempt:
+                    content = await self._chat(system, user)
+                    return parse_json_response(content)
+        except Exception as exc:
+            log.error("LLM request failed after retries: %s", failure_code(exc))
+            raise
         raise LLMError("unreachable")
 
     async def _chat(self, system: str, user: str) -> str:
@@ -83,13 +116,23 @@ class LLMClient:
             self._json_mode = False
             raise _Retryable()
         if response.status_code == 429 or response.status_code >= 500:
-            raise _Retryable(f"LLM HTTP {response.status_code}")
+            raise _Retryable(response.status_code)
         if response.status_code >= 400:
             raise httpx.HTTPStatusError(
-                f"LLM HTTP {response.status_code}: {response.text[:300]}", request=response.request, response=response
+                f"LLM HTTP {response.status_code}", request=response.request, response=response
             )
-        data = response.json()
         try:
-            return data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError) as exc:
-            raise LLMError(f"Неожиданный ответ LLM: {str(data)[:200]}") from exc
+            data = response.json()
+            choice = data["choices"][0]
+            # Even a syntactically valid prefix cannot be trusted after token truncation.
+            if choice.get("finish_reason") not in (None, "stop"):
+                raise LLMError("Генерация ответа LLM не завершена успешно")
+            message = choice["message"]
+            if message.get("refusal"):
+                raise LLMError("LLM отказалась выполнять проверку")
+            content = message["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise LLMError("LLM не вернула текст ответа")
+            return content
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
+            raise LLMError("Неожиданный формат ответа LLM-провайдера") from exc
