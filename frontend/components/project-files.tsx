@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, Info, LoaderCircle, RotateCw, Search, UploadCloud, X } from 'lucide-react';
+import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
 import type { DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import './project-enhancements.css';
@@ -10,27 +10,30 @@ interface ProjectFilesViewProps {
   project: Project;
   onUpload: (files: File[]) => Promise<string[]>;
   onOpenDocument: (document: DocumentInfo) => void;
+  onStart: () => Promise<void>;
   onRerun?: () => Promise<void>;
 }
 
-type FileStatusFilter = 'all' | 'processing' | 'ready' | 'failed';
+type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
 const isPending = (item: ProcessingState) => item.phase === 'queued' || item.phase === 'processing';
 const hasError = (item: ProcessingState) => item.phase === 'failed' || item.phase === 'unsupported';
 const riskCount = (counts: SeverityCounts) => counts.critical + counts.warning + counts.low;
 
 function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
   if (isPending(file) || file.documents.some(isPending)) return 'processing';
+  if (file.phase === 'uploaded' || file.documents.some(document => document.phase === 'uploaded')) return 'uploaded';
   if (hasError(file) || file.documents.some(hasError)) return 'failed';
   return 'ready';
 }
 
-export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }: ProjectFilesViewProps) {
+export function ProjectFilesView({ project, onUpload, onOpenDocument, onStart, onRerun }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
   const [uploading, setUploading] = useState(false);
-  const [rerunning, setRerunning] = useState(false);
-  const [rerunError, setRerunError] = useState('');
-  const rerunLock = useRef(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
+  const startLock = useRef(false);
+  const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
   const pending = project.files.filter(file => fileState(file) === 'processing').length;
   const documentCount = project.files.reduce((total, file) => total + file.documents.length, 0);
   const normalizedQuery = query.trim().toLocaleLowerCase('ru');
@@ -41,23 +44,25 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }:
   });
   const filters: { value: FileStatusFilter; label: string; count: number }[] = [
     { value: 'all', label: 'Все', count: project.files.length },
+    { value: 'uploaded', label: 'Ожидают запуска', count: waiting },
     { value: 'processing', label: 'В обработке', count: pending },
     { value: 'ready', label: 'Готово', count: project.files.filter(file => fileState(file) === 'ready').length },
     { value: 'failed', label: 'С ошибками', count: project.files.filter(file => fileState(file) === 'failed').length },
   ];
 
-  async function rerunProject() {
-    if (!onRerun || rerunLock.current || uploading || pending > 0) return;
-    rerunLock.current = true;
-    setRerunning(true);
-    setRerunError('');
+  async function runAnalysis() {
+    const action = waiting > 0 ? onStart : onRerun;
+    if (!action || startLock.current || uploading || (waiting === 0 && pending > 0)) return;
+    startLock.current = true;
+    setStarting(true);
+    setStartError('');
     try {
-      await onRerun();
+      await action();
     } catch (cause) {
-      setRerunError(cause instanceof Error ? cause.message : 'Не удалось запустить повторную проверку. Попробуйте ещё раз.');
+      setStartError(cause instanceof Error ? cause.message : 'Не удалось запустить анализ. Попробуйте ещё раз.');
     } finally {
-      rerunLock.current = false;
-      setRerunning(false);
+      startLock.current = false;
+      setStarting(false);
     }
   }
 
@@ -71,24 +76,20 @@ export function ProjectFilesView({ project, onUpload, onOpenDocument, onRerun }:
         </div>
         <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
       </div>
-      <FileDropzone onUpload={onUpload} disabled={rerunning} onBusyChange={setUploading} />
-      <div className="processing-notice">
-        <Info size={17} />
-        <p>Документы проверяются на сервере. ZIP-архивы распаковываются, результаты доступны отдельно для каждого документа.</p>
-      </div>
+      <FileDropzone onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
       <div className="project-files-heading">
         <h2>Загруженные файлы <span>{project.files.length}</span></h2>
         <div className="project-files-heading-actions">
           {pending > 0 && <span className="processing-count" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
-          {onRerun && project.files.length > 0 && (
-            <button type="button" className="secondary-button" disabled={rerunning || uploading || pending > 0} onClick={() => void rerunProject()}>
-              <RotateCw size={14} className={rerunning ? 'spin' : ''} />
-              {rerunning ? 'Запускаем проверку…' : 'Проверить заново'}
+          {(waiting > 0 || (onRerun && project.files.some(file => file.documents.some(document => document.phase === 'ready' || document.phase === 'failed')))) && (
+            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={starting || uploading || (waiting === 0 && pending > 0)} onClick={() => void runAnalysis()}>
+              {starting ? <LoaderCircle size={15} className="spin" /> : waiting > 0 ? <Play size={15} /> : <RotateCw size={14} />}
+              {starting ? 'Запускаем анализ…' : waiting > 0 ? 'Начать анализ' : 'Проверить заново'}
             </button>
           )}
         </div>
       </div>
-      {rerunError && <p className="field-error project-action-error" role="alert">{rerunError}</p>}
+      {startError && <p className="field-error project-action-error" role="alert">{startError}</p>}
       {project.files.length > 0 && (
         <div className="project-files-toolbar">
           <div className="file-status-filters" role="group" aria-label="Фильтр файлов по статусу">
@@ -182,7 +183,7 @@ function ProcessingStatus({ item, name }: { item: ProcessingState; name: string 
   return (
     <>
       <span className={`file-status ${item.phase}`} role="status">
-        {item.phase === 'queued' ? <Clock3 size={15} />
+        {item.phase === 'uploaded' || item.phase === 'queued' ? <Clock3 size={15} />
           : item.phase === 'processing' ? <LoaderCircle size={15} className="spin" />
             : hasError(item) ? <AlertCircle size={15} /> : <Check size={15} />}
         <span>{item.label}</span>
@@ -244,7 +245,7 @@ function FileDropzone({ onUpload, disabled, onBusyChange }: FileDropzoneProps) {
         <span className="upload-icon">{uploading ? <LoaderCircle size={30} className="spin" /> : <UploadCloud size={30} strokeWidth={1.5} />}</span>
         <div className="dropzone-copy">
           <h2>{uploading ? 'Загружаем файлы на сервер…' : dragging && !blocked ? 'Отпустите файлы для загрузки' : 'Загрузите документы'}</h2>
-          <p>{uploading ? 'После загрузки проверка начнётся автоматически.' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
+          <p>{uploading ? 'Сохраняем файлы. Анализ можно будет запустить кнопкой «Начать анализ».' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
           <small id="file-upload-help">PDF, TXT, DOCX, DOC, RTF, ODT, ZIP, PNG, JPEG, TIFF, BMP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
         </div>
         <input

@@ -225,6 +225,10 @@ export const api = {
     const blob = await response.blob();
     saveDownload(blob, reportFilename(response.headers.get('Content-Disposition'), `report.${format}`));
   },
+  startProjectAnalysis: (projectId: string, options: RequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
+    if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
+    return value;
+  }, { ...options, method: 'POST' }),
   rerunProject: (projectId: string, options: RequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
     return value;

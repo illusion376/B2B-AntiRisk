@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle, BookOpenCheck, LoaderCircle, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import type { CheckRule, RuleDraft, RiskLevel } from '@/lib/types';
-import { riskLabels } from '@/lib/rules';
+import { compareRulesByRisk, riskLabels } from '@/lib/rules';
 import { IconButton, Modal } from './ui';
 
 type RulesManagerProps = {
@@ -38,7 +38,7 @@ export function RulesManager({
   const filtered = rules.filter(rule => (
     `${rule.title} ${rule.description} ${rule.category}`.toLocaleLowerCase('ru').includes(normalizedQuery)
     && (level === 'all' || rule.severity === level)
-  ));
+  )).sort(compareRulesByRisk);
   const displayedError = localError || error;
 
   async function toggleRule(rule: CheckRule) {
@@ -101,7 +101,7 @@ export function RulesManager({
               <tr>
                 <th scope="col">Правило</th>
                 <th scope="col">Категория</th>
-                <th scope="col">Степень риска</th>
+                <th scope="col" aria-sort="descending">Степень риска</th>
                 <th scope="col">Активно</th>
                 <th scope="col"><span className="sr-only">Действия</span></th>
               </tr>

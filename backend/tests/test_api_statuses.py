@@ -36,7 +36,7 @@ def mock_counts(monkeypatch, analysis_counts=None, document_counts=None):
     monkeypatch.setattr(deps, "counts_by_document", lambda *_: document_counts or {})
 
 
-@pytest.mark.parametrize("status", ["QUEUED", "ANALYZING", "FAILED", "UNSUPPORTED", "COMPLETED"])
+@pytest.mark.parametrize("status", ["UPLOADED", "QUEUED", "ANALYZING", "FAILED", "UNSUPPORTED", "COMPLETED"])
 def test_document_without_visible_checks_has_no_traffic_light_or_score(status):
     result = deps.document_out(make_document(uuid.uuid4(), status))
 

@@ -50,10 +50,12 @@ def _check_magic(path: Path, ext: str) -> None:
 
 
 def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str = "AUTO",
-                    project: Project | None = None, title: str | None = None) -> tuple[Analysis, list[uuid.UUID]]:
+                    project: Project | None = None, title: str | None = None,
+                    *, defer_processing: bool = False) -> tuple[Analysis, list[uuid.UUID]]:
     """Сохраняет файл и создаёт анализ с документами (без коммита).
 
-    Возвращает анализ и id документов, которые нужно поставить в очередь после коммита.
+    Возвращает анализ и id поддерживаемых документов. При defer_processing они
+    остаются UPLOADED до явного запуска пользователем, иначе готовы к постановке в очередь.
     """
     original_name = storage.safe_filename(upload.filename or "document")
     ext = storage.extension(original_name)
@@ -61,6 +63,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
         raise UploadRejected(415, f"Формат {ext or 'без расширения'} не поддерживается. "
                                   "Загрузите PDF, TXT, ZIP, DOCX, DOC, RTF, ODT или изображение")
 
+    initial_status = "UPLOADED" if defer_processing else "QUEUED"
     analysis = Analysis(
         id=uuid.uuid4(),
         user_id=user.id,
@@ -69,7 +72,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
         original_filename=original_name,
         file_type=ext.lstrip("."),
         law_type=law_type,
-        analysis_status="QUEUED",
+        analysis_status=initial_status,
     )
     workdir = storage.analysis_dir(analysis.id)
     try:
@@ -96,7 +99,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
                     file_path=str(item.stored_path),
                     file_type=item.ext.lstrip("."),
                     file_size=item.size,
-                    status="QUEUED" if item.supported else "UNSUPPORTED",
+                    status=initial_status if item.supported else "UNSUPPORTED",
                     error_message=None if item.supported else "Формат не поддерживается — файл не проверялся",
                 ))
         else:
@@ -104,7 +107,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
                 id=uuid.uuid4(), analysis_id=analysis.id,
                 file_name=original_name, relative_path=original_name,
                 file_path=str(upload_path), file_type=ext.lstrip("."),
-                file_size=analysis.file_size, status="QUEUED",
+                file_size=analysis.file_size, status=initial_status,
             ))
     except ArchiveError as exc:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -113,7 +116,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
         shutil.rmtree(workdir, ignore_errors=True)
         raise
 
-    to_process = [d.id for d in documents if d.status == "QUEUED"]
+    to_process = [d.id for d in documents if d.status == initial_status]
     if not to_process:
         analysis.analysis_status = "FAILED"
         analysis.progress = 100

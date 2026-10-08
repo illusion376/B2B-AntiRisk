@@ -72,6 +72,7 @@
 .dashboard-shell .project-files-heading-actions .secondary-button { min-height: 32px; padding: 7px 10px; font-size: .6875rem; }
 .dashboard-shell .project-action-error { margin: 0 0 17px; }
 .dashboard-shell .file-dropzone.is-uploading { border-style: solid; background: #f5f5f5; }
+.dashboard-shell .file-status.uploaded { color: #797d7b; }
 .dashboard-shell .file-status.failed, .dashboard-shell .file-status.unsupported { color: #ae4d40; }
 .dashboard-shell .project-file-name .processing-error-text,
 .dashboard-shell .project-child-name .processing-error-text { color: #ae4d40; line-height: 1.6; overflow-wrap: anywhere; }

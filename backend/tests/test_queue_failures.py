@@ -111,7 +111,7 @@ def test_document_reanalysis_failure_restores_completed_document(queue, monkeypa
     assert doc.error_message == analyses.QUEUE_UNAVAILABLE
 
 
-def test_batch_upload_reports_queue_error_and_still_schedules_later_files(monkeypatch):
+def test_batch_upload_saves_files_without_scheduling(monkeypatch):
     project = Project(id=uuid.uuid4(), title="Test")
     project.analyses = []
     user = User(id=uuid.uuid4())
@@ -119,17 +119,16 @@ def test_batch_upload_reports_queue_error_and_still_schedules_later_files(monkey
     uploads = [MagicMock(filename=item.original_filename, size=10) for item in accepted]
     jobs = [[uuid.uuid4()] for _ in accepted]
     create = MagicMock(side_effect=list(zip(accepted, jobs)))
-    enqueue = MagicMock(side_effect=[HTTPException(503, analyses.QUEUE_UNAVAILABLE), None])
+    enqueue = MagicMock()
     monkeypatch.setattr(projects, "get_project_or_404", lambda *_: project)
     monkeypatch.setattr(projects.uploads, "create_analysis", create)
-    monkeypatch.setattr(projects, "start_processing", enqueue)
+    monkeypatch.setattr(projects, "enqueue_documents", enqueue)
     monkeypatch.setattr(projects, "project_files_out", lambda *_: [])
     db = MagicMock()
     request = MagicMock(headers={})
 
     result = projects.upload_files(project.id, request, uploads, "AUTO", db, user)
 
-    assert len(result.errors) == 1
-    assert result.errors[0].name == accepted[0].original_filename
-    assert result.errors[0].detail == analyses.QUEUE_UNAVAILABLE
-    assert enqueue.call_args_list == [call(db, item, ids) for item, ids in zip(accepted, jobs)]
+    assert result.errors == []
+    enqueue.assert_not_called()
+    assert all(call.kwargs["defer_processing"] for call in create.call_args_list)

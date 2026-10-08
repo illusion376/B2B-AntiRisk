@@ -91,6 +91,24 @@ test('HTTP validation errors expose useful details and a status for the UI', asy
   });
 });
 
+test('uploaded files remain waiting and analysis starts through a separate request', async t => {
+  const waiting = { ...file, status: 'UPLOADED', phase: 'uploaded', label: 'Ожидает запуска', progress: 0,
+    documents: [{ ...document, status: 'UPLOADED', phase: 'uploaded', label: 'Ожидает запуска', progress: 0 }] };
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push(url);
+    if (url.endsWith('/files')) return response({ files: [waiting], errors: [] });
+    assert.equal(url, '/api/projects/project-uuid/start');
+    assert.equal(options.method, 'POST');
+    return response({ documents: 1 });
+  });
+  const upload = await api.uploadFiles(project.id, [new File(['contract'], 'contract.txt')]);
+  assert.equal(upload.files[0].phase, 'uploaded');
+  assert.equal(upload.files[0].documents[0].phase, 'uploaded');
+  assert.deepEqual(calls, ['/api/projects/project-uuid/files']);
+  assert.deepEqual(await api.startProjectAnalysis(project.id), { documents: 1 });
+});
+
 test('proxy HTML and malformed success responses cannot become successful empty screens', async t => {
   const mock = t.mock.method(globalThis, 'fetch', async () => new Response('<html>upstream secret</html>', { status: 502 }));
   await assert.rejects(api.getProjects(), error => error.status === 502 && !error.message.includes('upstream secret'));

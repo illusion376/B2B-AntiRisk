@@ -15,6 +15,7 @@ from app.vocab import REVIEW_TO_API, SEVERITY_TO_API
 
 # Стадии пайплайна -> стадия и подпись для интерфейса
 _STAGE_LABELS = {
+    "UPLOADED": ("uploaded", "Ожидает запуска"),
     "QUEUED": ("queued", "В очереди"),
     "CONVERTING": ("processing", "Подготовка документа"),
     "OCR": ("processing", "Распознавание текста"),

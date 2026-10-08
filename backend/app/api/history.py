@@ -40,6 +40,8 @@ def describe(action: str, d: dict) -> tuple[str, str]:
             count = d.get("documents") or 1
             documents = f"{count} {_plural(count, 'документ', 'документа', 'документов')} в архиве" if count > 1 else None
             return ("Файл добавлен в проект" if project else "Документ добавлен"), _join(project, file, documents)
+        case "ANALYSIS_STARTED":
+            return "Анализ запущен", _join(project, file)
         case "ANALYSIS_COMPLETED":
             rules = d.get("rules") or 0
             critical, warning, low = d.get("critical", 0), d.get("warning", 0), d.get("low", 0)

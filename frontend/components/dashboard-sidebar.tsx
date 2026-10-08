@@ -31,7 +31,7 @@ export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
         return <button key={item.view} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>{onNavigate(item.view);onClose();}}><item.Icon size={16} strokeWidth={1.5}/><span>{item.label}</span>{item.count!==null && <small>{item.count}</small>}</button>;
       })}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-demo"><span className="sidebar-demo-label"><ShieldCheck size={15}/>Проверка документов</span><p>Документы под контролем.<br/>Решения — за вами.</p></div><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong>{user?.fullName || 'Загрузка профиля…'}</strong><small>{user?.email || 'Подключение к серверу'}</small></span></div></div>
+      <div className="sidebar-bottom"><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong>{user?.fullName || 'Загрузка профиля…'}</strong><small>{user?.email || 'Подключение к серверу'}</small></span></div></div>
     </aside>
   </>;
 }

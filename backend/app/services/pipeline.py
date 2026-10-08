@@ -29,8 +29,8 @@ log = logging.getLogger(__name__)
 
 TERMINAL = {"COMPLETED", "FAILED", "UNSUPPORTED"}
 # Статус анализа в целом = самый «ранний» этап среди документов в работе
-_STAGE_RANK = {"QUEUED": 0, "CONVERTING": 1, "OCR": 1, "VECTORIZING": 2, "ANALYZING": 3}
-_ANALYSIS_STAGE = {0: "QUEUED", 1: "OCR", 2: "VECTORIZING", 3: "ANALYZING"}
+_STAGE_RANK = {"UPLOADED": -1, "QUEUED": 0, "CONVERTING": 1, "OCR": 1, "VECTORIZING": 2, "ANALYZING": 3}
+_ANALYSIS_STAGE = {-1: "UPLOADED", 0: "QUEUED", 1: "OCR", 2: "VECTORIZING", 3: "ANALYZING"}
 _SEVERITY_ORDER = {severity: i for i, severity in enumerate(SEVERITY_ORDER)}
 
 

@@ -15,19 +15,22 @@ interface ProjectsViewProps {
   onQueryChange: (query: string) => void;
 }
 
-type ProjectFilter = 'all' | 'processing' | 'ready' | 'failed' | 'empty';
+type ProjectFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed' | 'empty';
 const PAGE_SIZE = 8;
 
 function projectState(project: Project): Exclude<ProjectFilter, 'all'> {
   if (!project.files.length) return 'empty';
   if (project.processingCount > 0 || project.files.some(file => file.phase === 'queued' || file.phase === 'processing'
     || file.documents.some(document => document.phase === 'queued' || document.phase === 'processing'))) return 'processing';
+  if (project.files.some(file => file.phase === 'uploaded'
+    || file.documents.some(document => document.phase === 'uploaded'))) return 'uploaded';
   if (project.files.some(file => file.phase === 'failed' || file.phase === 'unsupported'
     || file.documents.some(document => document.phase === 'failed' || document.phase === 'unsupported'))) return 'failed';
   return 'ready';
 }
 
 const projectStateLabels = {
+  uploaded: 'Ожидает запуска',
   processing: 'В обработке',
   ready: 'Готово',
   failed: 'С ошибками',
@@ -54,6 +57,7 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
 
   const filters: { id: ProjectFilter; label: string; count: number }[] = [
     { id: 'all', label: 'Все проекты', count: projects.length },
+    { id: 'uploaded', label: 'Ожидают запуска', count: projects.filter(project => projectState(project) === 'uploaded').length },
     { id: 'processing', label: 'В обработке', count: projects.filter(project => projectState(project) === 'processing').length },
     { id: 'ready', label: 'Готовые', count: projects.filter(project => projectState(project) === 'ready').length },
     { id: 'failed', label: 'С ошибками', count: projects.filter(project => projectState(project) === 'failed').length },

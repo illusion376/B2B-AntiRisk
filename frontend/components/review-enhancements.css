@@ -2,8 +2,7 @@
 .dashboard-shell.analysis-shell .main-content { display: flex; }
 
 @media (min-width: 961px) {
-  .dashboard-canvas.analysis-canvas { padding: 24px 2.5vw; }
-  .dashboard-shell.app-shell.analysis-shell { grid-template-columns: 215px minmax(0,1fr); max-width: 1800px; --line: #e8e8e8; --surface: #fff; }
+  .dashboard-shell.app-shell.analysis-shell { grid-template-columns: 215px minmax(0,1fr); --line: #e8e8e8; --surface: #fff; }
   .dashboard-shell.analysis-shell .dashboard-sidebar { padding-left: 13px; padding-right: 13px; }
   .dashboard-shell.analysis-shell .sidebar-brand strong { font-size: .875rem; }
   .dashboard-shell.analysis-shell .topbar { height: 58px; padding: 0 24px; }

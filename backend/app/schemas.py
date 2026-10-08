@@ -10,7 +10,7 @@ from app.vocab import ReviewStatus, RiskLevel, Severity
 LawType = Literal["ALL", "44-FZ", "223-FZ"]
 TrafficLight = Literal["critical", "warning", "ok"]
 # Стадия обработки файла для интерфейса (как getProcessing() во фронтенде) + ошибки
-Phase = Literal["queued", "processing", "ready", "failed", "unsupported"]
+Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
 
 
 class ORM(BaseModel):
@@ -50,7 +50,7 @@ class DocumentOut(ORM):
     relative_path: str | None  # путь внутри ZIP — для дерева содержимого архива
     file_type: str | None
     file_size: int | None
-    status: str  # QUEUED, CONVERTING, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED, UNSUPPORTED
+    status: str  # UPLOADED, QUEUED, CONVERTING, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED, UNSUPPORTED
     phase: Phase = "queued"
     label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
     progress: int
@@ -84,7 +84,7 @@ class ProjectFileOut(BaseModel):
     phase: Phase
     label: str
     progress: int
-    status: str  # QUEUED, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED
+    status: str  # UPLOADED, QUEUED, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED
     error_message: str | None
     risk_score: int | None
     traffic_light: TrafficLight | None

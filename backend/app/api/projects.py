@@ -7,10 +7,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.analyses import check_content_length, rerun, start_processing
+from app.api.analyses import check_content_length, enqueue_documents, rerun
 from app.api.deps import current_user, get_project_or_404, project_files_out, projects_out
 from app.db import get_db
-from app.models import Analysis, Project, User
+from app.models import Analysis, Document, Project, User
 from app.schemas import ProjectCreate, ProjectOut, ProjectUpdate, RerunRequest, UploadError, UploadResult
 from app.services import uploads
 from app.services.audit import log_action
@@ -108,7 +108,7 @@ def upload_files(
     project = get_project_or_404(db, project_id, user)
     existing = {(a.original_filename, a.file_size) for a in project.analyses}
 
-    accepted: list[tuple[Analysis, list[uuid.UUID]]] = []
+    accepted: list[Analysis] = []
     errors: list[UploadError] = []
     for upload in files:
         name = upload.filename or "файл"
@@ -117,25 +117,43 @@ def upload_files(
             errors.append(UploadError(name=name, detail="Этот файл уже добавлен в проект."))
             continue
         try:
-            analysis, to_process = uploads.create_analysis(db, user, upload, law_type, project)
+            analysis, _ = uploads.create_analysis(db, user, upload, law_type, project, defer_processing=True)
         except uploads.UploadRejected as exc:
             errors.append(UploadError(name=name, detail=exc.detail))
             continue
         existing.add((analysis.original_filename, analysis.file_size))
-        accepted.append((analysis, to_process))
+        accepted.append(analysis)
 
     if accepted:
         project.updated_at = func.now()
     db.commit()
-    for analysis, to_process in accepted:
-        if to_process:
-            try:
-                start_processing(db, analysis, to_process)
-            except HTTPException as exc:
-                if exc.status_code != 503:
-                    raise
-                errors.append(UploadError(name=analysis.original_filename, detail=str(exc.detail)))
-    return UploadResult(files=project_files_out(db, [a for a, _ in accepted]), errors=errors)
+    return UploadResult(files=project_files_out(db, accepted), errors=errors)
+
+
+@router.post("/{project_id}/start", status_code=status.HTTP_202_ACCEPTED,
+             summary="Начать анализ загруженных, ещё не проверенных документов проекта")
+def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    project = get_project_or_404(db, project_id, user)
+    # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
+    # или одновременном запуске из нескольких вкладок.
+    analyses = list(db.scalars(select(Analysis).where(
+        Analysis.project_id == project.id, Analysis.analysis_status == "UPLOADED")
+        .order_by(Analysis.id).with_for_update()))
+    docs = list(db.scalars(select(Document).where(
+        Document.analysis_id.in_([a.id for a in analyses]), Document.status == "UPLOADED")
+        .order_by(Document.id).with_for_update())) if analyses else []
+    if not docs:
+        raise HTTPException(409, "Нет документов, ожидающих запуска анализа")
+    for doc in docs:
+        doc.status, doc.progress, doc.error_message = "QUEUED", 0, None
+    for analysis in analyses:
+        analysis.analysis_status, analysis.progress, analysis.error_message = "QUEUED", 0, None
+        log_action(db, user.id, "ANALYSIS_STARTED", "analysis", analysis.id,
+                   {"file": analysis.original_filename, "project": project.title})
+    project.updated_at = func.now()
+    db.commit()
+    enqueue_documents(db, docs)
+    return {"documents": len(docs)}
 
 
 @router.post("/{project_id}/rerun", status_code=status.HTTP_202_ACCEPTED,

@@ -69,8 +69,9 @@ API возвращает snake_case DTO; `frontend/lib/api.ts` преобраз�
 |---|---|
 | Документы → список проектов | `GET /api/projects?q=` — проекты с файлами, `processing_count`, `counts`, `traffic_light` |
 | Новый проект | `POST /api/projects` `{title, description}` → `409` при повторе названия (без учёта регистра) |
-| Загрузка файлов в проект | `POST /api/projects/{id}/files` (multipart, несколько `files`) → `{files, errors}` — ошибки по каждому файлу |
-| Статус обработки файла | `files[].phase` (`queued / processing / ready / failed / unsupported`), `label`, `progress` — опрашивать `GET /api/projects/{id}` |
+| Загрузка файлов в проект | `POST /api/projects/{id}/files` (multipart, несколько `files`) → `{files, errors}` — сохраняет файлы без запуска анализа |
+| Начать анализ | `POST /api/projects/{id}/start` → `{documents}` — запускает только ожидающие документы; повторный запуск без новых файлов → `409` |
+| Статус обработки файла | `files[].phase` (`uploaded / queued / processing / ready / failed / unsupported`), `label`, `progress` — опрашивать `GET /api/projects/{id}` |
 | ZIP: содержимое → выбор файла | `files[].documents[]` (`relative_path` — путь в архиве); открыть — по `documents[].id` |
 | Карточка документа | `GET /api/documents/{id}` — `total_pages`, `rules_checked`, `counts`, `traffic_light` |
 | Текст страницы | `GET /api/documents/{id}/pages/{n}` → `sections[{title, paragraphs[{clause, text, finding_ids}]}]` |
@@ -108,6 +109,9 @@ API возвращает snake_case DTO; `frontend/lib/api.ts` преобраз�
 # Проект и загрузка архива
 curl -X POST -H "Content-Type: application/json" -d '{"title": "Поставка мебели"}' http://localhost:8000/api/projects
 curl -F "files=@Документация.zip" -F "files=@Проект контракта.pdf" http://localhost:8000/api/projects/<project_id>/files
+
+# Явный запуск проверки сохранённых файлов
+curl -X POST http://localhost:8000/api/projects/<project_id>/start
 
 # Замечания документа: только критические и непросмотренные
 curl "http://localhost:8000/api/documents/<document_id>/findings?severity=critical&status=unseen"

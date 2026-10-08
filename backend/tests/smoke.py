@@ -135,6 +135,10 @@ def main() -> None:
     check(len(docs) == 3, "в ответе сразу видны все 3 файла архива")
     check(docs.get("Документация/readme.exe", {}).get("phase") == "unsupported", "exe помечен как неподдерживаемый")
 
+    check(upload["files"][0]["phase"] == "uploaded", "загрузка не запускает анализ")
+    response = client.post(f"/api/projects/{pid}/start")
+    check(response.status_code == 202 and response.json()["documents"] == 2, "явный запуск двух поддерживаемых документов")
+
     print("3. Ожидание обработки")
     last = None
     while True:
