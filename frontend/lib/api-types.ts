@@ -1,8 +1,15 @@
 /** HTTP payloads from backend/app/schemas.py. Keep snake_case at this boundary. */
-import type { Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
+import type { AnalysisMode, AnalysisModeOption, Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
+
+export interface AnalysisModesDto {
+  default_mode: AnalysisMode;
+  modes: AnalysisModeOption[];
+  configured_model?: string | null;
+}
 
 export interface DocumentDto {
   id: string; analysis_id: string; file_name: string; relative_path: string | null;
+  analysis_mode: AnalysisMode | null;
   file_type: string | null; file_size: number | null; status: string; phase: ProcessingPhase;
   label: string; progress: number; total_pages: number; is_scanned: boolean; ocr_pages: number;
   ocr_confidence: number | null; law_type: string | null; risk_score: number | null;

@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadLib } from './load-lib.mjs';
 
-const { api, ApiError, mapProject, mapFinding, mapPage, rulePayload } = await loadLib('api');
+const { api, ApiError, mapProject, mapFinding, mapPage, mapAnalysisModes, rulePayload } = await loadLib('api');
 const { getProcessing, validateUpload, MAX_FILE_BYTES } = await loadLib('projects');
 const created = '2026-10-07T06:30:00+00:00';
-const counts = { critical: 1, warning: 2, low: 0, ok: 3, unseen: 2 };
+const counts = { critical: 1, warning: 2, low: 0, ok: 3, unknown: 2, unseen: 2 };
 const document = {
-  id: 'document-uuid', analysis_id: 'analysis-uuid', file_name: 'Договор.docx', relative_path: 'folder/Договор.docx',
+  id: 'document-uuid', analysis_id: 'analysis-uuid', analysis_mode: 'llm', file_name: 'Договор.docx', relative_path: 'folder/Договор.docx',
   file_type: 'docx', file_size: 500, status: 'OCR', phase: 'processing', label: 'Распознавание текста', progress: 32,
   total_pages: 2, is_scanned: true, ocr_pages: 1, ocr_confidence: 89.5, law_type: '44-FZ',
   risk_score: null, traffic_light: null, counts, rules_checked: 0, error_message: null,
@@ -38,6 +38,9 @@ test('API project keeps analysis and document identifiers separate and exposes s
   assert.equal(mapped.files[0].documents[0].id, 'document-uuid');
   assert.equal(mapped.files[0].documents[0].analysisId, mapped.files[0].id);
   assert.equal(mapped.files[0].documents[0].relativePath, 'folder/Договор.docx');
+  assert.equal(mapped.files[0].documents[0].analysisMode, 'llm');
+  assert.equal(mapped.counts.unknown, 2);
+  assert.equal(mapped.files[0].counts.unknown, 2);
   assert.equal(mapped.files[0].documents[0].updatedAt, null);
   assert.deepEqual(getProcessing(mapped.files[0], Date.now() + 24 * 60 * 60 * 1000), {
     phase: 'processing', progress: 32, label: 'Обрабатывается',
@@ -150,4 +153,67 @@ test('upload validation matches backend formats and the 100 MB default limit', (
   assert.equal(validateUpload({ name: 'scan.tiff', size: MAX_FILE_BYTES }, []), null);
   assert.match(validateUpload({ name: 'a.pdf', size: MAX_FILE_BYTES + 1 }, []), /100 МБ/);
   assert.match(validateUpload({ name: 'scan.webp', size: 100 }, []), /Поддерживаются/);
+});
+
+test('analysis modes preserve an unavailable server default instead of choosing a fallback', async t => {
+  const modes = {
+    default_mode: 'llm', configured_model: 'qwen-local',
+    modes: [
+      { id: 'llm', label: 'LLM', available: false, description: 'Анализ моделью' },
+      { id: 'nli', label: 'NLI', available: true, description: 'Классификация' },
+      { id: 'keyword', label: 'Ключевые слова', available: true, description: 'Поиск слов' },
+    ],
+  };
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    assert.equal(url, '/api/analysis-modes');
+    return response(modes);
+  });
+  const result = await api.getAnalysisModes();
+  assert.equal(result.defaultMode, 'llm');
+  assert.equal(result.modes[0].available, false);
+  assert.equal(result.configuredModel, 'qwen-local');
+  assert.throws(() => mapAnalysisModes({ ...modes, default_mode: 'automatic' }));
+  assert.throws(() => mapAnalysisModes({ ...modes, modes: [modes.modes[1]] }));
+});
+
+test('start and rerun send an explicit mode and preserve the selected rules', async t => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    assert.equal(options.method, 'POST');
+    return url.includes('/reanalyze') ? response({ ...document, analysis_mode: 'nli' }) : response({ documents: 1 });
+  });
+  await api.startProjectAnalysis(project.id, { analysisMode: 'llm' });
+  await api.rerunProject(project.id, { analysisMode: 'keyword', ruleIds: ['payment_deadline'] });
+  const result = await api.reanalyzeDocument(document.id, { analysisMode: 'nli' });
+  assert.equal(result.analysisMode, 'nli');
+  assert.deepEqual(calls, [
+    ['/api/projects/project-uuid/start', { analysis_mode: 'llm' }],
+    ['/api/projects/project-uuid/rerun', { rule_ids: ['payment_deadline'], analysis_mode: 'keyword' }],
+    ['/api/documents/document-uuid/reanalyze', { analysis_mode: 'nli' }],
+  ]);
+});
+
+test('an unavailable LLM exposes the server message and never retries in another mode', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return new Response(JSON.stringify({ detail: {
+      code: 'analysis_mode_unavailable', analysis_mode: 'llm', message: 'Настройте LLM на сервере.',
+    } }), { status: 422 });
+  });
+  await assert.rejects(api.startProjectAnalysis(project.id, { analysisMode: 'llm' }), error => {
+    assert.equal(error.status, 422);
+    assert.equal(error.message, 'Настройте LLM на сервере.');
+    return true;
+  });
+  assert.equal(calls, 1);
+});
+
+test('unknown findings and an incomplete traffic light remain distinct from no risk', () => {
+  const mappedFinding = mapFinding({ ...finding, severity: 'unknown', source: 'LLM', quote: '', quote_verified: false });
+  assert.equal(mappedFinding.severity, 'unknown');
+  const mappedProject = mapProject({ ...project, traffic_light: 'unknown', counts: { ...counts, critical: 0, warning: 0 } });
+  assert.equal(mappedProject.trafficLight, 'unknown');
+  assert.equal(mappedProject.counts.unknown, 2);
 });

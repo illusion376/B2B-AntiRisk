@@ -2,13 +2,15 @@
 
 AI Procurement Copilot, кейс 1. Сервис проверяет документацию закупок (44-ФЗ / 223-ФЗ) по настраиваемому
 чек-листу правил и показывает риски в формате «светофора»: критические, требуют внимания, низкий риск, без
-замечаний. Каждое замечание содержит дословную цитату, номер пункта и страницу, а также координаты подсветки.
+замечаний; неполные проверки отмечаются отдельно как «Недостаточно данных». Подтверждённое замечание содержит
+цитату из документа, страницу и, если их удалось определить, номер пункта и координаты подсветки.
 
 ## Быстрый старт
 
 ```bash
-cp .env.example .env        # необязательно: без LLM система работает в эвристическом режиме
-docker-compose up --build
+cp .env.example .env
+# Для LLM заполните LLM_API_KEY ключом из кабинета ProxyAPI.
+docker compose up --build
 ```
 
 | Адрес | Что там |
@@ -21,18 +23,118 @@ docker-compose up --build
 `frontend` (nginx). Схема БД — `database/init-db.sql`; расширения схемы и 20 правил проверки backend
 применяет сам при старте (`database/migrations/*.sql`, учёт в таблице `schema_migrations`).
 
-### Подключение ИИ
+### Режим анализа и подключение ProxyAPI
 
-LLM и эмбеддинги — любой OpenAI-совместимый API, настройки в `.env`:
+Выберите способ проверки во вкладке **«Настройки»** в боковом меню. Выбор автоматически сохраняется
+в этом браузере и применяется ко всем проектам при запуске и повторной проверке. В проекте остаются
+кнопки «Начать анализ» / «Проверить заново». Если режим недоступен, появится ссылка на настройки.
+Доступны `llm` (языковая модель через ProxyAPI) и `keyword` (поиск по словам без моделей).
+Локальный NLI отключён, сервисы Ollama удалены из Compose. Старые результаты NLI остаются читаемыми,
+а попытка запустить новый анализ в режиме `nli` возвращает понятную ошибку `422`.
 
-| Вариант | Настройки |
+Выбранный режим сохраняется в `analysis_mode` каждого документа при постановке в очередь:
+изменение настроек не меняет уже запущенную проверку. После частичной повторной проверки по `rule_ids`
+результаты могут иметь разные источники. Источник конкретного замечания указан в его `source`.
+Если выбранная LLM недоступна, приложение показывает ошибку или неполный результат;
+автоматического переключения на другой режим нет.
+
+`GET /api/analysis-modes` возвращает `default_mode`, список `modes` с полями `id`, `label`, `available`,
+`description` и `configured_model`. LLM доступна только при заполненных URL, модели и ключе.
+Это проверка конфигурации, а не баланса или сетевой доступности ProxyAPI. Секреты в ответ не попадают.
+
+В корневом `.env` задайте (применяется к **backend и worker**):
+
+```dotenv
+ANALYSIS_ENGINE=auto
+LLM_BASE_URL=https://api.proxyapi.ru/v1
+LLM_MODEL=openai/gpt-4.1-mini
+LLM_API_KEY=your-proxyapi-key
+HEURISTIC_ENGINE=keyword
+LLM_MAX_TOKENS=8192
+LLM_REASONING_EFFORT=low
+```
+
+Запросы уходят на `https://api.proxyapi.ru/v1/chat/completions` с `Authorization: Bearer`.
+Прямого обращения к `api.openai.com` нет. `openai/` в имени модели обозначает её поставщика внутри
+каталога ProxyAPI. Используется уже имеющийся `httpx`, дополнительный SDK не устанавливается.
+Адрес и формат: [документация ProxyAPI](https://proxyapi.ru/docs/api-overview).
+Клиент выбирает параметры запроса по имени модели: для GPT-5/o-series использует
+`max_completion_tokens` и `reasoning_effort`, для остальных — `max_tokens` и `temperature`.
+
+| Настройка | Назначение |
 |---|---|
-| Внешний API (OpenRouter, vLLM, YandexGPT, OpenAI…) | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` |
-| Локально через Ollama | `docker-compose --profile local-llm up --build` + `LLM_BASE_URL=http://ollama:11434/v1`, `EMBEDDING_BASE_URL=http://ollama:11434/v1` |
-| Без LLM (по умолчанию) | находятся релевантные пункты, замечания помечаются `source: "HEURISTIC"` |
+| `ANALYSIS_ENGINE=auto` | LLM при полной конфигурации, иначе `HEURISTIC_ENGINE=keyword` |
+| `ANALYSIS_ENGINE=llm` или `keyword` | Явный серверный режим по умолчанию; может быть переопределён выбором во вкладке «Настройки» |
+| `LLM_BASE_URL` | По умолчанию `https://api.proxyapi.ru/v1`; пустое значение отключает LLM |
+| `LLM_MODEL` | Идентификатор модели в каталоге ProxyAPI; по умолчанию `openai/gpt-4.1-mini` |
+| `LLM_API_KEY` | Ключ из кабинета ProxyAPI; обязателен для LLM |
+| `LLM_CONCURRENCY`, `LLM_TIMEOUT_S` | Параллелизм и таймаут запросов |
+| `LLM_MAX_TOKENS`, `LLM_JSON_MODE` | Лимит ответа (по умолчанию 8192) и запрос JSON-формата; у reasoning-моделей лимит включает рассуждения и итоговый JSON, а не входной контекст |
+| `LLM_REASONING_EFFORT` | Объём рассуждений GPT-5/o-series: `low` (по умолчанию), `medium`, `high`; другим моделям не передаётся |
 
-Эмбеддинги — размерности 1024 (`vector(1024)` в БД): `bge-m3`, `multilingual-e5-large` или
-`text-embedding-3-*` с `EMBEDDING_SEND_DIMENSIONS=true`.
+При обновлении старой установки поменяйте `HEURISTIC_ENGINE=nli` на `keyword`, уберите
+`ANALYSIS_ENGINE=nli` и замените локальные URL Ollama на адрес ProxyAPI. Либо оставьте
+`EMBEDDING_BASE_URL` пустым для хэш-эмбеддингов без модели. Настройка `nli` не заменяется молча:
+интерфейс предложит выбрать доступный режим.
+После изменения `.env` достаточно `docker compose up -d --force-recreate backend worker`.
+Ключи задаются только на сервере; в `NEXT_PUBLIC_*` их передавать нельзя.
+
+### ProxyAPI с GPT-5 mini
+
+```dotenv
+ANALYSIS_ENGINE=llm
+LLM_BASE_URL=https://api.proxyapi.ru/v1
+LLM_MODEL=openai/gpt-5-mini
+LLM_API_KEY=your-secret-key
+LLM_MAX_TOKENS=8192
+LLM_REASONING_EFFORT=low
+```
+
+Для GPT-5/o-series клиент отправляет `max_completion_tokens` и не передаёт `temperature`:
+GPT-5 mini отклоняет `max_tokens` и `temperature=0` с HTTP 400. Для остальных моделей
+сохраняются `max_tokens` и настроенная температура. Значение `LLM_MAX_TOKENS` из существующего
+`.env` имеет приоритет над новым значением по умолчанию: замените старые `1500` на `8192`.
+Анализатор передаёт строгую JSON Schema результата в API. Если провайдер её не поддерживает,
+клиент пробует JSON-режим, затем JSON по инструкции; локальная проверка схемы и цитат остаётся обязательной.
+При исчерпании лимита результат остаётся незавершённым; в логах появляется
+`OUTPUT_TOKEN_LIMIT`. Такой запрос не повторяется с тем же недостаточным лимитом.
+
+### Сборка Docker
+
+В стандартных зависимостях больше нет `torch`, `transformers` и их транзитивных GPU-пакетов.
+Веса моделей не скачиваются ни при сборке, ни при анализе. Хэш-эмбеддинги — обычный алгоритм без весов.
+Системные пакеты OCR (Tesseract), конвертация документов (LibreOffice) и шрифты сохранены.
+
+Docker использует кэш BuildKit для pip, npm и `.next/cache`; зависимости устанавливаются до копирования
+исходников. `.dockerignore` исключает окружения, `node_modules`, данные и секреты из контекста сборки.
+При обычных правках приложения слои системных и Python-зависимостей используются повторно.
+Точное время холодной сборки зависит от сети и машины; гарантированного времени в секундах нет.
+
+```bash
+# Первое обновление кода и образов; данные PostgreSQL и документов сохраняются.
+docker compose up -d --build
+# Обычный запуск уже собранных образов:
+docker compose up -d
+```
+
+Модель видит найденные для конкретного правила фрагменты, а не весь документ: количество задаёт
+`RETRIEVAL_TOP_K` (по умолчанию 4). Пропущенный поиском пункт, ошибка OCR или слишком длинный контекст
+могут сделать вывод неполным даже у сильной модели. Увеличение контекста модели само по себе не
+расширяет поиск. Для семантического поиска отдельно настраивается `EMBEDDING_BASE_URL`; без него
+используются хэш-эмбеддинги без модели. База ожидает размерность 1024 (`vector(1024)`);
+для совместимых API с параметром `dimensions` предусмотрено `EMBEDDING_SEND_DIMENSIONS=true`.
+
+`NOT_FOUND` и отсутствие найденных фрагментов пропускаются: такие правила не создают замечаний,
+не входят в «Недостаточно данных» и не считаются подтверждёнными «без замечаний».
+Если найденное условие не позволяет сделать вывод, модель возвращает `UNKNOWN`.
+`UNKNOWN`, ошибка модели, некорректный ответ и неподтверждённая цитата означают **«Недостаточно данных»
+(`unknown`)**. Такие результаты не входят в подтверждённые «без замечаний»;
+при неполной оценке нельзя считать итоговый балл подтверждением безопасности документа. Для результата
+`OK` модель тоже должна вернуть подтверждённую цитату из переданного фрагмента. Сверка цитаты
+подтверждает происхождение текста, но не юридическую корректность или полноту вывода модели.
+
+Для применения нового поведения к сохранённым результатам запустите «Проверить заново».
+Если все правила пропущены, список результатов будет пустым, без подтверждённого индекса риска.
 
 ## Как это работает
 
@@ -61,7 +163,7 @@ LLM и эмбеддинги — любой OpenAI-совместимый API, н
 ## API для фронтенда
 
 API возвращает snake_case DTO; `frontend/lib/api.ts` преобразует их в camelCase модели `frontend/lib/types.ts`:
-`severity`: `critical | warning | low | ok`, статус замечания: `unseen | accepted | dismissed`,
+`severity`: `critical | warning | low | ok | unknown`, статус замечания: `unseen | accepted | dismissed`,
 степень риска правила: `critical | warning | low`. Пользователь — заголовок `X-User-Id`
 (без него — демо-пользователь). Это прототип идентификации, не аутентификация; UI использует профиль по умолчанию.
 
@@ -70,13 +172,15 @@ API возвращает snake_case DTO; `frontend/lib/api.ts` преобраз�
 | Документы → список проектов | `GET /api/projects?q=` — проекты с файлами, `processing_count`, `counts`, `traffic_light` |
 | Новый проект | `POST /api/projects` `{title, description}` → `409` при повторе названия (без учёта регистра) |
 | Загрузка файлов в проект | `POST /api/projects/{id}/files` (multipart, несколько `files`) → `{files, errors}` — сохраняет файлы без запуска анализа |
-| Начать анализ | `POST /api/projects/{id}/start` → `{documents}` — запускает только ожидающие документы; повторный запуск без новых файлов → `409` |
+| Режимы проверки | `GET /api/analysis-modes` → настройки по умолчанию и доступность `llm / keyword` |
+| Начать анализ | `POST /api/projects/{id}/start` `{"analysis_mode":"llm"}` → `{documents}` — запускает только ожидающие документы; повторный запуск без новых файлов → `409` |
+| Повторить проверку | `POST /api/projects/{id}/rerun` или `/api/documents/{id}/reanalyze` с `{"analysis_mode":"llm"}` |
 | Статус обработки файла | `files[].phase` (`uploaded / queued / processing / ready / failed / unsupported`), `label`, `progress` — опрашивать `GET /api/projects/{id}` |
 | ZIP: содержимое → выбор файла | `files[].documents[]` (`relative_path` — путь в архиве); открыть — по `documents[].id` |
-| Карточка документа | `GET /api/documents/{id}` — `total_pages`, `rules_checked`, `counts`, `traffic_light` |
+| Карточка документа | `GET /api/documents/{id}` — `analysis_mode`, `total_pages`, `rules_checked`, `counts`, `traffic_light` |
 | Текст страницы | `GET /api/documents/{id}/pages/{n}` → `sections[{title, paragraphs[{clause, text, finding_ids}]}]` |
 | Настоящий PDF и миниатюры | `GET /api/documents/{id}/file`, `GET /api/documents/{id}/pages/{n}/thumbnail?width=160` |
-| Панель «Замечания» + фильтры | `GET /api/documents/{id}/findings?severity=critical,warning&category=&status=unseen&q=` → 4 группы, `categories`, `statuses` |
+| Панель «Замечания» + фильтры | `GET /api/documents/{id}/findings?severity=critical,warning&category=&status=unseen&q=` → группы рисков, «без замечаний» и `unknown`, `categories`, `statuses` |
 | Смена статуса замечания | `PATCH /api/findings/{id}` `{"status": "accepted"}` |
 | Оглавление | `GET /api/documents/{id}/outline` |
 | Поиск по документу | `GET /api/documents/{id}/search?q=` → `hits[{page, clause, snippet, highlights}]` |
@@ -103,6 +207,10 @@ API возвращает snake_case DTO; `frontend/lib/api.ts` преобраз�
 | `protocol` | протокол разногласий: «редакция заказчика → предлагаемая редакция → обоснование» | docx, pdf, json |
 | `annotated` | исходный документ в PDF с подсветкой и комментариями на полях | pdf |
 
+PDF с пометками недоступен, пока остаются активные результаты `unknown`: такой файл мог бы скрыть
+неполноту проверки. API возвращает ошибку и предлагает подробный отчёт, в котором видны результаты
+«Недостаточно данных».
+
 ### Примеры
 
 ```bash
@@ -110,8 +218,16 @@ API возвращает snake_case DTO; `frontend/lib/api.ts` преобраз�
 curl -X POST -H "Content-Type: application/json" -d '{"title": "Поставка мебели"}' http://localhost:8000/api/projects
 curl -F "files=@Документация.zip" -F "files=@Проект контракта.pdf" http://localhost:8000/api/projects/<project_id>/files
 
-# Явный запуск проверки сохранённых файлов
-curl -X POST http://localhost:8000/api/projects/<project_id>/start
+# Доступность LLM и других режимов
+curl http://localhost:8000/api/analysis-modes
+
+# Явный запуск LLM-проверки сохранённых файлов
+curl -X POST -H "Content-Type: application/json" -d '{"analysis_mode":"llm"}' \
+     http://localhost:8000/api/projects/<project_id>/start
+
+# Повторная проверка уже обработанных документов выбранной моделью
+curl -X POST -H "Content-Type: application/json" -d '{"analysis_mode":"llm"}' \
+     http://localhost:8000/api/projects/<project_id>/rerun
 
 # Замечания документа: только критические и непросмотренные
 curl "http://localhost:8000/api/documents/<document_id>/findings?severity=critical&status=unseen"
@@ -130,8 +246,10 @@ curl -OJ "http://localhost:8000/api/documents/<document_id>/report?mode=protocol
 ## Проверка работоспособности
 
 ```bash
-docker compose exec backend pytest                 # юнит-тесты
-docker compose exec backend python -m tests.smoke  # сквозная проверка всей системы
+# Юнит-тесты (локальное окружение разработки, не production-образ):
+python -m pip install -r backend/requirements-dev.txt
+(cd backend && python -m pytest)
+python backend/tests/smoke.py  # сквозная проверка всей системы
 ```
 
 Сквозная проверка создаёт проект, загружает ZIP (договор с рискованными пунктами, страница-скан, DOCX),

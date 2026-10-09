@@ -13,9 +13,10 @@ from app.api.deps import counts_by_document, current_user, document_out, finding
 from app.db import get_db
 from app.models import DocumentPage, RiskFinding, User, visible_findings
 from app.schemas import (
-    DocumentOut, DocumentUpdate, FindingGroup, FindingsResponse, OutlineSection, PageContent, SearchResponse,
+    DocumentOut, DocumentUpdate, FindingGroup, FindingsResponse, OutlineSection, PageContent, RerunRequest, SearchResponse,
 )
 from app.services import pdf_tools
+from app.services.analysis_modes import analysis_mode_or_422
 from app.services.audit import log_action
 from app.services.search import search_pages
 from app.services.pipeline import refresh_analysis
@@ -129,7 +130,7 @@ def get_page(document_id: uuid.UUID, page_number: int, db: Session = Depends(get
     # Привязка замечаний к абзацам: по номеру пункта, иначе по началу цитаты
     findings = db.scalars(select(RiskFinding).where(
         RiskFinding.document_id == document_id, RiskFinding.page_number == page_number,
-        RiskFinding.severity != "GREEN", visible_findings())).all()
+        RiskFinding.severity != "GREEN", RiskFinding.quote_verified.is_(True), visible_findings())).all()
     paragraphs = [p for s in sections for p in s["paragraphs"]]
     for p in paragraphs:
         p["finding_ids"] = []
@@ -216,16 +217,20 @@ def document_findings(
 
 @router.post("/{document_id}/reanalyze", response_model=DocumentOut, status_code=status.HTTP_202_ACCEPTED,
              summary="Перепроверить документ правилами без повторного OCR")
-def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
+              body: RerunRequest | None = None):
     doc = get_document_or_404(db, document_id, user)
+    mode = analysis_mode_or_422(body.analysis_mode if body else None)
     db.refresh(doc, with_for_update=True)
     if doc.status != "COMPLETED":
         raise HTTPException(409, "Документ ещё не обработан")
     doc.status, doc.progress = "ANALYZING", 70
+    doc.analysis_mode = mode
     doc.error_message = None
-    log_action(db, user.id, "DOCUMENT_REANALYZE", "document", doc.id, {"file": doc.file_name})
+    log_action(db, user.id, "DOCUMENT_REANALYZE", "document", doc.id,
+               {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None})
     db.flush()
     refresh_analysis(db, doc.analysis_id)
     db.commit()
-    enqueue_documents(db, [doc])
+    enqueue_documents(db, [doc], body.rule_ids if body else None)
     return document_out(doc, counts_by_document(db, [doc.id]).get(doc.id))

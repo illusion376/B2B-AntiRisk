@@ -5,6 +5,7 @@ import { ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, FileText,
 import type { Project, ProjectDraft } from '@/lib/types';
 import { formatProjectDate } from '@/lib/projects';
 import { Modal } from './ui';
+import { UnknownResultsBadge } from './shared-badges';
 import './project-enhancements.css';
 
 interface ProjectsViewProps {
@@ -112,7 +113,7 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
                 {visible.map(project => {
                   const state = projectState(project);
                   const riskCount = project.counts.critical + project.counts.warning + project.counts.low;
-                  const hasResults = riskCount > 0 || project.files.some(file => file.rulesChecked > 0);
+                  const hasResults = riskCount > 0 || project.counts.ok > 0 || project.counts.unknown > 0 || project.files.some(file => file.rulesChecked > 0);
                   return (
                     <tr key={project.id}>
                       <td>
@@ -127,6 +128,7 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
                         <span className={riskCount ? 'dashboard-risk-value' : ''} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
                           {hasResults ? riskCount : '—'}
                         </span>
+                        <UnknownResultsBadge count={project.counts.unknown} />
                       </td>
                       <td><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td>
                       <td>

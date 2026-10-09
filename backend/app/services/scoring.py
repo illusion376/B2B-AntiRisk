@@ -2,7 +2,7 @@
 from collections.abc import Iterable
 
 
-def risk_score(severities: Iterable[str]) -> int:
+def risk_score(severities: Iterable[str]) -> int | None:
     """Насыщающаяся шкала: каждое красное замечание «съедает» 30% оставшегося запаса, жёлтое — 10%,
     низкий риск — 3%.
 
@@ -10,6 +10,8 @@ def risk_score(severities: Iterable[str]) -> int:
     """
     safe = 1.0
     for severity in severities:
+        if severity == "UNKNOWN":
+            return None
         if severity == "RED":
             safe *= 0.7
         elif severity == "YELLOW":
@@ -20,10 +22,12 @@ def risk_score(severities: Iterable[str]) -> int:
 
 
 def traffic_light(severities: Iterable[str]) -> str:
-    """RED / YELLOW / GREEN. Низкий риск светофор не окрашивает (во фронтенде он зелёный)."""
+    """Подтверждённый риск виден и при неполной оценке; UNKNOWN не становится зелёным."""
     values = set(severities)
     if "RED" in values:
         return "RED"
     if "YELLOW" in values:
         return "YELLOW"
+    if "UNKNOWN" in values:
+        return "UNKNOWN"
     return "GREEN"

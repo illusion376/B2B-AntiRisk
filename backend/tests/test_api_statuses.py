@@ -62,6 +62,30 @@ def test_document_score_uses_visible_findings_after_rule_disabled():
     assert document.risk_score == 99  # сборка ответа не изменяет сохранённый результат
 
 
+@pytest.mark.parametrize("critical,expected_light", [(0, "unknown"), (1, "critical")])
+def test_incomplete_checks_never_produce_green_or_numeric_score(critical, expected_light):
+    result = deps.document_out(make_document(uuid.uuid4()),
+                               (SeverityCounts(critical=critical, unknown=1, ok=1), 3))
+
+    assert result.traffic_light == expected_light
+    assert result.risk_score is None
+    assert result.counts.unknown == 1
+
+
+def test_archive_does_not_hide_unknown_score_of_one_document(monkeypatch):
+    analysis = make_analysis()
+    known, unknown = make_document(analysis.id), make_document(analysis.id)
+    mock_counts(monkeypatch, {analysis.id: (SeverityCounts(critical=1, unknown=1), 2)},
+                {known.id: (SeverityCounts(critical=1), 1), unknown.id: (SeverityCounts(unknown=1), 1)})
+    db = MagicMock()
+    db.scalars.return_value = [known, unknown]
+
+    result = deps.project_files_out(db, [analysis])[0]
+
+    assert result.traffic_light == "critical"
+    assert result.risk_score is None
+
+
 @pytest.mark.parametrize("status", ["FAILED", "COMPLETED"])
 def test_project_without_successful_checks_is_not_green(monkeypatch, status):
     project = Project(id=uuid.uuid4(), title="Test", description="", created_at=NOW, updated_at=NOW)

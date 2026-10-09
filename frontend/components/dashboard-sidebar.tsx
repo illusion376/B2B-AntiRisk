@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpenCheck, ChevronRight, CircleHelp, History, LayoutDashboard, Plus, ShieldCheck, X } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, CircleHelp, History, LayoutDashboard, Plus, Settings2, ShieldCheck, X } from 'lucide-react';
 import type { User, View } from '@/lib/types';
 
 interface Props {
@@ -20,6 +20,7 @@ export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,
     {view:'documents' as const,label:'Документы',Icon:LayoutDashboard,count:projectCount},
     {view:'rules' as const,label:'Правила проверки',Icon:BookOpenCheck,count:ruleCount},
     {view:'history' as const,label:'История действий',Icon:History,count:null},
+    {view:'settings' as const,label:'Настройки',Icon:Settings2,count:null},
   ];
   return <>
     {open && <button className="dashboard-scrim" aria-label="Закрыть меню" onClick={onClose} />}

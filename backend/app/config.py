@@ -1,6 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,23 +46,27 @@ class Settings(BaseSettings):
     embedding_send_dimensions: bool = False  # для text-embedding-3-* у OpenAI
     embedding_batch_size: int = 32
 
-    # --- LLM (OpenAI-совместимый chat/completions) ---
-    llm_base_url: str | None = None  # пусто -> эвристический режим без LLM
+    # --- LLM через ProxyAPI; модели не загружаются на сервер ---
+    llm_base_url: str | None = "https://api.proxyapi.ru/v1"
     llm_api_key: str | None = None
-    llm_model: str = "qwen2.5:7b-instruct"
+    llm_model: str = "openai/gpt-4.1-mini"
     llm_temperature: float = 0.0
-    llm_max_tokens: int = 1500
-    llm_timeout_s: int = 120
-    llm_concurrency: int = 6
+    llm_max_tokens: int = Field(default=8192, ge=1)
+    llm_reasoning_effort: Literal["low", "medium", "high"] = "low"
+    llm_timeout_s: int = Field(default=120, gt=0)
+    llm_concurrency: int = Field(default=6, ge=1)
     llm_json_mode: bool = True  # response_format={"type": "json_object"}
 
     # --- Анализ ---
-    retrieval_top_k: int = 4
+    # auto: настроенная LLM, иначе поиск по словам без локальной модели.
+    # nli принимается для понятной ошибки в старых конфигурациях, но отключён.
+    analysis_engine: Literal["auto", "llm", "nli", "keyword"] = "auto"
+    retrieval_top_k: int = Field(default=4, ge=1)
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
 
-    # --- Оффлайн-анализ (без LLM) ---
-    # "nli" (анализ противоречий через NLI-модель) или "keyword" (поиск по стеммам)
-    heuristic_engine: str = "nli"
+    # --- Поиск без LLM ---
+    # Старое значение nli принимается только для понятной ошибки при запуске.
+    heuristic_engine: Literal["nli", "keyword"] = "keyword"
     nli_model_name: str = "cointegrated/rubert-base-cased-nli-threeway"
     nli_threshold: float = 0.5  # минимальная вероятность entailment для фиксации риска
     nli_batch_size: int = 16
@@ -73,7 +79,7 @@ class Settings(BaseSettings):
 
     @property
     def llm_enabled(self) -> bool:
-        return bool(self.llm_base_url)
+        return all(value and value.strip() for value in (self.llm_base_url, self.llm_model, self.llm_api_key))
 
     @property
     def embedding_model_id(self) -> str:

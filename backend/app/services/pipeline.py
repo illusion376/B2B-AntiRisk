@@ -16,6 +16,7 @@ from app.config import settings
 from app.db import session_scope
 from app.models import Analysis, AuditLog, Document, DocumentChunk, DocumentPage, Project, RiskFinding, RiskRule
 from app.services import storage
+from app.services.analysis_modes import AnalysisModeError, resolve_analysis_mode
 from app.services.analyzer import FindingDraft, RuleContext, evaluate_heuristic, evaluate_nli, evaluate_with_llm
 from app.services.converter import ConversionError, to_pdf
 from app.services.embeddings import EmbeddingError, embed_texts
@@ -85,7 +86,9 @@ def refresh_analysis(db: Session, analysis_id: uuid.UUID) -> None:
     if completed:
         analysis.analysis_status = "COMPLETED"
         analysis.error_message = None
-        analysis.risk_score = max(d.risk_score or 0 for d in completed)
+        analysis.risk_score = None if any(d.risk_score is None for d in completed) else max(
+            d.risk_score for d in completed
+        )
         analysis.rules_checked = db.scalar(
             select(func.count(func.distinct(RiskFinding.rule_id))).where(RiskFinding.analysis_id == analysis_id)
         ) or 0
@@ -177,6 +180,12 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
     """Прогоняет правила по уже извлечённому и векторизованному документу и сохраняет замечания."""
     with session_scope() as db:
         doc = db.get(Document, document_id)
+        if doc is None:
+            raise ProcessingError("Документ не найден")
+        # Старые строки без режима получают текущий default ровно при новом запуске.
+        # Для поставленных API задач всегда используем сохранённый выбор пользователя.
+        mode = resolve_analysis_mode(doc.analysis_mode)
+        doc.analysis_mode = mode
         rules = applicable_rules(db, doc.law_type, rule_ids)
         ensure_rule_embeddings(db, rules)
         contexts = [
@@ -193,9 +202,9 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         ]
         document_name, law_type, analysis_id = doc.file_name, doc.law_type, doc.analysis_id
 
-    if settings.llm_enabled:
+    if mode == "llm":
         drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type))
-    elif settings.heuristic_engine == "nli":
+    elif mode == "nli":
         drafts = evaluate_nli(contexts, pages)
     else:
         drafts = evaluate_heuristic(contexts, pages)
@@ -269,6 +278,10 @@ def process_document(document_id: uuid.UUID) -> None:
         source, analysis_id, analysis_law = Path(doc.file_path), doc.analysis_id, analysis.law_type
 
     try:
+        # Проверяем и сохраняем режим до длительных конвертации/OCR (включая старые задания).
+        with session_scope() as db:
+            doc = db.get(Document, document_id)
+            doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)
         set_document(document_id, status="CONVERTING", progress=5, error_message=None)
         preview_target = storage.subdir(analysis_id, "preview") / f"{document_id}.pdf"
         try:
@@ -325,7 +338,7 @@ def process_document(document_id: uuid.UUID) -> None:
         analyze_document(document_id)
         set_document(document_id, processing_ms=round((time.monotonic() - started) * 1000))
         log.info("Document %s processed in %.1fs", document_id, time.monotonic() - started)
-    except ProcessingError as exc:
+    except (ProcessingError, AnalysisModeError) as exc:
         log.warning("Document %s failed: %s", document_id, exc)
         set_document(document_id, status="FAILED", error_message=str(exc))
     except Exception as exc:

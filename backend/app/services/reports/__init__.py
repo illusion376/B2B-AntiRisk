@@ -157,6 +157,9 @@ def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
         doc = data.documents[0]
         if not doc.preview_path:
             raise ReportError("Документ ещё не обработан")
+        if any(f.severity == "UNKNOWN" and f.review_status != "DISMISSED" for f in doc.findings):
+            raise ReportError("PDF с пометками недоступен: по части проверок недостаточно данных. "
+                              "Скачайте подробный отчёт — он содержит причины неполной оценки.")
         findings = [f.__dict__ for f in doc.issues]
         path = pdf_tools.annotated_pdf(Path(doc.preview_path), findings, target.with_suffix(".pdf"))
         return ReportFile(path, f"{_slug(Path(doc.file_name).stem)}_с_пометками.pdf", MEDIA_TYPES["pdf"])

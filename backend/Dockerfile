@@ -3,7 +3,6 @@ FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONPATH=/app \
     TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
@@ -17,11 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY backend/requirements.txt .
-RUN pip install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 
 COPY backend/app ./app
-COPY backend/tests ./tests
-COPY backend/pytest.ini .
 COPY database/migrations ./migrations
 
 RUN useradd --create-home --uid 1000 app && mkdir -p /data/storage && chown -R app:app /data /app

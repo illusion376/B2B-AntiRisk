@@ -2,7 +2,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {AlertCircle,Check,ChevronDown,ChevronRight,CircleHelp,Clock3,Download,EllipsisVertical,FileText,Files,History,LoaderCircle,Menu,Pencil,RefreshCw,Search,ShieldCheck,X} from 'lucide-react';
 import {api,errorMessage} from '@/lib/api';
-import type {CheckRule,DocumentInfo,Finding,Project,ProjectDraft,ReportFormat,ReportModeId,ReviewStatus,RuleDraft,SearchResponse,View} from '@/lib/types';
+import type {AnalysisMode,CheckRule,DocumentInfo,Finding,Project,ProjectDraft,ReportFormat,ReportModeId,ReviewStatus,RuleDraft,SearchResponse,View} from '@/lib/types';
 import {DocumentWorkspace} from './document-workspace';
 import {IconButton,Modal} from './ui';
 import {useWorkspaceTools} from './workspace-tools';
@@ -12,6 +12,8 @@ import {ProjectFilesView} from './project-files';
 import {DashboardSidebar} from './dashboard-sidebar';
 import {useWorkspaceNavigation} from './use-workspace-navigation';
 import {useLiveDocument,useWorkspaceData} from './use-workspace-data';
+import {useAnalysisModes} from './use-analysis-modes';
+import {SettingsView} from './settings-view';
 import './dashboard.css';
 import './integration.css';
 
@@ -22,6 +24,8 @@ function ErrorNotice({message,onRetry}:{message:string;onRetry?:()=>void}) {
 export function Workspace() {
   const {view,page,projectId,documentId,findingId,navigate}=useWorkspaceNavigation();
   const data=useWorkspaceData();
+  const analysisModes=useAnalysisModes();
+  const selectedAnalysisMode=analysisModes.selectedMode;
   const {projects,rules,history,user,reportModes}=data;
   const live=useLiveDocument(view==='document'?documentId:null,page);
   const activeDocument=live.document;
@@ -56,7 +60,7 @@ export function Workspace() {
   const openDocument=(document:DocumentInfo)=>navigate({view:'document',projectId,documentId:document.id,page:1,findingId:null});
   const navigatePage=(next:number)=>navigate({page:Math.max(1,Math.min(activeDocument?.totalPages||1,next)),findingId:null});
   const selectFinding=(finding:Finding)=>navigate({findingId:finding.id,...(finding.page?{page:finding.page}:{})});
-  const refreshAll=()=>{data.refresh();live.refresh();};
+  const refreshAll=()=>{data.refresh();live.refresh();analysisModes.refresh();};
   const openModal=(next:typeof modal)=>{setModalError(null);setModal(next);setPopover(null);};
   useEffect(()=>{
     const header=headerRef.current;if(!header)return;
@@ -89,8 +93,8 @@ export function Workspace() {
   }
   async function createProject(draft:ProjectDraft){try{const project=await api.createProject(draft);data.refresh();openProject(project);setModal(null);setToast('Проект создан');}catch(cause){return errorMessage(cause);}}
   async function uploadFiles(files:File[]){const result=await api.uploadFiles(projectId,files);data.refresh();if(result.files.length)setToast(`Загружено файлов: ${result.files.length}`);return result.errors.map(error=>`${error.name}: ${error.detail}`);}
-  async function startAnalysis(){try{await api.startProjectAnalysis(projectId);setToast('Анализ запущен');}finally{refreshAll();}}
-  async function rerunProject(){try{await api.rerunProject(projectId);setToast('Повторная проверка запущена');}finally{refreshAll();}}
+  async function startAnalysis(mode:AnalysisMode){try{await api.startProjectAnalysis(projectId,{analysisMode:mode});setToast('Анализ запущен');}finally{refreshAll();}}
+  async function rerunProject(mode:AnalysisMode){try{await api.rerunProject(projectId,{analysisMode:mode});setToast('Повторная проверка запущена');}finally{refreshAll();}}
   async function toggleRule(rule:CheckRule){await api.updateRule(rule.id,{enabled:!rule.enabled});refreshAll();}
   async function saveRule(draft:RuleDraft){try{if(ruleDialog?.mode==='edit')await api.updateRule(ruleDialog.rule.id,draft);else await api.createRule(draft);refreshAll();setRuleDialog(null);setToast('Правило сохранено');}catch(cause){return errorMessage(cause);}}
   async function deleteRule(){if(ruleDialog?.mode!=='delete')return;try{await api.deleteRule(ruleDialog.rule.id);refreshAll();setRuleDialog(null);setToast('Правило удалено');}catch(cause){return errorMessage(cause);}}
@@ -112,11 +116,12 @@ export function Workspace() {
     </div>
     <main id="main-content" className="main-content" tabIndex={-1}>
       {data.error&&<ErrorNotice message={data.error} onRetry={data.refresh}/>}{actionError&&<ErrorNotice message={actionError}/>}
-      {data.loading?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
+      {data.loading&&view!=='settings'?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
       {view==='documents'&&(!data.error||projects.length>0)&&<ProjectsView projects={projects} onOpen={openProject} onCreate={()=>openModal('create-project')} query={dashboardQuery} onQueryChange={setDashboardQuery}/>}
-      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
-      {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={live.findings} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
+      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
+      {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {activeDocument?.phase==='ready'&&activeDocument.errorMessage&&<ErrorNotice message={`${live.findings.length?'Повторная проверка не удалась. Показаны предыдущие результаты. ':''}${activeDocument.errorMessage}`}/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={live.findings} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
       {view==='rules'&&<RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule}/>}
+      {view==='settings'&&<SettingsView config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError}/>}
       {view==='history'&&<section className="secondary-view history-view"><div className="view-title"><div><span className="eyebrow">ЖУРНАЛ ДЕЙСТВИЙ</span><h1>История действий</h1><p>Последние проверки, решения и скачанные отчёты.</p></div><span className="count-chip"><Clock3 size={16}/>Последние 100 событий</span></div>{!history.length?<div className="api-state">Действий пока нет. Создайте проект и загрузите документы.</div>:<ol className="timeline">{history.map((entry,index)=><li key={entry.id}><span className={`timeline-icon ${index===0?'latest':''}`}><History size={18}/></span><div><h3>{entry.title}</h3><p>{entry.detail}</p></div><time dateTime={entry.time}>{dateTime(entry.time)}</time></li>)}</ol>}</section>}
       </>}
     </main>
