@@ -4,7 +4,7 @@
   .workspace-summary-card { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 2px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
   .workspace-summary-card dt { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; font-size: .8125rem; color: #626b5d; margin-bottom: 8px; }
   .workspace-summary-card dd { margin: 0; }
-  .workspace-summary-card dd:not(.summary-caption) { font-size: 1.5rem; font-weight: 600; line-height: 1.1; color: var(--text); }
+  .workspace-summary-card dd:not(.summary-caption) { font-size: 1.5rem; font-weight: 700; line-height: 1.1; color: var(--text); }
   .summary-caption { grid-column: 1 / -1; font-size: .75rem; color: #7c8471; }
   .summary-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: #f2f3ee; color: #6f7865; }
   .summary-processing .summary-icon { background: #fbf3dc; color: #9a7318; }
@@ -31,7 +31,7 @@
 
   .project-create-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 236px; padding: 23px; text-align: center; border: 1px dashed #d4d6cd; border-radius: 8px; background: transparent; color: #6f7865; }
   .project-create-card > span { width: 52px; height: 52px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: #fff; border: 1px solid var(--line); color: var(--red); }
-  .project-create-card strong { font-size: .9375rem; font-weight: 600; color: var(--text); }
+  .project-create-card strong { font-size: .9375rem; font-weight: 700; color: var(--text); }
   .project-create-card p { font-size: .8125rem; line-height: 1.5; color: #626b5d; }
   .project-create-card:hover { border-color: #d2a39b; background: #fffaf8; }
 
@@ -81,7 +81,7 @@
 .dashboard-shell .project-child-document:last-child { border-bottom: 0; }
 .dashboard-shell .child-document-icon { color: #999; display: flex; }
 .dashboard-shell .project-child-name { min-width: 0; }
-.dashboard-shell .project-child-name h4 { font-size: .75rem; font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.dashboard-shell .project-child-name h4 { font-size: .75rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
 .dashboard-shell .project-child-name p { margin-top: 4px; color: #8d8d8d; font-size: .6875rem; line-height: 1.5; overflow-wrap: anywhere; }
 .dashboard-shell .project-no-documents { padding: 0 12px 15px 55px; color: #888; font-size: .75rem; line-height: 1.6; }
 .dashboard-shell .project-files-empty .secondary-button,

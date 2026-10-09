@@ -98,10 +98,41 @@ def test_missing_or_meaningless_evidence_means_unknown(answer):
     assert finding.exact_quote is None and finding.highlights == []
 
 
-def test_not_found_and_missing_candidates_are_unknown():
+def test_not_found_is_omitted_instead_of_unknown_or_ok():
     answer = {"verdict": "NOT_FOUND", "issues": [], "evidence": [], "explanation": "Нужное условие не найдено."}
-    assert evaluate(answer)[0].severity == "UNKNOWN"
+    assert evaluate(answer) == []
+    assert evaluate(answer, candidates=[]) == []
+
+
+def test_llm_cannot_claim_risk_without_source_candidates():
     assert evaluate(risk_answer(), candidates=[])[0].severity == "UNKNOWN"
+
+
+def test_inconclusive_found_condition_stays_unknown():
+    answer = {"verdict": "UNKNOWN", "issues": [], "evidence": [],
+              "explanation": "Условие найдено, но срок указан в отсутствующем приложении."}
+    result = evaluate(answer)
+    assert len(result) == 1
+    assert result[0].severity == "UNKNOWN" and result[0].source == "LLM"
+    assert result[0].comment == answer["explanation"]
+
+
+def test_unknown_cannot_contain_confirmed_evidence():
+    result = evaluate({**ok_answer(), "verdict": "UNKNOWN"})
+    assert result[0].severity == "UNKNOWN" and result[0].source == "ERROR"
+
+
+def test_empty_retrieval_does_not_initialize_llm_or_create_findings(monkeypatch):
+    def unexpected_client(**kwargs):
+        raise AssertionError("No provider request is needed without candidate fragments")
+    monkeypatch.setattr(analyzer, "LLMClient", unexpected_client)
+    assert asyncio.run(analyzer.evaluate_with_llm([RuleContext(rule(), [])], pages(), "doc.pdf", None)) == []
+
+
+def test_keyword_mode_omits_vector_only_candidates():
+    candidate = chunk()
+    candidate.fts_hit = False
+    assert analyzer.evaluate_heuristic([RuleContext(rule(), [candidate])], pages(RISK_TEXT)) == []
 
 
 @pytest.mark.parametrize("verdict", ["RISK", "OK"])

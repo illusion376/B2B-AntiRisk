@@ -85,8 +85,8 @@ def test_heuristic_mode(contract_pdf):
     chunk = _chunk("6.2. Поставщик уплачивает Заказчику штраф в размере 0,1% от стоимости Контракта за каждый день "
                    "просрочки исполнения обязательств, но не ограниченной общей суммой Контракта.")
     drafts = evaluate_heuristic([RuleContext(rule, [chunk]), RuleContext(_rule(), [])], pages)
+    assert len(drafts) == 1
     assert drafts[0].severity == "YELLOW" and drafts[0].source == "HEURISTIC" and drafts[0].quote_verified
-    assert drafts[1].severity == "UNKNOWN"
 
 
 def test_hash_embedding_similarity():
@@ -142,7 +142,7 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     chunk = _chunk("6.1. Стороны несут ответственность за неисполнение обязательств")
     drafts = asyncio.run(analyzer.evaluate_with_llm(
         [RuleContext(good, [chunk]), RuleContext(broken, [chunk]), RuleContext(_rule(), [])], pages, "doc.pdf", "44-FZ"))
-    assert [d.severity for d in drafts] == ["GREEN", "UNKNOWN", "UNKNOWN"]
+    assert [d.severity for d in drafts] == ["GREEN", "UNKNOWN"]
     assert drafts[1].source == "ERROR"  # сбой одного правила не роняет весь документ
     assert len(calls) == 2  # правило без релевантных фрагментов в LLM не отправляется
     assert "44-ФЗ" in calls[0] and "[F1] (стр. 1" in calls[0]
@@ -165,14 +165,13 @@ def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
     r2 = _rule()
     r2.id = "r2_no_chunks"
     drafts = analyzer.evaluate_nli([RuleContext(rule, [chunk]), RuleContext(r2, [])], pages)
-    assert len(drafts) == 2
+    assert len(drafts) == 1
     assert drafts[0].severity == "RED"
     assert drafts[0].source == "NLI"
     assert drafts[0].quote_verified
     assert drafts[0].clause == "6.2"
     assert drafts[0].confidence == 0.88
     assert "Семантический NLI-анализ подтвердил риск" in drafts[0].comment
-    assert drafts[1].severity == "UNKNOWN"
 
 
 def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
