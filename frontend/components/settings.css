@@ -1,29 +1,29 @@
-.dashboard-shell .settings-view { max-width: 1160px; }
-.dashboard-shell .settings-heading-icon { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--line); border-radius: 10px; color: #697064; }
-.dashboard-shell .analysis-settings-card { padding: 26px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.dashboard-shell .settings-view { max-width: 920px; }
+.dashboard-shell .settings-heading-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; color: #697064; }
+.dashboard-shell .analysis-settings-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .dashboard-shell .analysis-mode-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.dashboard-shell .analysis-mode-fieldset legend { margin-bottom: 10px; padding: 0; font-size: 1rem; font-weight: 700; }
-.dashboard-shell #analysis-settings-help { max-width: 760px; color: #626b5d; font-size: .875rem; line-height: 1.65; }
-.dashboard-shell .analysis-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
-.dashboard-shell .analysis-mode-option { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 20px; border: 1px solid #d9ddd4; border-radius: 8px; cursor: pointer; }
+.dashboard-shell .analysis-mode-fieldset legend { margin-bottom: 6px; padding: 0; font-size: 1rem; font-weight: 700; }
+.dashboard-shell #analysis-settings-help { max-width: 760px; color: #626b5d; font-size: .875rem; line-height: 1.45; }
+.dashboard-shell .analysis-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.dashboard-shell .analysis-mode-option { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #d9ddd4; border-radius: 8px; cursor: pointer; }
 .dashboard-shell .analysis-mode-option:hover { border-color: #929a88; }
 .dashboard-shell .analysis-mode-option.is-selected { border-color: #657254; box-shadow: inset 0 0 0 1px #657254; background: #f7f9f4; }
 .dashboard-shell .analysis-mode-option.is-unavailable { cursor: not-allowed; background: #f7f7f5; }
 .dashboard-shell .analysis-mode-option input { width: 17px; height: 17px; margin: 2px 0 0; flex-shrink: 0; accent-color: #596b47; }
 .dashboard-shell .analysis-mode-option:focus-within { outline: 2px solid #657254; outline-offset: 3px; }
 .dashboard-shell .analysis-mode-option > svg { flex-shrink: 0; color: #596b47; }
-.dashboard-shell .analysis-mode-copy { display: grid; flex: 1; gap: 9px; min-width: 0; }
-.dashboard-shell .analysis-mode-copy strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: .9375rem; font-weight: 700; }
+.dashboard-shell .analysis-mode-copy { display: grid; flex: 1; gap: 5px; min-width: 0; }
+.dashboard-shell .analysis-mode-copy strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: .875rem; font-weight: 700; }
 .dashboard-shell .analysis-mode-copy strong small { padding: 2px 7px; border-radius: 4px; background: #e9eae6; font-size: .75rem; font-weight: 700; color: #62695b; }
-.dashboard-shell .analysis-mode-copy > span { font-size: .875rem; color: #626b5d; line-height: 1.65; }
+.dashboard-shell .analysis-mode-copy > span { font-size: .8125rem; color: #626b5d; line-height: 1.45; }
 .dashboard-shell .settings-status, .dashboard-shell .settings-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 18px; font-size: .875rem; }
 .dashboard-shell .settings-error, .dashboard-shell .settings-warning { color: #922b29; }
 .dashboard-shell .settings-warning { margin-top: 18px; line-height: 1.6; font-size: .875rem; }
-.dashboard-shell .settings-model { margin-top: 20px; font-size: .8125rem; color: #626b5d; overflow-wrap: anywhere; }
-.dashboard-shell .settings-save-note { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); color: #626b5d; font-size: .8125rem; }
+.dashboard-shell .settings-model { margin-top: 12px; font-size: .8125rem; color: #626b5d; overflow-wrap: anywhere; }
+.dashboard-shell .settings-save-note { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: #626b5d; font-size: .8125rem; }
 .dashboard-shell .project-analysis-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0; font-size: .8125rem; color: #626b5d; }
 .dashboard-shell .project-analysis-summary button { font-size: .8125rem; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 700px) {
   .dashboard-shell .analysis-mode-options { grid-template-columns: 1fr; }
-  .dashboard-shell .analysis-settings-card { padding: 18px; }
+  .dashboard-shell .analysis-settings-card { padding: 14px; }
 }

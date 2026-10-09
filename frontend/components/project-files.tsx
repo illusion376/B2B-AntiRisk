@@ -4,11 +4,13 @@ import { useRef, useState } from 'react';
 import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
-import { UnknownResultsBadge } from './shared-badges';
+import { ProjectActions } from './project-actions';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
   project: Project;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
   onUpload: (files: File[]) => Promise<string[]>;
   onOpenDocument: (document: DocumentInfo) => void;
   onStart: (mode: AnalysisMode) => Promise<void>;
@@ -34,7 +36,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 }
 
 export function ProjectFilesView({
-  project, onUpload, onOpenDocument, onStart, onRerun,
+  project, onRename, onDelete, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
   selectedAnalysisMode, onOpenSettings,
 }: ProjectFilesViewProps) {
@@ -87,7 +89,10 @@ export function ProjectFilesView({
           <h1>{project.title}</h1>
           <p>{project.description || 'Загрузите документы, чтобы начать работу.'}</p>
         </div>
-        <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
+        <div className="project-heading-actions">
+          <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
+          <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={uploading || starting} />
+        </div>
       </div>
       <FileDropzone onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
       {!modeReady && <div className="project-analysis-summary">
@@ -147,7 +152,6 @@ export function ProjectFilesView({
                   <div className="file-processing">
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
-                    {processingState.phase === 'ready' && <UnknownResultsBadge count={file.counts.unknown} />}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
                   </div>
                   {canOpen && (
@@ -171,7 +175,6 @@ export function ProjectFilesView({
                         <div className="file-processing">
                           <ProcessingStatus item={document} name={document.name} />
                           {document.phase === 'ready' && <small>{document.rulesChecked > 0 ? `Проверено правил: ${document.rulesChecked} · Замечаний: ${riskCount(document.counts)}` : 'Нет результатов проверки правил'}</small>}
-                          {document.phase === 'ready' && <UnknownResultsBadge count={document.counts.unknown} />}
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
                         </div>
                         {document.phase === 'ready' && document.hasPreview && (

@@ -94,6 +94,34 @@ test('HTTP validation errors expose useful details and a status for the UI', asy
   });
 });
 
+test('rename project trims the title, preserves its files and sends only the changed field', async t => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/projects/project-uuid');
+    assert.equal(options.method, 'PATCH');
+    assert.deepEqual(JSON.parse(options.body), { title: 'Новая закупка' });
+    return response({ ...project, title: 'Новая закупка' });
+  });
+  const renamed = await api.renameProject(project.id, '  Новая закупка  ');
+  assert.equal(renamed.title, 'Новая закупка');
+  assert.equal(renamed.files[0].documents[0].id, document.id);
+});
+
+test('project deletion accepts an empty 204 response and encodes the identifier', async t => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/projects/project%2Fwith%20spaces');
+    assert.equal(options.method, 'DELETE');
+    return new Response(null, { status: 204 });
+  });
+  assert.equal(await api.deleteProject('project/with spaces'), undefined);
+});
+
+test('project mutation errors remain available to the dialog without reporting success', async t => {
+  const mock = t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ detail: 'Проект с таким названием уже существует.' }), { status: 409 }));
+  await assert.rejects(api.renameProject(project.id, 'Закупка'), error => error.status === 409 && /уже существует/.test(error.message));
+  mock.mock.mockImplementation(async () => new Response(null, { status: 500 }));
+  await assert.rejects(api.deleteProject(project.id), error => error.status === 500);
+});
+
 test('uploaded files remain waiting and analysis starts through a separate request', async t => {
   const waiting = { ...file, status: 'UPLOADED', phase: 'uploaded', label: 'Ожидает запуска', progress: 0,
     documents: [{ ...document, status: 'UPLOADED', phase: 'uploaded', label: 'Ожидает запуска', progress: 0 }] };

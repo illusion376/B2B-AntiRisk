@@ -5,13 +5,15 @@ import { ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, FileText,
 import type { Project, ProjectDraft } from '@/lib/types';
 import { formatProjectDate } from '@/lib/projects';
 import { Modal } from './ui';
-import { UnknownResultsBadge } from './shared-badges';
+import { ProjectActions } from './project-actions';
 import './project-enhancements.css';
 
 interface ProjectsViewProps {
   projects: Project[];
   onOpen: (project: Project) => void;
   onCreate: () => void;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
   query: string;
   onQueryChange: (query: string) => void;
 }
@@ -38,7 +40,7 @@ const projectStateLabels = {
   empty: 'Ожидает файлов',
 };
 
-export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange }: ProjectsViewProps) {
+export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, query, onQueryChange }: ProjectsViewProps) {
   const [sort, setSort] = useState('recent');
   const [filter, setFilter] = useState<ProjectFilter>('all');
   const [page, setPage] = useState(0);
@@ -106,7 +108,7 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
                 <tr>
                   <th scope="col">Проект</th><th scope="col">Статус</th><th scope="col">Файлы</th>
                   <th scope="col">Замечания</th><th scope="col">Обновлён</th>
-                  <th scope="col"><span className="sr-only">Открыть</span></th>
+                  <th scope="col"><span className="sr-only">Действия с проектом</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -128,13 +130,13 @@ export function ProjectsView({ projects, onOpen, onCreate, query, onQueryChange 
                         <span className={riskCount ? 'dashboard-risk-value' : ''} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
                           {hasResults ? riskCount : '—'}
                         </span>
-                        <UnknownResultsBadge count={project.counts.unknown} />
                       </td>
                       <td><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td>
                       <td>
-                        <button className="dashboard-row-action" aria-label={`Открыть проект «${project.title}»`} onClick={() => onOpen(project)}>
+                        <div className="project-row-actions"><button className="dashboard-row-action" aria-label={`Открыть проект «${project.title}»`} title="Открыть проект" onClick={() => onOpen(project)}>
                           <ArrowUpRight size={16} />
                         </button>
+                        <ProjectActions project={project} onRename={onRename} onDelete={onDelete} compact /></div>
                       </td>
                     </tr>
                   );

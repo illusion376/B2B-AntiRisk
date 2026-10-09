@@ -13,27 +13,37 @@ export function useWorkspaceData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  const generation = useRef(0);
+  const refresh = useCallback(() => { generation.current += 1; setRevision(value => value + 1); }, []);
+  const replaceProject = useCallback((project: Project) => {
+    refresh();
+    setProjects(previous => previous.map(item => item.id === project.id ? project : item));
+  }, [refresh]);
+  const removeProject = useCallback((id: string) => {
+    refresh();
+    setProjects(previous => previous.filter(project => project.id !== id));
+  }, [refresh]);
   useEffect(() => {
     const controller = new AbortController();
     const options = { signal: controller.signal };
+    const ticket = generation.current;
     let timer: ReturnType<typeof setTimeout>;
     async function read() {
       try {
         const [nextProjects, nextRules, nextHistory, nextUser, nextModes] = await Promise.all([
           api.getProjects(options), api.getRules(options), api.getHistory(options), api.getUser(options), api.getReportModes(options),
         ]);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || ticket !== generation.current) return;
         setProjects(nextProjects); setRules(nextRules); setHistory(nextHistory); setUser(nextUser); setReportModes(nextModes); setError(null);
         const processing = nextProjects.some(project => project.processingCount > 0 || project.files.some(file => file.phase === 'queued' || file.phase === 'processing'));
         if (processing) timer = setTimeout(read, 2500);
-      } catch (cause) { if (!controller.signal.aborted) setError(errorMessage(cause)); }
-      finally { if (!controller.signal.aborted) setLoading(false); }
+      } catch (cause) { if (!controller.signal.aborted && ticket === generation.current) setError(errorMessage(cause)); }
+      finally { if (!controller.signal.aborted && ticket === generation.current) setLoading(false); }
     }
     void read();
     return () => { clearTimeout(timer); controller.abort(); };
   }, [revision]);
-  return {projects, rules, history, user, reportModes, loading, error, refresh};
+  return {projects, rules, history, user, reportModes, loading, error, refresh, replaceProject, removeProject};
 }
 
 interface DocumentBundle { id: string; document: DocumentInfo; findings: Finding[]; outline: OutlineSection[] }

@@ -65,6 +65,21 @@
   }
 }
 
+/* Project actions stay visible and do not depend on hover or a clipped table menu. */
+.dashboard-shell .project-row-actions, .dashboard-shell .project-actions { display: flex; align-items: center; gap: 6px; }
+.dashboard-shell .project-row-actions { justify-content: flex-end; }
+.dashboard-shell .project-heading-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.dashboard-shell .project-heading-actions .project-actions { flex-wrap: wrap; }
+.dashboard-shell .project-actions button { flex-shrink: 0; }
+.dashboard-shell .projects-view .dashboard-project-table th:first-child { width: auto; }
+.dashboard-shell .projects-view .dashboard-project-table th:last-child { width: 120px; }
+.dashboard-shell .project-delete-action:hover { color: #a12f29; border-color: #d7a19b; background: #fff5f3; }
+.dashboard-shell .project-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.project-delete-warning { color: #626b5d; font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
+.project-delete-warning p + p { margin-top: 10px; }
+.dashboard-shell .modal .project-delete-confirm { background: #a12f29; border-color: #a12f29; color: #fff; }
+.dashboard-shell .modal .project-delete-confirm:hover { background: #85241f; }
+
 /* Live project data and archive contents, using the current dashboard layout. */
 .dashboard-shell .dashboard-state.failed { color: #b04d40; }
 .dashboard-shell .dashboard-state.failed i { background: #c45648; }

@@ -1,14 +1,6 @@
-import { CircleHelp } from 'lucide-react';
 import { findingSourceLabels } from '@/lib/labels';
 import type { Finding } from '@/lib/types';
 import './result-badges.css';
-
-export function UnknownResultsBadge({ count }: { count: number }) {
-  if (!Number.isFinite(count) || count <= 0) return null;
-  return <span className="unknown-results-badge" title="По этим результатам нельзя сделать вывод о наличии или отсутствии риска">
-    <CircleHelp size={13} aria-hidden="true" />Недостаточно данных: {count}
-  </span>;
-}
 
 export function FindingEvidenceBadges({ finding }: { finding: Finding }) {
   const hasUnverifiedQuote = Boolean(finding.quote) && !finding.quoteVerified;

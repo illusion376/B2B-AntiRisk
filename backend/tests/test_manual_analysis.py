@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from app.api import projects
 from app.config import settings
 from app.db import get_db
-from app.models import Analysis, Base, Document, User
+from app.models import Analysis, Base, Document, DocumentPage, Project, RiskFinding, User
 from app.services import uploads
 
 
@@ -32,6 +32,12 @@ def sqlite_uuid(_type, _compiler, **_kwargs):
 @pytest.fixture
 def workspace(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(connection, _record):
+        connection.execute("PRAGMA foreign_keys=ON")
+        # SQLite lower() only handles ASCII; production PostgreSQL also folds Cyrillic.
+        connection.create_function("lower", 1, lambda value: value.lower() if value is not None else None, deterministic=True)
+
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with sessions.begin() as db:
@@ -139,3 +145,59 @@ def test_start_checks_project_ownership(workspace):
     client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))])
     assert client.post(f"/api/projects/{pid}/start", headers={"X-User-Id": str(user_id)}).status_code == 404
     queue.assert_not_called()
+
+
+def test_project_rename_persists_without_changing_uploaded_files(workspace):
+    client, pid, queue, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    renamed = client.patch(f"/api/projects/{pid}", json={"title": "  Новый договор  "})
+    assert renamed.status_code == 200
+    assert renamed.json()["title"] == "Новый договор"
+    assert renamed.json()["files"][0]["id"] == uploaded["id"]
+    assert client.get(f"/api/projects/{pid}").json()["title"] == "Новый договор"
+    assert client.get("/api/projects").json()[0]["title"] == "Новый договор"
+    queue.assert_not_called()
+
+
+def test_project_rename_rejects_blank_long_and_duplicate_titles(workspace):
+    client, pid, _, _ = workspace
+    client.post("/api/projects", json={"title": "Другой проект"})
+    assert client.patch(f"/api/projects/{pid}", json={"title": "   "}).status_code == 422
+    assert client.patch(f"/api/projects/{pid}", json={"title": "a" * 121}).status_code == 422
+    assert client.patch(f"/api/projects/{pid}", json={"title": "Другой проект"}).status_code == 409
+    assert client.patch(f"/api/projects/{pid}", json={"title": "ДРУГОЙ ПРОЕКТ"}).status_code == 409
+    assert client.get(f"/api/projects/{pid}").json()["title"] == "Закупка"
+
+
+def test_project_delete_removes_owned_files_and_results_only(workspace):
+    client, pid, _, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    aid, did = uuid.UUID(uploaded["id"]), uuid.UUID(uploaded["documents"][0]["id"])
+    other = client.post("/api/projects", json={"title": "Другой"}).json()["id"]
+    other_file = client.post(f"/api/projects/{other}/files", files=[("files", ("other.txt", b"Other"))]).json()["files"][0]
+    page_id, finding_id = uuid.uuid4(), uuid.uuid4()
+    with sessions.begin() as db:
+        db.add(DocumentPage(id=page_id, document_id=did, page_number=1, width=595, height=842, text="Contract"))
+        db.add(RiskFinding(id=finding_id, analysis_id=aid, document_id=did, title="Risk", severity="HIGH", comment="Review"))
+    assert (settings.storage_dir / str(aid)).is_dir()
+    deleted = client.delete(f"/api/projects/{pid}")
+    assert deleted.status_code == 204 and not deleted.content
+    assert client.get(f"/api/projects/{pid}").status_code == 404
+    assert client.delete(f"/api/projects/{pid}").status_code == 404
+    assert not (settings.storage_dir / str(aid)).exists()
+    with sessions() as db:
+        for model, identifier in [(Project, uuid.UUID(pid)), (Analysis, aid), (Document, did), (DocumentPage, page_id), (RiskFinding, finding_id)]:
+            assert db.get(model, identifier) is None
+    assert client.get(f"/api/projects/{other}").json()["files"][0]["id"] == other_file["id"]
+    assert (settings.storage_dir / other_file["id"]).is_dir()
+
+
+def test_project_mutations_check_ownership(workspace):
+    client, pid, _, sessions = workspace
+    user_id = uuid.uuid4()
+    with sessions.begin() as db:
+        db.add(User(id=user_id, email="other@example.test", full_name="Other"))
+    headers = {"X-User-Id": str(user_id)}
+    assert client.patch(f"/api/projects/{pid}", json={"title": "Чужой"}, headers=headers).status_code == 404
+    assert client.delete(f"/api/projects/{pid}", headers=headers).status_code == 404
+    assert client.get(f"/api/projects/{pid}").json()["title"] == "Закупка"
