@@ -19,6 +19,7 @@ from app.services import storage
 from app.services.analysis_modes import AnalysisModeError, resolve_analysis_mode
 from app.services.analyzer import FindingDraft, RuleContext, evaluate_heuristic, evaluate_nli, evaluate_with_llm
 from app.services.converter import ConversionError, to_pdf
+from app.services.dedup import merge_duplicate_drafts
 from app.services.embeddings import EmbeddingError, embed_texts
 from app.services.extraction import PageContent, extract_pages
 from app.services.retrieval import hybrid_search
@@ -209,6 +210,8 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         drafts = evaluate_nli(contexts, pages)
     else:
         drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
+
+    drafts = merge_duplicate_drafts(drafts)
 
 
     with session_scope() as db:
