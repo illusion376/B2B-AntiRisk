@@ -115,6 +115,22 @@ test('project deletion accepts an empty 204 response and encodes the identifier'
   assert.equal(await api.deleteProject('project/with spaces'), undefined);
 });
 
+test('file deletion accepts 204, encodes both identifiers and preserves cancellation', async t => {
+  const controller = new AbortController();
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/projects/project%2Fwith%20spaces/files/file%2Fwith%20spaces');
+    assert.equal(options.method, 'DELETE');
+    assert.equal(options.signal, controller.signal);
+    return new Response(null, { status: 204 });
+  });
+  assert.equal(await api.deleteProjectFile('project/with spaces', 'file/with spaces', { signal: controller.signal }), undefined);
+});
+
+test('file deletion exposes a conflict when another tab has already started analysis', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ detail: 'Удалить файл можно только до начала анализа.' }), { status: 409 }));
+  await assert.rejects(api.deleteProjectFile(project.id, file.id), error => error.status === 409 && /до начала анализа/.test(error.message));
+});
+
 test('project mutation errors remain available to the dialog without reporting success', async t => {
   const mock = t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ detail: 'Проект с таким названием уже существует.' }), { status: 409 }));
   await assert.rejects(api.renameProject(project.id, 'Закупка'), error => error.status === 409 && /уже существует/.test(error.message));

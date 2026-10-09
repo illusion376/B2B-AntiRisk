@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
-import type { CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, ReportMode, User } from '@/lib/types';
+import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Project, ReportMode, User } from '@/lib/types';
 
 export function useWorkspaceData() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [rules, setRules] = useState<CheckRule[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [reportModes, setReportModes] = useState<ReportMode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +22,12 @@ export function useWorkspaceData() {
     refresh();
     setProjects(previous => previous.filter(project => project.id !== id));
   }, [refresh]);
+  const removeProjectFile = useCallback((projectId: string, fileId: string) => {
+    refresh();
+    setProjects(previous => previous.map(project => project.id === projectId
+      ? { ...project, files: project.files.filter(file => file.id !== fileId) }
+      : project));
+  }, [refresh]);
   useEffect(() => {
     const controller = new AbortController();
     const options = { signal: controller.signal };
@@ -30,11 +35,11 @@ export function useWorkspaceData() {
     let timer: ReturnType<typeof setTimeout>;
     async function read() {
       try {
-        const [nextProjects, nextRules, nextHistory, nextUser, nextModes] = await Promise.all([
-          api.getProjects(options), api.getRules(options), api.getHistory(options), api.getUser(options), api.getReportModes(options),
+        const [nextProjects, nextRules, nextUser, nextModes] = await Promise.all([
+          api.getProjects(options), api.getRules(options), api.getUser(options), api.getReportModes(options),
         ]);
         if (controller.signal.aborted || ticket !== generation.current) return;
-        setProjects(nextProjects); setRules(nextRules); setHistory(nextHistory); setUser(nextUser); setReportModes(nextModes); setError(null);
+        setProjects(nextProjects); setRules(nextRules); setUser(nextUser); setReportModes(nextModes); setError(null);
         const processing = nextProjects.some(project => project.processingCount > 0 || project.files.some(file => file.phase === 'queued' || file.phase === 'processing'));
         if (processing) timer = setTimeout(read, 2500);
       } catch (cause) { if (!controller.signal.aborted && ticket === generation.current) setError(errorMessage(cause)); }
@@ -43,7 +48,7 @@ export function useWorkspaceData() {
     void read();
     return () => { clearTimeout(timer); controller.abort(); };
   }, [revision]);
-  return {projects, rules, history, user, reportModes, loading, error, refresh, replaceProject, removeProject};
+  return {projects, rules, user, reportModes, loading, error, refresh, replaceProject, removeProject, removeProjectFile};
 }
 
 interface DocumentBundle { id: string; document: DocumentInfo; findings: Finding[]; outline: OutlineSection[] }

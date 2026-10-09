@@ -70,11 +70,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
   return (
     <section className="secondary-view projects-view">
       <div className="view-title">
-        <div>
-          <span className="eyebrow">ОБЗОР / ДОКУМЕНТЫ</span>
-          <h1>Рабочее пространство</h1>
-          <p>Проекты, документы и проверка рисков — в одном месте.</p>
-        </div>
+        <h1>Документы</h1>
         <button className="primary-button" onClick={onCreate}><Plus size={16} />Новый проект</button>
       </div>
       <div className="dashboard-list-toolbar">
@@ -163,9 +159,6 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
           ) : <button className="primary-button" onClick={onCreate}><Plus size={16} />Новый проект</button>}
         </div>
       )}
-      <div className="dashboard-list-note">
-        <span className="workspace-online-dot" />Проекты и результаты сохраняются на сервере
-      </div>
     </section>
   );
 }

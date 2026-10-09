@@ -212,6 +212,7 @@ export const api = {
   createProject: (draft: ProjectDraft, options: RequestOptions = {}): Promise<Project> => request('/projects', mapProject, { ...options, method: 'POST', ...json(draft) }),
   renameProject: (projectId: string, title: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, { ...options, method: 'PATCH', ...json({ title: title.trim() }) }),
   deleteProject: async (projectId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/projects/${segment(projectId)}`, { ...options, method: 'DELETE' }); },
+  deleteProjectFile: async (projectId: string, fileId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/projects/${segment(projectId)}/files/${segment(fileId)}`, { ...options, method: 'DELETE' }); },
   uploadFiles: (projectId: string, files: File[], options: RequestOptions & { lawType?: 'AUTO' | '44-FZ' | '223-FZ' } = {}): Promise<UploadResult> => {
     const body = new FormData();
     for (const file of files) body.append('files', file);

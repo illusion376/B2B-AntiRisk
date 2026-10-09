@@ -1,10 +1,12 @@
 'use client';
 
 import { Fragment, useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3, FileText, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
+import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3, FileText, LoaderCircle, Play, RotateCw, Search, Trash2, UploadCloud, X } from 'lucide-react';
+import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import { ProjectActions } from './project-actions';
+import { Modal } from './ui';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
@@ -21,6 +23,7 @@ interface ProjectFilesViewProps {
   onOpenSettings: () => void;
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onRemoveFile: (file: ProjectFile) => Promise<void>;
 }
 
 type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
@@ -38,7 +41,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 export function ProjectFilesView({
   project, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
-  selectedAnalysisMode, onOpenSettings, onRename, onDelete,
+  selectedAnalysisMode, onOpenSettings, onRename, onDelete, onRemoveFile,
 }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
@@ -46,7 +49,12 @@ export function ProjectFilesView({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
   const [sort, setSort] = useState('recent');
+  const [fileToRemove, setFileToRemove] = useState<ProjectFile | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState('');
   const startLock = useRef(false);
+  const removeLock = useRef(false);
+  const busy = uploading || starting || removing;
   const selectedModeInfo = analysisModes?.modes.find(mode => mode.id === selectedAnalysisMode);
   const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true;
   const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
@@ -70,7 +78,7 @@ export function ProjectFilesView({
 
   async function runAnalysis() {
     const action = waiting > 0 ? onStart : onRerun;
-    if (!action || startLock.current || uploading || (waiting === 0 && pending > 0) || !modeReady || !selectedAnalysisMode) return;
+    if (!action || startLock.current || removeLock.current || fileToRemove || uploading || (waiting === 0 && pending > 0) || !modeReady || !selectedAnalysisMode) return;
     startLock.current = true;
     setStarting(true);
     setStartError('');
@@ -84,6 +92,28 @@ export function ProjectFilesView({
     }
   }
 
+  function closeRemoveDialog() {
+    if (!removeLock.current) { setFileToRemove(null); setRemoveError(''); }
+  }
+
+  async function removeFile(event: React.FormEvent) {
+    event.preventDefault();
+    if (!fileToRemove || removeLock.current || startLock.current || uploading) return;
+    removeLock.current = true;
+    setRemoving(true);
+    setRemoveError('');
+    try {
+      await onRemoveFile(fileToRemove);
+      if (project.files.length === 1) { setQuery(''); setStatusFilter('all'); }
+      setFileToRemove(null);
+    } catch (cause) {
+      setRemoveError(errorMessage(cause));
+    } finally {
+      removeLock.current = false;
+      setRemoving(false);
+    }
+  }
+
   return (
     <section className={`secondary-view project-files-view${hasFiles ? ' has-files' : ''}`}>
       <div className="view-title project-overview-card">
@@ -93,16 +123,16 @@ export function ProjectFilesView({
           <p>{project.description || 'Храните и проверяйте документы в рамках проекта.'}</p>
         </div>
         <div className="project-overview-actions">
-          <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={uploading || starting} />
+          <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={busy || !!fileToRemove} />
         </div>
       </div>
       <div className={`project-upload-section${hasFiles ? ' has-files' : ''}`}>
         {hasFiles && <h2>Документы <span>{project.files.length}</span></h2>}
-        <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
+        <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting || removing || !!fileToRemove} onBusyChange={setUploading} />
         {hasFiles && <div className="project-files-heading-actions">
           {pending > 0 && <span className="processing-count" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
           {(waiting > 0 || (onRerun && project.files.some(file => file.documents.some(document => document.phase === 'ready' || document.phase === 'failed')))) && (
-            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={starting || uploading || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
+            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={busy || !!fileToRemove || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
               {starting ? <LoaderCircle size={15} className="spin" /> : waiting > 0 ? <Play size={15} /> : <RotateCw size={14} />}
               {starting ? 'Запускаем анализ…' : waiting > 0 ? 'Начать анализ' : 'Проверить заново'}
             </button>
@@ -151,6 +181,7 @@ export function ProjectFilesView({
             const singleDocument = !isArchive && file.documents.length === 1 ? file.documents[0] : null;
             const processingState = singleDocument ?? file;
             const canOpen = singleDocument?.phase === 'ready' && singleDocument.hasPreview;
+            const canRemove = file.phase === 'uploaded' && file.documents.every(document => document.phase === 'uploaded' || document.phase === 'unsupported');
             return (
               <Fragment key={file.id}>
                 <tr className="project-file-table-row">
@@ -177,6 +208,11 @@ export function ProjectFilesView({
                       Открыть <ArrowUpRight size={15} />
                     </button>
                   )}
+                  {canRemove && <button type="button" className="project-file-remove-button" disabled={busy}
+                    title="Удалить файл до начала анализа" aria-label={`Удалить файл «${file.name}»`}
+                    onClick={() => { if (!startLock.current && !removeLock.current && !uploading) { setRemoveError(''); setFileToRemove(file); } }}>
+                    <Trash2 size={16} />
+                  </button>}
                   </td>
                 </tr>
                 {(isArchive || file.documents.length > 1) && file.documents.length > 0 && (
@@ -219,6 +255,21 @@ export function ProjectFilesView({
           </tbody>
         </table>
       </div>
+      {fileToRemove && <Modal title="Удалить файл?" closeDisabled={removing} onClose={closeRemoveDialog}>
+        <form onSubmit={event => void removeFile(event)} aria-busy={removing}>
+          <div className="project-delete-warning">
+            <p>Файл «{fileToRemove.name}» будет удалён из проекта.</p>
+            {fileToRemove.type === 'zip' && <p>Все документы из этого ZIP-архива тоже будут удалены.</p>}
+          </div>
+          {removeError && <p className="field-error" role="alert">{removeError}</p>}
+          <div className="modal-actions">
+            <button type="button" className="secondary-button" disabled={removing} onClick={closeRemoveDialog}>Отмена</button>
+            <button className="primary-button project-delete-confirm" disabled={removing}>
+              {removing && <LoaderCircle size={15} className="spin" />}{removing ? 'Удаляем…' : 'Удалить файл'}
+            </button>
+          </div>
+        </form>
+      </Modal>}
     </section>
   );
 }

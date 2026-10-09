@@ -24,7 +24,7 @@ function identifier(value: unknown): string | null {
 export function normalizeRoute(route: WorkspaceRoute, totalPages?: number): WorkspaceRoute {
   const projectId = identifier(route.projectId) ?? '';
   const documentId = identifier(route.documentId);
-  const view = ['documents', 'project', 'document', 'rules', 'history', 'settings'].includes(route.view) ? route.view : 'documents';
+  const view = ['documents', 'project', 'document', 'rules', 'settings'].includes(route.view) ? route.view : 'documents';
   if (view === 'document' && projectId && documentId) {
     let page = Number.isFinite(route.page) ? Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(route.page))) : 1;
     // A direct link must keep its requested page until the document has loaded.
@@ -32,7 +32,7 @@ export function normalizeRoute(route: WorkspaceRoute, totalPages?: number): Work
     return { view, projectId, documentId, page, findingId: identifier(route.findingId) };
   }
   if ((view === 'project' || view === 'document') && projectId) return { ...defaultRoute, view: 'project', projectId };
-  return { ...defaultRoute, view: view === 'rules' || view === 'history' || view === 'settings' ? view : 'documents' };
+  return { ...defaultRoute, view: view === 'rules' || view === 'settings' ? view : 'documents' };
 }
 
 export function parseRoute(hash: string, totalPages?: number): WorkspaceRoute {
@@ -50,7 +50,7 @@ export function parseRoute(hash: string, totalPages?: number): WorkspaceRoute {
   const rawPage = params.get('page');
   const page = rawPage !== null && /^\d+$/.test(rawPage) ? Number(rawPage) : 1;
   let route: WorkspaceRoute = { ...defaultRoute };
-  if (segments.length === 1 && ['documents', 'rules', 'history', 'settings'].includes(segments[0])) {
+  if (segments.length === 1 && ['documents', 'rules', 'settings'].includes(segments[0])) {
     route.view = segments[0] as View;
   } else if (segments[0] === 'projects' && segments.length === 2) {
     route = { ...route, view: 'project', projectId: segments[1] };

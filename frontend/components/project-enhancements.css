@@ -168,6 +168,8 @@
 .dashboard-shell .project-file-size, .dashboard-shell .project-file-date { color: #858b97; font-size: .75rem; }
 .dashboard-shell .project-file-date time { white-space: nowrap; }
 .dashboard-shell .project-file-actions { text-align: right; }
+.dashboard-shell .project-file-remove-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid #e4e4e4; border-radius: 4px; background: #fff; color: #8f6666; }
+.dashboard-shell .project-file-remove-button:hover { border-color: #e8c5c5; background: #fff5f5; color: #b64343; }
 .dashboard-shell .project-file-table .file-open-button { min-height: 30px; padding: 6px 8px; font-size: .6875rem; }
 .dashboard-shell .project-file-table .project-archive-row > td { padding-top: 0; }
 .dashboard-shell .project-file-table .project-document-children { margin: 0 0 0 18px; }

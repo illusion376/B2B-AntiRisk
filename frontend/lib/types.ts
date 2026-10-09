@@ -1,7 +1,7 @@
 export type Severity = 'critical' | 'warning' | 'low' | 'ok' | 'unknown';
 export type RiskLevel = Exclude<Severity, 'ok' | 'unknown'>;
 export type ReviewStatus = 'unseen' | 'accepted' | 'dismissed';
-export type View = 'documents' | 'project' | 'document' | 'rules' | 'history' | 'settings';
+export type View = 'documents' | 'project' | 'document' | 'rules' | 'settings';
 export type ProcessingPhase = 'uploaded' | 'queued' | 'processing' | 'ready' | 'failed' | 'unsupported';
 export type TrafficLight = 'critical' | 'warning' | 'ok' | 'unknown';
 export type LawType = 'ALL' | '44-FZ' | '223-FZ';

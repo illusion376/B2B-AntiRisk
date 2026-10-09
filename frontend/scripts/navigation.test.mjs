@@ -36,13 +36,18 @@ test('legacy develop URLs only open documents when they contain a real document 
   assert.deepEqual(parseRoute('#document?project=p&page=18&finding=1'),{...defaultRoute,view:'project',projectId:'p'});
   assert.deepEqual(parseRoute('#document?page=18&finding=1'),defaultRoute);
 });
-test('project, history, rules, settings and documents links have no stale document selection',()=>{
+test('project, rules, settings and documents links have no stale document selection',()=>{
   assert.deepEqual(parseRoute('#/projects/p'),{...defaultRoute,view:'project',projectId:'p'});
-  for(const view of ['documents','history','rules','settings']) {
+  for(const view of ['documents','rules','settings']) {
     const route=normalizeRoute({...documentRoute,view});
     assert.deepEqual(route,{...defaultRoute,view});
     assert.deepEqual(parseRoute(serializeRoute(route)),route);
   }
+});
+test('removed history links return to documents and discard stale document selection',()=>{
+  assert.deepEqual(parseRoute('#/history'),defaultRoute);
+  assert.deepEqual(parseRoute('#history?project=p&document=d&page=12'),defaultRoute);
+  assert.deepEqual(normalizeRoute({...documentRoute,view:'history'}),defaultRoute);
 });
 test('invalid identifiers cannot create malformed URLs',()=>{
   assert.equal(normalizeRoute({...documentRoute,findingId:42}).findingId,null);

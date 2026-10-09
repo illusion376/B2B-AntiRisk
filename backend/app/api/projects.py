@@ -131,6 +131,31 @@ def upload_files(
     return UploadResult(files=project_files_out(db, accepted), errors=errors)
 
 
+@router.delete("/{project_id}/files/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT,
+               summary="Удалить загруженный файл до начала анализа")
+def delete_project_file(project_id: uuid.UUID, analysis_id: uuid.UUID, db: Session = Depends(get_db),
+                        user: User = Depends(current_user)):
+    project = get_project_or_404(db, project_id, user)
+    # Тот же порядок блокировок, что при запуске: файл, затем его документы.
+    # Если другая вкладка уже запустила анализ, проверяем статус после блокировки.
+    analysis = db.scalar(select(Analysis).where(
+        Analysis.id == analysis_id, Analysis.project_id == project.id).with_for_update())
+    if analysis is None:
+        raise HTTPException(404, "Файл не найден")
+    documents = list(db.scalars(select(Document).where(Document.analysis_id == analysis.id)
+                               .order_by(Document.id).with_for_update()))
+    if analysis.analysis_status != "UPLOADED" or any(
+        document.status not in ("UPLOADED", "UNSUPPORTED") for document in documents
+    ):
+        raise HTTPException(409, "Удалить файл можно только до начала анализа.")
+    project.updated_at = func.now()
+    log_action(db, user.id, "ANALYSIS_DELETED", "analysis", analysis.id,
+               {"file": analysis.original_filename, "project": project.title})
+    db.delete(analysis)
+    db.commit()
+    uploads.remove_files(analysis_id)
+
+
 @router.post("/{project_id}/start", status_code=status.HTTP_202_ACCEPTED,
              summary="Начать анализ загруженных, ещё не проверенных документов проекта")
 def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),

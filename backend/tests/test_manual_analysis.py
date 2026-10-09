@@ -201,3 +201,91 @@ def test_project_mutations_check_ownership(workspace):
     assert client.patch(f"/api/projects/{pid}", json={"title": "Чужой"}, headers=headers).status_code == 404
     assert client.delete(f"/api/projects/{pid}", headers=headers).status_code == 404
     assert client.get(f"/api/projects/{pid}").json()["title"] == "Закупка"
+
+
+def test_delete_waiting_file_removes_storage_and_only_starts_remaining_documents(workspace):
+    client, pid, queue, sessions = workspace
+    files = client.post(f"/api/projects/{pid}/files", files=[
+        ("files", ("remove.txt", b"Remove")), ("files", ("keep.txt", b"Keep")),
+    ]).json()["files"]
+    removed, kept = files
+    aid = uuid.UUID(removed["id"])
+    did = uuid.UUID(removed["documents"][0]["id"])
+    assert (settings.storage_dir / str(aid)).is_dir()
+    response = client.delete(f"/api/projects/{pid}/files/{aid}")
+    assert response.status_code == 204 and not response.content
+    assert not (settings.storage_dir / str(aid)).exists()
+    with sessions() as db:
+        assert db.get(Analysis, aid) is None and db.get(Document, did) is None
+        assert db.get(Project, uuid.UUID(pid)) is not None
+    assert [file["id"] for file in client.get(f"/api/projects/{pid}").json()["files"]] == [kept["id"]]
+    assert client.delete(f"/api/projects/{pid}/files/{aid}").status_code == 404
+    queue.assert_not_called()
+    assert client.post(f"/api/projects/{pid}/start").json() == {"documents": 1}
+    queue.assert_called_once_with([uuid.UUID(kept["documents"][0]["id"])])
+    assert client.delete(f"/api/projects/{pid}/files/{kept['id']}").status_code == 409
+    assert (settings.storage_dir / kept["id"]).is_dir()
+
+
+def test_delete_last_waiting_file_leaves_empty_project_and_allows_reupload(workspace):
+    client, pid, queue, _ = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 204
+    assert client.get(f"/api/projects/{pid}").json()["files"] == []
+    assert client.post(f"/api/projects/{pid}/start").status_code == 409
+    queue.assert_not_called()
+    uploaded_again = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()
+    assert len(uploaded_again["files"]) == 1 and not uploaded_again["errors"]
+
+
+def test_delete_waiting_zip_removes_supported_and_unsupported_children(workspace):
+    client, pid, queue, sessions = workspace
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as package:
+        package.writestr("folder/contract.txt", "Contract")
+        package.writestr("readme.exe", "Unsupported")
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("bundle.zip", archive.getvalue(), "application/zip"))]).json()["files"][0]
+    assert len(uploaded["documents"]) == 2
+    assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 204
+    assert not (settings.storage_dir / uploaded["id"]).exists()
+    with sessions() as db:
+        for document in uploaded["documents"]:
+            assert db.get(Document, uuid.UUID(document["id"])) is None
+    queue.assert_not_called()
+
+
+def test_delete_waiting_file_checks_project_and_user_ownership(workspace):
+    client, pid, _, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    other_project = client.post("/api/projects", json={"title": "Другой"}).json()["id"]
+    assert client.delete(f"/api/projects/{other_project}/files/{uploaded['id']}").status_code == 404
+    assert client.delete(f"/api/projects/{pid}/files/{uuid.uuid4()}").status_code == 404
+    other_user = uuid.uuid4()
+    with sessions.begin() as db:
+        db.add(User(id=other_user, email="other@example.test", full_name="Other"))
+    assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}", headers={"X-User-Id": str(other_user)}).status_code == 404
+    assert client.get(f"/api/projects/{pid}").json()["files"][0]["id"] == uploaded["id"]
+    assert (settings.storage_dir / uploaded["id"]).is_dir()
+
+
+@pytest.mark.parametrize("analysis_status", ["QUEUED", "CONVERTING", "OCR", "VECTORIZING", "ANALYZING", "COMPLETED", "FAILED"])
+def test_delete_file_rejects_started_or_finished_analysis(workspace, analysis_status):
+    client, pid, _, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    with sessions.begin() as db:
+        db.get(Analysis, uuid.UUID(uploaded["id"])).analysis_status = analysis_status
+    response = client.delete(f"/api/projects/{pid}/files/{uploaded['id']}")
+    assert response.status_code == 409 and "до начала анализа" in response.json()["detail"]
+    with sessions() as db:
+        assert db.get(Analysis, uuid.UUID(uploaded["id"])) is not None
+        assert db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])) is not None
+    assert (settings.storage_dir / uploaded["id"]).is_dir()
+
+
+def test_delete_file_also_checks_child_document_status(workspace):
+    client, pid, _, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    with sessions.begin() as db:
+        db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])).status = "QUEUED"
+    assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 409
+    assert (settings.storage_dir / uploaded["id"]).is_dir()

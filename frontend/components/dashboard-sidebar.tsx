@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpenCheck, ChevronRight, CircleHelp, History, LayoutDashboard, Plus, Settings2, ShieldCheck, X } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, CircleHelp, LayoutDashboard, Plus, Settings2, ShieldCheck, X } from 'lucide-react';
 import type { User, View } from '@/lib/types';
 
 interface Props {
@@ -19,7 +19,6 @@ export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,
   const items = [
     {view:'documents' as const,label:'Документы',Icon:LayoutDashboard,count:projectCount},
     {view:'rules' as const,label:'Правила проверки',Icon:BookOpenCheck,count:ruleCount},
-    {view:'history' as const,label:'История действий',Icon:History,count:null},
     {view:'settings' as const,label:'Настройки',Icon:Settings2,count:null},
   ];
   return <>
@@ -32,7 +31,7 @@ export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
         return <button key={item.view} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>{onNavigate(item.view);onClose();}}><item.Icon size={16} strokeWidth={1.5}/><span>{item.label}</span>{item.count!==null && <small>{item.count}</small>}</button>;
       })}</nav>
-      <div className="sidebar-bottom"><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong>{user?.fullName || 'Загрузка профиля…'}</strong><small>{user?.email || 'Подключение к серверу'}</small></span></div></div>
+      <div className="sidebar-bottom"><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={16}/><span>Помощь и информация</span><ChevronRight size={13}/></button><div className="sidebar-user"><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong title={user?.fullName}>{user?.fullName || 'Загрузка профиля…'}</strong><small title={user?.email}>{user?.email || 'Подключение к серверу'}</small></span></div></div>
     </aside>
   </>;
 }
