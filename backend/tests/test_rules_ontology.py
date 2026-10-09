@@ -6,8 +6,13 @@ from app.models import RiskRule
 
 
 def _load_migration_rules() -> list[dict]:
-    migration_path = Path(__file__).resolve().parents[2] / "database" / "migrations" / "005_tz_and_qualification_rules.sql"
-    assert migration_path.exists(), "Файл миграции 005_tz_and_qualification_rules.sql должен существовать"
+    candidate_paths = [
+        Path(__file__).resolve().parents[2] / "database" / "migrations" / "005_tz_and_qualification_rules.sql",
+        Path(__file__).resolve().parents[1] / "migrations" / "005_tz_and_qualification_rules.sql",
+        Path("/app/migrations/005_tz_and_qualification_rules.sql"),
+    ]
+    migration_path = next((p for p in candidate_paths if p.exists()), None)
+    assert migration_path is not None, "Файл миграции 005_tz_and_qualification_rules.sql должен существовать"
     sql = migration_path.read_text(encoding="utf-8")
 
     # Регулярка для извлечения кортежей значений из INSERT INTO risk_rules
