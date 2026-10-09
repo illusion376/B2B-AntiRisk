@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     # nli принимается для понятной ошибки в старых конфигурациях, но отключён.
     analysis_engine: Literal["auto", "llm", "nli", "keyword"] = "auto"
     retrieval_top_k: int = Field(default=4, ge=1)
+    retrieval_max_distance: float = Field(default=0.58, ge=0.0, le=2.0)
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
 
     # --- Поиск без LLM ---
