@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 
 from app.config import settings
 from app.models import RiskRule
+from app.services.dedup import merge_duplicate_drafts
 from app.services.llm import LLMClient, failure_code
 from app.services.quotes import QuoteMatch, locate_quote
 from app.services.retrieval import RetrievedChunk
@@ -330,7 +331,7 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
             drafts.append(_unknown(ctx.rule, "ИИ-сервис не смог выполнить проверку этого правила. Повторите анализ или проверьте условие вручную.", source="ERROR"))
         else:
             drafts.extend(result)
-    return drafts
+    return merge_duplicate_drafts(drafts)
 
 
 # ---------- Эвристический режим (LLM не настроена) ----------
@@ -379,7 +380,7 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             confidence=0.3,
             source="HEURISTIC",
         ))
-    return drafts
+    return merge_duplicate_drafts(drafts)
 
 
 # ---------- NLI режим (анализ противоречий без внешней LLM) ----------
