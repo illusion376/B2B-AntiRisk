@@ -6,40 +6,45 @@ import { errorMessage } from '@/lib/api';
 import type { Project } from '@/lib/types';
 import { Modal } from './ui';
 
-export function ProjectActions({ project, onRename, onDelete, compact = false, disabled = false }: {
+interface ProjectActionsProps {
   project: Project;
   onRename: (project: Project) => void;
   onDelete: (project: Project) => void;
   compact?: boolean;
   disabled?: boolean;
-}) {
-  return <div className="project-actions" role="group" aria-label={`Действия с проектом «${project.title}»`}>
-    <button type="button" className={compact ? 'dashboard-row-action' : 'secondary-button'} title="Переименовать проект"
-      aria-label={`Переименовать проект «${project.title}»`} disabled={disabled} onClick={() => onRename(project)}>
-      <Pencil size={15} />{!compact && 'Переименовать'}
+}
+
+export function ProjectActions({ project, onRename, onDelete, compact = false, disabled = false }: ProjectActionsProps) {
+  return <div className="project-actions">
+    <button type="button" className={compact ? 'dashboard-row-action' : 'secondary-button'} disabled={disabled}
+      aria-label={compact ? `Переименовать проект «${project.title}»` : undefined} title="Переименовать проект" onClick={() => onRename(project)}>
+      <Pencil size={16} />{!compact && 'Переименовать'}
     </button>
-    <button type="button" className={`${compact ? 'dashboard-row-action' : 'secondary-button'} project-delete-action`} title="Удалить проект"
-      aria-label={`Удалить проект «${project.title}»`} disabled={disabled} onClick={() => onDelete(project)}>
-      <Trash2 size={15} />{!compact && 'Удалить'}
+    <button type="button" className={`${compact ? 'dashboard-row-action' : 'secondary-button'} project-delete-action`} disabled={disabled}
+      aria-label={compact ? `Удалить проект «${project.title}»` : undefined} title="Удалить проект" onClick={() => onDelete(project)}>
+      <Trash2 size={16} />{!compact && 'Удалить'}
     </button>
   </div>;
 }
 
-export function ProjectActionDialog({ project, mode, onConfirm, onClose }: {
+interface ProjectActionDialogProps {
   project: Project;
   mode: 'rename' | 'delete';
   onConfirm: (title: string) => Promise<void>;
   onClose: () => void;
-}) {
-  const [title, setTitle] = useState(project.title);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const lock = useRef(false);
-  const deleting = mode === 'delete';
+}
 
-  async function submit() {
-    if (lock.current || (!deleting && !title.trim())) return;
-    lock.current = true;
+export function ProjectActionDialog({ project, mode, onConfirm, onClose }: ProjectActionDialogProps) {
+  const [title, setTitle] = useState(project.title);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const saveLock = useRef(false);
+  const close = () => { if (!saveLock.current) onClose(); };
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (saveLock.current || (mode === 'rename' && !title.trim())) return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -48,30 +53,24 @@ export function ProjectActionDialog({ project, mode, onConfirm, onClose }: {
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
-      lock.current = false;
+      saveLock.current = false;
       setSaving(false);
     }
   }
 
-  return <Modal title={deleting ? 'Удалить проект?' : 'Переименовать проект'}
-    onClose={() => { if (!lock.current) onClose(); }} closeDisabled={saving}>
-    <form aria-busy={saving} onSubmit={event => { event.preventDefault(); void submit(); }}>
-      {deleting ? <div className="project-delete-warning">
-        <p>Проект «<strong>{project.title}</strong>» будет удалён вместе со всеми файлами и результатами проверок.</p>
-        <p>Загрузок в проекте: {project.files.length}. Отменить удаление нельзя.</p>
-      </div> : <>
-        <label className="form-label" htmlFor="rename-project-title">Название проекта</label>
-        <input id="rename-project-title" className="form-input" autoFocus required maxLength={120} disabled={saving}
-          value={title} aria-invalid={!!error} aria-describedby={error ? 'project-action-error' : undefined}
-          onChange={event => { setTitle(event.target.value); setError(''); }} />
-      </>}
-      {error && <p id="project-action-error" className="field-error" role="alert">{error}</p>}
+  return <Modal title={mode === 'rename' ? 'Переименовать проект' : 'Точно удалить проект?'} closeDisabled={saving} onClose={close}>
+    <form onSubmit={submit}>
+      {mode === 'rename' ? <>
+        <label className="form-label" htmlFor="project-title">Название проекта</label>
+        <input id="project-title" className="form-input" required autoFocus maxLength={120} disabled={saving} value={title} onChange={event => setTitle(event.target.value)} />
+      </> : <div className="project-delete-warning">
+        <p>Проект «{project.title}», его документы и результаты проверки будут удалены.</p>
+      </div>}
+      {error && <p className="field-error" role="alert">{error}</p>}
       <div className="modal-actions">
-        <button type="button" className="secondary-button" autoFocus={deleting} disabled={saving} onClick={onClose}>Отмена</button>
-        <button type="submit" className={`primary-button${deleting ? ' project-delete-confirm' : ''}`}
-          disabled={saving || (!deleting && (!title.trim() || title.trim() === project.title))}>
-          {saving ? <LoaderCircle size={16} className="spin" /> : deleting ? <Trash2 size={16} /> : <Pencil size={16} />}
-          {saving ? deleting ? 'Удаляем…' : 'Сохраняем…' : deleting ? 'Удалить проект' : 'Сохранить'}
+        <button type="button" className="secondary-button" disabled={saving} onClick={close}>Отмена</button>
+        <button className={`primary-button${mode === 'delete' ? ' project-delete-confirm' : ''}`} disabled={saving || (mode === 'rename' && !title.trim())}>
+          {saving && <LoaderCircle size={15} className="spin" />}{saving ? 'Сохраняем…' : mode === 'rename' ? 'Сохранить' : 'Удалить проект'}
         </button>
       </div>
     </form>

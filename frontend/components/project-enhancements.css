@@ -102,6 +102,96 @@
 .dashboard-shell .project-files-empty .secondary-button,
 .dashboard-shell .dashboard-empty .primary-button { margin-top: 18px; }
 
+/* Project overview and the two upload states. Keep the uploader mounted to retain errors. */
+.dashboard-shell .project-files-view { padding: 22px 28px; background: #fafbfc; }
+.dashboard-shell .project-files-view .project-overview-card { min-height: 134px; padding: 22px 24px; border: 1px solid #eef0f2; border-radius: 10px; background: #fff; }
+.dashboard-shell .project-overview-card .project-overview-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
+.dashboard-shell .project-overview-actions .secondary-button { min-height: 36px; padding: 8px 13px; color: #444851; }
+.dashboard-shell .project-files-view .view-title p { color: #787d89; font-size: .8125rem; line-height: 1.5; }
+.dashboard-shell .project-files-view.has-files .project-overview-card { min-height: 104px; padding: 16px 20px; }
+.dashboard-shell .project-files-view.has-files .view-title h1 { font-size: 1.5rem; }
+.dashboard-shell .project-files-view.has-files .view-title .eyebrow { margin-bottom: 5px; }
+.dashboard-shell .project-files-view.has-files .view-title p { margin-top: 5px; }
+.dashboard-shell .project-upload-section { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin: 16px 0 20px; }
+.dashboard-shell .project-upload-section > h2 { font-size: .875rem; line-height: 1.5; }
+.dashboard-shell .project-upload-section > h2 > span { margin-left: 5px; color: #9297a0; }
+.dashboard-shell .project-upload-section .upload-errors { grid-column: 1 / -1; margin: 0; }
+.dashboard-shell .project-files-view .file-dropzone { grid-column: 1 / -1; flex-direction: column; justify-content: center; min-height: 274px; gap: 14px; margin: 0; padding: 26px; border: 1px dashed #dce0e6; border-radius: 8px; background: transparent; text-align: center; }
+.dashboard-shell .project-files-view .file-dropzone.is-dragging { border-color: #555b65; background: #f1f3f6; }
+.dashboard-shell .project-files-view .upload-icon { width: 68px; height: 68px; border-radius: 10px; color: #444851; }
+.dashboard-shell .project-files-view .upload-icon svg { width: 36px; height: 36px; }
+.dashboard-shell .project-files-view .dropzone-copy { flex: none; }
+.dashboard-shell .project-files-view .dropzone-copy h2 { font-size: 1.125rem; }
+.dashboard-shell .project-files-view .dropzone-copy p { color: #737986; font-size: .875rem; margin-top: 8px; }
+.dashboard-shell .project-files-view .dropzone-copy small { color: #858b97; font-size: .8125rem; }
+.dashboard-shell .project-files-view .file-dropzone > button { min-height: 40px; width: auto; margin: 0; padding: 10px 18px; font-size: .8125rem; }
+.dashboard-shell .file-upload-compact { grid-column: 2; display: flex; }
+.dashboard-shell .file-upload-compact.is-dragging > button { border-color: #555b65; background: #f1f3f6; }
+.dashboard-shell .project-files-view .project-files-heading-actions { gap: 10px; }
+.dashboard-shell .project-upload-section.has-files > .project-files-heading-actions { grid-column: 3; grid-row: 1; }
+.dashboard-shell .project-files-view .project-files-heading-actions:empty { display: none; }
+.dashboard-shell .project-files-view .project-files-heading-actions .secondary-button { min-height: 33px; font-size: .75rem; }
+.dashboard-shell .project-files-view .project-files-toolbar { gap: 12px; padding: 0; margin: 0 0 14px; }
+.dashboard-shell .project-files-view .file-status-filters { gap: 6px; }
+.dashboard-shell .project-files-view .file-status-filters button { min-height: 34px; padding: 7px 10px; border: 1px solid #e3e6eb; background: #fff; border-radius: 5px; color: #535964; font-size: .75rem; }
+.dashboard-shell .project-files-view .file-status-filters button > span { margin: 0; padding: 1px 5px; opacity: 1; background: #f0f1f4; color: #737986; }
+.dashboard-shell .project-files-view .file-status-filters button[aria-pressed='true'] { border-color: #292b30; background: #292b30; color: #fff; }
+.dashboard-shell .project-files-view .file-status-filters button[aria-pressed='true'] > span { background: #ffffff24; color: #fff; }
+.dashboard-shell .project-file-controls { display: flex; gap: 10px; margin-left: auto; }
+.dashboard-shell .project-file-sort { display: flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid #e3e6eb; border-radius: 5px; background: #fff; color: #7d8390; }
+.dashboard-shell .project-file-sort select { width: 135px; min-height: 34px; border: 0; background: transparent; color: #535964; font-size: .75rem; }
+.dashboard-shell .project-file-sort:focus-within { outline: 2px solid #353a36; outline-offset: 2px; }
+.dashboard-shell .project-file-sort select:focus { outline: 0; }
+.dashboard-shell .project-file-table-scroll { overflow-x: auto; border: 1px solid #e3e6eb; border-radius: 8px; background: #fff; }
+.dashboard-shell .project-file-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; text-align: left; }
+.dashboard-shell .project-file-table th { height: 42px; padding: 10px 16px; border-bottom: 1px solid #e3e6eb; background: #f8f9fb; color: #737986; font-size: .75rem; }
+.dashboard-shell .project-file-table th:first-child { width: 42%; }
+.dashboard-shell .project-file-table th:nth-child(2) { width: 24%; }
+.dashboard-shell .project-file-table th:nth-child(3) { width: 8%; }
+.dashboard-shell .project-file-table th:nth-child(4) { width: 16%; }
+.dashboard-shell .project-file-table th:last-child { width: 10%; }
+.dashboard-shell .project-file-table td { padding: 13px 16px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+.dashboard-shell .project-file-table tbody > tr:last-child > td { border-bottom: 0; }
+.dashboard-shell .project-file-table-row:hover { background: #fcfcfd; }
+.dashboard-shell .project-file-title-cell { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.dashboard-shell .project-file-table .file-type-icon { width: 36px; height: 43px; }
+.dashboard-shell .project-file-table .project-file-name h3 { font-size: .875rem; line-height: 1.4; }
+.dashboard-shell .project-file-name h3 button { padding: 0; text-align: left; line-height: inherit; }
+.dashboard-shell .project-file-name h3 button:hover { text-decoration: underline; }
+.dashboard-shell .project-file-table .project-file-name p { margin-top: 3px; color: #858b97; }
+.dashboard-shell .project-file-table .file-processing { width: auto; }
+.dashboard-shell .project-file-table .file-status { display: inline-flex; padding: 4px 7px; border-radius: 5px; background: #f3f4f6; font-size: .75rem; }
+.dashboard-shell .project-file-table .file-status.ready { background: #eaf6ef; color: #278452; }
+.dashboard-shell .project-file-table .file-status.processing, .dashboard-shell .project-file-table .file-status.queued { background: #fff6df; }
+.dashboard-shell .project-file-table .file-status.failed, .dashboard-shell .project-file-table .file-status.unsupported { background: #fcefeb; }
+.dashboard-shell .project-file-table .file-processing > small { color: #858b97; font-size: .625rem; }
+.dashboard-shell .project-file-size, .dashboard-shell .project-file-date { color: #858b97; font-size: .75rem; }
+.dashboard-shell .project-file-date time { white-space: nowrap; }
+.dashboard-shell .project-file-actions { text-align: right; }
+.dashboard-shell .project-file-table .file-open-button { min-height: 30px; padding: 6px 8px; font-size: .6875rem; }
+.dashboard-shell .project-file-table .project-archive-row > td { padding-top: 0; }
+.dashboard-shell .project-file-table .project-document-children { margin: 0 0 0 18px; }
+.dashboard-shell .project-file-table .project-child-document { padding-top: 10px; padding-bottom: 10px; }
+.dashboard-shell .project-file-table .project-files-empty { padding: 24px 20px; border: 0; background: transparent; }
+.dashboard-shell .project-file-table .project-files-empty h3 { margin-top: 0; }
+
+@media (max-width: 1100px) {
+  .dashboard-shell .project-overview-card { flex-wrap: wrap; }
+  .dashboard-shell .project-file-controls { flex: 1; }
+  .dashboard-shell .project-files-view .project-files-toolbar .field-search { flex: 1; width: auto; }
+}
+@media (max-width: 760px) {
+  .dashboard-shell .project-files-view { padding: 16px; }
+  .dashboard-shell .project-files-view .project-overview-card { padding: 18px; }
+  .dashboard-shell .project-upload-section.has-files { grid-template-columns: minmax(0, 1fr) auto; }
+  .dashboard-shell .project-upload-section.has-files > .project-files-heading-actions { grid-column: 1 / -1; grid-row: 2; width: auto; justify-content: flex-end; }
+  .dashboard-shell .project-overview-actions { flex-wrap: wrap; }
+  .dashboard-shell .project-file-controls { width: 100%; flex-wrap: wrap; }
+  .dashboard-shell .project-file-sort { flex: 1; }
+  .dashboard-shell .project-file-sort select { width: 100%; }
+  .dashboard-shell .project-files-view .file-dropzone { min-height: 250px; padding: 22px 16px; }
+}
+
 @media (max-width: 1000px) {
   .dashboard-shell .project-child-document { grid-template-columns: 20px minmax(0, 1fr) 190px; }
   .dashboard-shell .project-child-document .file-open-button { grid-column: 3; justify-self: start; }

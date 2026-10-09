@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { AlertCircle, Archive, ArrowUpRight, Check, Clock3, FileText, FolderOpen, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
+import { Fragment, useRef, useState } from 'react';
+import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3, FileText, LoaderCircle, Play, RotateCw, Search, UploadCloud, X } from 'lucide-react';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import { ProjectActions } from './project-actions';
@@ -9,8 +9,6 @@ import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
   project: Project;
-  onRename: (project: Project) => void;
-  onDelete: (project: Project) => void;
   onUpload: (files: File[]) => Promise<string[]>;
   onOpenDocument: (document: DocumentInfo) => void;
   onStart: (mode: AnalysisMode) => Promise<void>;
@@ -21,6 +19,8 @@ interface ProjectFilesViewProps {
   onRetryAnalysisModes: () => void;
   selectedAnalysisMode: AnalysisMode | null;
   onOpenSettings: () => void;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
 }
 
 type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
@@ -36,27 +36,30 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 }
 
 export function ProjectFilesView({
-  project, onRename, onDelete, onUpload, onOpenDocument, onStart, onRerun,
+  project, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
-  selectedAnalysisMode, onOpenSettings,
+  selectedAnalysisMode, onOpenSettings, onRename, onDelete,
 }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
   const [uploading, setUploading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
+  const [sort, setSort] = useState('recent');
   const startLock = useRef(false);
   const selectedModeInfo = analysisModes?.modes.find(mode => mode.id === selectedAnalysisMode);
   const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true;
   const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
   const pending = project.files.filter(file => fileState(file) === 'processing').length;
-  const documentCount = project.files.reduce((total, file) => total + file.documents.length, 0);
+  const hasFiles = project.files.length > 0;
   const normalizedQuery = query.trim().toLocaleLowerCase('ru');
   const filtered = project.files.filter(file => {
     const searchText = [file.name, ...file.documents.flatMap(document => [document.name, document.relativePath ?? ''])]
       .join(' ').toLocaleLowerCase('ru');
     return (statusFilter === 'all' || fileState(file) === statusFilter) && searchText.includes(normalizedQuery);
-  });
+  }).sort((left, right) => sort === 'name'
+    ? left.name.localeCompare(right.name, 'ru', { numeric: true })
+    : sort === 'oldest' ? left.addedAt - right.addedAt : right.addedAt - left.addedAt);
   const filters: { value: FileStatusFilter; label: string; count: number }[] = [
     { value: 'all', label: 'Все', count: project.files.length },
     { value: 'uploaded', label: 'Ожидают запуска', count: waiting },
@@ -82,27 +85,21 @@ export function ProjectFilesView({
   }
 
   return (
-    <section className="secondary-view project-files-view">
-      <div className="view-title">
+    <section className={`secondary-view project-files-view${hasFiles ? ' has-files' : ''}`}>
+      <div className="view-title project-overview-card">
         <div>
           <span className="eyebrow">ПРОЕКТ</span>
           <h1>{project.title}</h1>
-          <p>{project.description || 'Загрузите документы, чтобы начать работу.'}</p>
+          <p>{project.description || 'Храните и проверяйте документы в рамках проекта.'}</p>
         </div>
-        <div className="project-heading-actions">
-          <span className="count-chip"><FolderOpen size={17} />Документов: {documentCount}</span>
+        <div className="project-overview-actions">
           <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={uploading || starting} />
         </div>
       </div>
-      <FileDropzone onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
-      {!modeReady && <div className="project-analysis-summary">
-        <span role="status">{analysisModesLoading ? 'Загружаем настройки…' : analysisModesError ? 'Не удалось загрузить настройки.' : 'Выбранный режим недоступен. Выберите другой в настройках.'}</span>
-        {analysisModesError && <button onClick={onRetryAnalysisModes}>Повторить</button>}
-        {!analysisModesLoading && <button onClick={onOpenSettings}>Открыть настройки</button>}
-      </div>}
-      <div className="project-files-heading">
-        <h2>Загруженные файлы <span>{project.files.length}</span></h2>
-        <div className="project-files-heading-actions">
+      <div className={`project-upload-section${hasFiles ? ' has-files' : ''}`}>
+        {hasFiles && <h2>Документы <span>{project.files.length}</span></h2>}
+        <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting} onBusyChange={setUploading} />
+        {hasFiles && <div className="project-files-heading-actions">
           {pending > 0 && <span className="processing-count" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
           {(waiting > 0 || (onRerun && project.files.some(file => file.documents.some(document => document.phase === 'ready' || document.phase === 'failed')))) && (
             <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={starting || uploading || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
@@ -110,11 +107,15 @@ export function ProjectFilesView({
               {starting ? 'Запускаем анализ…' : waiting > 0 ? 'Начать анализ' : 'Проверить заново'}
             </button>
           )}
-        </div>
+        </div>}
       </div>
+      {hasFiles && !modeReady && <div className="project-analysis-summary">
+        <span role="status">{analysisModesLoading ? 'Загружаем настройки…' : analysisModesError ? 'Не удалось загрузить настройки.' : 'Выбранный режим недоступен. Выберите другой в настройках.'}</span>
+        {analysisModesError && <button onClick={onRetryAnalysisModes}>Повторить</button>}
+        {!analysisModesLoading && <button onClick={onOpenSettings}>Открыть настройки</button>}
+      </div>}
       {startError && <p className="field-error project-action-error" role="alert">{startError}</p>}
-      {project.files.length > 0 && (
-        <div className="project-files-toolbar">
+      <div className="project-files-toolbar">
           <div className="file-status-filters" role="group" aria-label="Фильтр файлов по статусу">
             {filters.map(filter => (
               <button key={filter.value} type="button" aria-pressed={statusFilter === filter.value} onClick={() => setStatusFilter(filter.value)}>
@@ -122,16 +123,28 @@ export function ProjectFilesView({
               </button>
             ))}
           </div>
+          <div className="project-file-controls">
           <div className="field-search project-search">
             <Search size={17} aria-hidden="true" />
             <input aria-label="Поиск документов в проекте" placeholder="Найти документ" value={query} onChange={event => setQuery(event.target.value)} />
             {query && <button type="button" className="search-clear" aria-label="Очистить поиск документов" onClick={() => setQuery('')}><X size={16} /></button>}
           </div>
+          <label className="project-file-sort">
+            <ArrowDownWideNarrow size={16} aria-hidden="true" />
+            <span className="sr-only">Сортировка документов</span>
+            <select value={sort} onChange={event => setSort(event.target.value)}>
+              <option value="recent">Сначала новые</option>
+              <option value="oldest">Сначала старые</option>
+              <option value="name">По названию</option>
+            </select>
+          </label>
+          </div>
         </div>
-      )}
       {(normalizedQuery || statusFilter !== 'all') && <p className="project-search-result" role="status">Показано загрузок: {filtered.length} из {project.files.length}</p>}
-      {filtered.length > 0 ? (
-        <div className="project-file-list">
+      <div className="project-file-table-scroll">
+        <table className="project-file-table" aria-label="Документы проекта">
+          <thead><tr><th scope="col">Название</th><th scope="col">Статус</th><th scope="col">Размер</th><th scope="col">Дата добавления</th><th scope="col"><span className="sr-only">Действия</span></th></tr></thead>
+          <tbody>
           {filtered.map(file => {
             const isArchive = file.type === 'zip';
             const Icon = isArchive ? Archive : FileText;
@@ -139,28 +152,35 @@ export function ProjectFilesView({
             const processingState = singleDocument ?? file;
             const canOpen = singleDocument?.phase === 'ready' && singleDocument.hasPreview;
             return (
-              <div className="project-upload-group" key={file.id}>
-                <article className="project-file-row">
+              <Fragment key={file.id}>
+                <tr className="project-file-table-row">
+                  <td><div className="project-file-title-cell">
                   <span className={`file-type-icon ${file.type}`}><Icon size={24} /><small>{file.type.toUpperCase()}</small></span>
                   <div className="project-file-name">
-                    <h3>{file.name}</h3>
-                    <p>{formatFileSize(file.size)} · {formatProjectDate(file.addedAt)}{isArchive ? ` · Документов: ${file.documents.length}` : ''}</p>
+                    <h3>{canOpen ? <button type="button" onClick={() => onOpenDocument(singleDocument)}>{file.name}</button> : file.name}</h3>
+                    <p>{isArchive ? `Документов в архиве: ${file.documents.length}` : 'Проверка и обработка документа'}</p>
                     {file.errorMessage && <p className="processing-error-text">{file.errorMessage}</p>}
                     {singleDocument?.errorMessage && singleDocument.errorMessage !== file.errorMessage && <p className="processing-error-text">{singleDocument.errorMessage}</p>}
                     {(singleDocument?.errorMessage || file.errorMessage) && file.rulesChecked > 0 && <p>Предыдущие результаты проверки сохранены.</p>}
                   </div>
-                  <div className="file-processing">
+                  </div></td>
+                  <td className="file-processing">
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
-                  </div>
+                  </td>
+                  <td className="project-file-size">{formatFileSize(file.size)}</td>
+                  <td className="project-file-date"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
+                  <td className="project-file-actions">
                   {canOpen && (
                     <button className="secondary-button file-open-button" onClick={() => onOpenDocument(singleDocument)} aria-label={`Открыть документ «${singleDocument.name}»`}>
                       Открыть <ArrowUpRight size={15} />
                     </button>
                   )}
-                </article>
+                  </td>
+                </tr>
                 {(isArchive || file.documents.length > 1) && file.documents.length > 0 && (
+                  <tr className="project-archive-row"><td colSpan={5}>
                   <div className="project-document-children" aria-label={`Документы загрузки «${file.name}»`}>
                     {file.documents.map(document => (
                       <article className="project-child-document" key={document.id}>
@@ -185,20 +205,20 @@ export function ProjectFilesView({
                       </article>
                     ))}
                   </div>
+                  </td></tr>
                 )}
-                {file.phase === 'ready' && file.documents.length === 0 && <p className="project-no-documents">Для этой загрузки сервер не вернул документов.</p>}
-              </div>
+                {file.phase === 'ready' && file.documents.length === 0 && <tr><td colSpan={5}><p className="project-no-documents">Для этой загрузки сервер не вернул документов.</p></td></tr>}
+              </Fragment>
             );
           })}
-        </div>
-      ) : (
-        <div className="project-files-empty">
-          <FileText size={27} />
+          {filtered.length === 0 && <tr><td colSpan={5}><div className="project-files-empty">
           <h3>{project.files.length ? 'Подходящих документов нет' : 'Здесь будут документы проекта'}</h3>
           <p>{project.files.length ? 'Измените поисковый запрос или выберите другой статус.' : 'Добавьте первый файл с помощью кнопки или перетащите его в область выше.'}</p>
           {project.files.length > 0 && <button className="secondary-button" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Сбросить фильтры</button>}
-        </div>
-      )}
+        </div></td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -226,12 +246,13 @@ function ProcessingStatus({ item, name }: { item: ProcessingState; name: string 
 }
 
 interface FileDropzoneProps {
+  compact: boolean;
   onUpload: ProjectFilesViewProps['onUpload'];
   disabled: boolean;
   onBusyChange: (busy: boolean) => void;
 }
 
-function FileDropzone({ onUpload, disabled, onBusyChange }: FileDropzoneProps) {
+function FileDropzone({ compact, onUpload, disabled, onBusyChange }: FileDropzoneProps) {
   const input = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const uploadLock = useRef(false);
@@ -260,25 +281,25 @@ function FileDropzone({ onUpload, disabled, onBusyChange }: FileDropzoneProps) {
   return (
     <>
       <div
-        className={`file-dropzone ${dragging && !blocked ? 'is-dragging' : ''} ${blocked ? 'is-uploading' : ''}`}
+        className={`${compact ? 'file-upload-compact' : 'file-dropzone'} ${dragging && !blocked ? 'is-dragging' : ''} ${blocked ? 'is-uploading' : ''}`}
         aria-busy={uploading}
         onDragEnter={event => { event.preventDefault(); if (blocked) return; dragDepth.current++; setDragging(true); }}
         onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = blocked ? 'none' : 'copy'; }}
         onDragLeave={event => { event.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }}
         onDrop={event => { event.preventDefault(); dragDepth.current = 0; setDragging(false); void accept(Array.from(event.dataTransfer.files)); }}
       >
-        <span className="upload-icon">{uploading ? <LoaderCircle size={30} className="spin" /> : <UploadCloud size={30} strokeWidth={1.5} />}</span>
+        {!compact && <><span className="upload-icon">{uploading ? <LoaderCircle size={36} className="spin" /> : <UploadCloud size={36} strokeWidth={1.5} />}</span>
         <div className="dropzone-copy">
           <h2>{uploading ? 'Загружаем файлы на сервер…' : dragging && !blocked ? 'Отпустите файлы для загрузки' : 'Загрузите документы'}</h2>
           <p>{uploading ? 'Сохраняем файлы. Анализ можно будет запустить кнопкой «Начать анализ».' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
           <small id="file-upload-help">DOCX, PDF, ZIP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
-        </div>
+        </div></>}
         <input
           ref={input} type="file" hidden multiple disabled={blocked} accept={UPLOAD_ACCEPT} aria-label="Выберите документы"
           onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void accept(files); }}
         />
-        <button type="button" className="primary-button" disabled={blocked} aria-describedby="file-upload-help" onClick={() => input.current?.click()}>
-          <UploadCloud size={17} />{uploading ? 'Загрузка…' : 'Выбрать файлы'}
+        <button type="button" className={compact ? 'secondary-button' : 'primary-button'} disabled={blocked} aria-describedby={compact ? undefined : 'file-upload-help'} onClick={() => input.current?.click()}>
+          {uploading ? <LoaderCircle size={17} className="spin" /> : <UploadCloud size={17} />}{uploading ? 'Загрузка…' : compact ? 'Добавить документы' : 'Выбрать файлы'}
         </button>
       </div>
       {errors.length > 0 && (
