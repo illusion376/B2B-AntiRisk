@@ -18,6 +18,16 @@ log = logging.getLogger(__name__)
 
 LAW_NAMES = {"44-FZ": "44-ФЗ", "223-FZ": "223-ФЗ"}
 
+SENSITIVITY_INSTRUCTIONS = {
+    "strict": "Фиксируй RISK только при явно выраженном опасном условии, подтверждённом цитатой. "
+              "Если вывод зависит от предположений или дополнительных обстоятельств, используй UNKNOWN, а не OK.",
+    "balanced": "Учитывай явные и обоснованные потенциальные риски. Отделяй подтверждённое условие от предположения; "
+                "если данных недостаточно, используй UNKNOWN, а не OK.",
+    "sensitive": "Дополнительно ищи неоднозначные формулировки, ограничения и потенциальные риски. "
+                 "Для каждого RISK нужна дословная цитата и конкретное объяснение возможных последствий. "
+                 "Не выдавай потенциальный риск за установленное нарушение; при недостатке оснований используй UNKNOWN.",
+}
+
 SYSTEM_PROMPT = """Ты — опытный юрист по государственным и корпоративным закупкам (44-ФЗ, 223-ФЗ, ГК РФ).
 Ты проверяешь документацию закупки на стороне ПОСТАВЩИКА: ищешь условия, которые грозят штрафами,
 убытками, односторонним расторжением контракта и включением в реестр недобросовестных поставщиков (РНП).
@@ -276,7 +286,8 @@ def _short(value) -> str | None:
 
 
 async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: RuleContext,
-                         pages: list[dict], document_name: str, law_type: str | None) -> list[FindingDraft]:
+                         pages: list[dict], document_name: str, law_type: str | None,
+                         sensitivity: str = "balanced") -> list[FindingDraft]:
     rule = ctx.rule
     if not ctx.chunks:
         return []
@@ -290,12 +301,15 @@ async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: R
         fragments=_format_fragments(ctx.chunks),
     )
     async with semaphore:
-        answer = await client.complete_json(SYSTEM_PROMPT, prompt)
+        answer = await client.complete_json(SYSTEM_PROMPT + "\nЧувствительность проверки: "
+                                            + SENSITIVITY_INSTRUCTIONS[sensitivity], prompt)
     return _build_drafts(rule, ctx, answer, pages)
 
 
 async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], document_name: str,
-                            law_type: str | None) -> list[FindingDraft]:
+                            law_type: str | None, sensitivity: str = "balanced") -> list[FindingDraft]:
+    if sensitivity not in SENSITIVITY_INSTRUCTIONS:
+        raise ValueError("Неизвестная чувствительность анализа")
     contexts = [ctx for ctx in contexts if ctx.chunks]
     if not contexts:
         return []
@@ -303,7 +317,7 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
     try:
         async with LLMClient(response_schema=LLMResult.model_json_schema()) as client:
             results = await asyncio.gather(
-                *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type) for ctx in contexts),
+                *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type, sensitivity) for ctx in contexts),
                 return_exceptions=True,
             )
     except Exception as exc:
@@ -329,20 +343,24 @@ def _stems(text: str) -> set[str]:
     return {w[:6] for w in _WORD.findall(text.lower().replace("ё", "е"))}
 
 
-def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict]) -> list[FindingDraft]:
+def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivity: str = "balanced") -> list[FindingDraft]:
     """Без LLM: показываем самый релевантный фрагмент как «требует внимания».
 
     Режим нужен, чтобы система работала «из коробки» без ключей API; замечания помечаются
     source=HEURISTIC и низкой уверенностью.
     """
+    if sensitivity not in SENSITIVITY_INSTRUCTIONS:
+        raise ValueError("Неизвестная чувствительность анализа")
     drafts: list[FindingDraft] = []
     for ctx in contexts:
         rule = ctx.rule
-        relevant = [c for c in ctx.chunks if c.fts_hit]
+        query_stems = _stems(rule.semantic_query)
+        relevant = [c for c in ctx.chunks if c.fts_hit or (sensitivity == "sensitive" and c.score > 0)]
+        if sensitivity == "strict":
+            relevant = [c for c in relevant if len(_stems(c.content) & query_stems) >= min(2, len(query_stems))]
         if not relevant:
             continue
         best = max(relevant, key=lambda c: c.score)
-        query_stems = _stems(rule.semantic_query)
         sentences = [s for s in _SENTENCE.split(best.content.replace("\n", " ")) if len(s) > 20] or [best.content]
         sentence = max(sentences, key=lambda s: len(_stems(s) & query_stems))
         match = locate_quote(pages, sentence[:400], _page_hint(best))

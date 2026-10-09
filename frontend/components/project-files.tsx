@@ -5,7 +5,6 @@ import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3,
 import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
-import { ProjectActions } from './project-actions';
 import { Modal } from './ui';
 import './project-enhancements.css';
 
@@ -21,8 +20,6 @@ interface ProjectFilesViewProps {
   onRetryAnalysisModes: () => void;
   selectedAnalysisMode: AnalysisMode | null;
   onOpenSettings: () => void;
-  onRename: (project: Project) => void;
-  onDelete: (project: Project) => void;
   onRemoveFile: (file: ProjectFile) => Promise<void>;
 }
 
@@ -41,7 +38,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 export function ProjectFilesView({
   project, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
-  selectedAnalysisMode, onOpenSettings, onRename, onDelete, onRemoveFile,
+  selectedAnalysisMode, onOpenSettings, onRemoveFile,
 }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
@@ -116,16 +113,6 @@ export function ProjectFilesView({
 
   return (
     <section className={`secondary-view project-files-view${hasFiles ? ' has-files' : ''}`}>
-      <div className="view-title project-overview-card">
-        <div>
-          <span className="eyebrow">ПРОЕКТ</span>
-          <h1>{project.title}</h1>
-          <p>{project.description || 'Храните и проверяйте документы в рамках проекта.'}</p>
-        </div>
-        <div className="project-overview-actions">
-          <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={busy || !!fileToRemove} />
-        </div>
-      </div>
       <div className={`project-upload-section${hasFiles ? ' has-files' : ''}`}>
         {hasFiles && <h2>Документы <span>{project.files.length}</span></h2>}
         <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting || removing || !!fileToRemove} onBusyChange={setUploading} />

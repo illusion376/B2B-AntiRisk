@@ -6,6 +6,7 @@ export type ProcessingPhase = 'uploaded' | 'queued' | 'processing' | 'ready' | '
 export type TrafficLight = 'critical' | 'warning' | 'ok' | 'unknown';
 export type LawType = 'ALL' | '44-FZ' | '223-FZ';
 export type AnalysisMode = 'llm' | 'nli' | 'keyword';
+export type AnalysisSensitivity = 'strict' | 'balanced' | 'sensitive';
 
 export interface AnalysisModeOption {
   id: AnalysisMode;
@@ -48,6 +49,7 @@ export interface DocumentInfo extends ProcessingState {
   id: string;
   analysisId: string;
   analysisMode: AnalysisMode | null;
+  analysisSensitivity: AnalysisSensitivity | null;
   name: string;
   relativePath: string | null;
   type: string | null;

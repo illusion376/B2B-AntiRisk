@@ -83,6 +83,7 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String(50), default="QUEUED")
     # Последний выбранный режим; source отдельного замечания описывает его фактический источник.
     analysis_mode: Mapped[str | None] = mapped_column(String(20))
+    analysis_sensitivity: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")
     progress: Mapped[int] = mapped_column(Integer, default=0)
     risk_score: Mapped[int | None] = mapped_column(Integer)
     law_type: Mapped[str | None] = mapped_column(String(20))

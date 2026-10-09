@@ -200,12 +200,13 @@ def rerun_analysis(
     user: User = Depends(current_user),
 ):
     analysis = get_analysis_or_404(db, analysis_id, user)
-    rerun(db, user, [analysis], body.rule_ids if body else None, body.analysis_mode if body else None)
+    rerun(db, user, [analysis], body.rule_ids if body else None, body.analysis_mode if body else None,
+          body.analysis_sensitivity if body else "balanced")
     return analysis_detail(db, analysis)
 
 
 def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str] | None,
-          analysis_mode: str | None = None) -> int:
+          analysis_mode: str | None = None, analysis_sensitivity: str = "balanced") -> int:
     mode = analysis_mode_or_422(analysis_mode)
     if any(a.analysis_status not in TERMINAL for a in analyses):
         raise HTTPException(409, "Проверка ещё выполняется")
@@ -217,11 +218,13 @@ def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str]
     for doc in docs:
         doc.status, doc.progress = ("ANALYZING", 70) if doc.status == "COMPLETED" else ("QUEUED", 0)
         doc.analysis_mode = mode
+        doc.analysis_sensitivity = analysis_sensitivity
         doc.error_message = None
     for analysis in analyses:
         if any(d.analysis_id == analysis.id for d in docs):
             log_action(db, user.id, "ANALYSIS_RERUN", "analysis", analysis.id,
-                       {"file": analysis.original_filename, "rule_ids": rule_ids, "analysis_mode": mode})
+                       {"file": analysis.original_filename, "rule_ids": rule_ids, "analysis_mode": mode,
+                        "analysis_sensitivity": analysis_sensitivity})
             analysis.error_message = None
     db.flush()
     for analysis in analyses:

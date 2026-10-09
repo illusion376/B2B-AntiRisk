@@ -226,9 +226,11 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
         raise HTTPException(409, "Документ ещё не обработан")
     doc.status, doc.progress = "ANALYZING", 70
     doc.analysis_mode = mode
+    doc.analysis_sensitivity = body.analysis_sensitivity if body else "balanced"
     doc.error_message = None
     log_action(db, user.id, "DOCUMENT_REANALYZE", "document", doc.id,
-               {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None})
+               {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None,
+                "analysis_sensitivity": doc.analysis_sensitivity})
     db.flush()
     refresh_analysis(db, doc.analysis_id)
     db.commit()

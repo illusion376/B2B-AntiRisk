@@ -289,3 +289,34 @@ def test_delete_file_also_checks_child_document_status(workspace):
         db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])).status = "QUEUED"
     assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 409
     assert (settings.storage_dir / uploaded["id"]).is_dir()
+
+
+@pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
+def test_sensitivity_is_committed_before_enqueue_and_can_change_on_rerun(workspace, sensitivity):
+    client, pid, queue, sessions = workspace
+    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
+    did = uuid.UUID(uploaded["documents"][0]["id"])
+    expected = sensitivity
+
+    def verify_committed(ids):
+        assert ids == [did]
+        with sessions() as db:
+            assert db.get(Document, did).analysis_sensitivity == expected
+    queue.side_effect = verify_committed
+    assert client.post(f"/api/projects/{pid}/start", json={"analysis_mode": "keyword", "analysis_sensitivity": sensitivity}).status_code == 202
+    assert client.get(f"/api/projects/{pid}").json()["files"][0]["documents"][0]["analysis_sensitivity"] == sensitivity
+    with sessions.begin() as db:
+        db.get(Document, did).status = "FAILED"
+        db.get(Analysis, uuid.UUID(uploaded["id"])).analysis_status = "FAILED"
+    expected = "sensitive" if sensitivity == "strict" else "strict"
+    assert client.post(f"/api/projects/{pid}/rerun", json={"analysis_sensitivity": expected}).status_code == 202
+    assert queue.call_count == 2
+
+
+@pytest.mark.parametrize("sensitivity", ["invalid", "", None, 0])
+def test_invalid_sensitivity_does_not_start_documents(workspace, sensitivity):
+    client, pid, queue, _ = workspace
+    client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))])
+    assert client.post(f"/api/projects/{pid}/start", json={"analysis_sensitivity": sensitivity}).status_code == 422
+    assert client.get(f"/api/projects/{pid}").json()["files"][0]["phase"] == "uploaded"
+    queue.assert_not_called()

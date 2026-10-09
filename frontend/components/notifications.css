@@ -1,0 +1,23 @@
+.dashboard-shell .notification-center { position: relative; }
+.dashboard-shell .notification-trigger { position: relative; }
+.dashboard-shell .notification-badge { position: absolute; top: -5px; right: -5px; min-width: 14px; height: 14px; padding: 0 3px; display: grid; place-items: center; border-radius: 7px; background: #ae302b; color: #fff; font-size: 8px; line-height: 1; border: 1px solid #fff; }
+.dashboard-shell .notification-popover { position: absolute; top: calc(100% + 10px); right: 0; z-index: 90; width: min(350px, calc(100vw - 32px)); border: 1px solid #e6e6e6; border-radius: 8px; box-shadow: 0 8px 28px #00000012; background: #fff; color: #242424; }
+.dashboard-shell .notification-heading { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border-bottom: 1px solid #eeeeee; }
+.dashboard-shell .notification-heading h2 { margin: 0; font-size: .8125rem; }
+.dashboard-shell .notification-heading button { display: flex; padding: 3px; color: #737373; }
+.dashboard-shell .notification-popover ul { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto; }
+.dashboard-shell .notification-popover li + li { border-top: 1px solid #eeeeee; }
+.dashboard-shell .notification-item { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 13px 14px; text-align: left; }
+.dashboard-shell .notification-item:hover, .dashboard-shell .notification-item.unread { background: #fafafa; }
+.dashboard-shell .notification-kind-icon { display: flex; margin-top: 1px; color: #308058; flex-shrink: 0; }
+.dashboard-shell .notification-item.critical .notification-kind-icon, .dashboard-shell .notification-item.error .notification-kind-icon { color: #b13c34; }
+.dashboard-shell .notification-item > span:nth-child(2) { flex: 1; min-width: 0; }
+.dashboard-shell .notification-item strong { display: block; font-size: .75rem; margin-bottom: 5px; }
+.dashboard-shell .notification-item > span > span { display: block; font-size: .6875rem; line-height: 1.5; color: #7b7b7b; overflow-wrap: anywhere; }
+.dashboard-shell .notification-item time { display: block; margin-top: 6px; color: #9a9a9a; font-size: .625rem; }
+.dashboard-shell .notification-item i { width: 5px; height: 5px; border-radius: 50%; background: #323232; margin-top: 5px; flex-shrink: 0; }
+.dashboard-shell .notification-empty { margin: 0; padding: 22px 18px; font-size: .75rem; line-height: 1.6; color: #898989; }
+.dashboard-shell .toast.notice-error > span, .dashboard-shell .toast.notice-critical > span { color: #b43d35; background: #fff0ee; }
+@media (max-width: 600px) {
+  .dashboard-shell .notification-popover { position: fixed; top: 65px; right: 16px; width: calc(100vw - 32px); }
+}

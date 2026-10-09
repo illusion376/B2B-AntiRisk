@@ -3,13 +3,13 @@ import type {
   ProjectFileDto, RuleDto, UploadDto, UserDto,
 } from './api-types';
 import type {
-  AnalysisMode, AnalysisModes, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
+  AnalysisMode, AnalysisModes, AnalysisSensitivity, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
   ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 
 export interface RequestOptions { signal?: AbortSignal }
-export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode }
+export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity }
 export interface ReportOptions extends RequestOptions { mode?: string; format?: string; includeDismissed?: boolean }
 export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
 export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
@@ -128,6 +128,7 @@ export function mapDocument(value: DocumentDto): DocumentInfo {
   return {
     id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
     analysisMode: value.analysis_mode ?? null,
+    analysisSensitivity: value.analysis_sensitivity ?? null,
     relativePath: value.relative_path, type: value.file_type, size: value.file_size,
     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
     totalPages: value.total_pages, isScanned: value.is_scanned, ocrPages: value.ocr_pages,
@@ -254,12 +255,12 @@ export const api = {
   startProjectAnalysis: (projectId: string, options: AnalysisRequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
     return value;
-  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
+  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
   rerunProject: (projectId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
     return value;
-  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode }) }),
-  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
+  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
   thumbnailUrl,
   documentFileUrl,
   documentOriginalUrl,

@@ -10,6 +10,7 @@ from app.vocab import ReviewStatus, RiskLevel, Severity
 LawType = Literal["ALL", "44-FZ", "223-FZ"]
 TrafficLight = Literal["critical", "warning", "ok", "unknown"]
 AnalysisMode = Literal["llm", "nli", "keyword"]
+AnalysisSensitivity = Literal["strict", "balanced", "sensitive"]
 # Стадия обработки файла для интерфейса (как getProcessing() во фронтенде) + ошибки
 Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
 
@@ -58,6 +59,7 @@ class DocumentOut(ORM):
         "предыдущие результаты; источник каждого замечания указан в source. NULL — старый запуск без записи режима."
     ))
     phase: Phase = "queued"
+    analysis_sensitivity: AnalysisSensitivity | None = None
     label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
     progress: int
     total_pages: int
@@ -329,6 +331,7 @@ class RuleTestResult(BaseModel):
 
 class StartRequest(BaseModel):
     analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")
+    analysis_sensitivity: AnalysisSensitivity = Field(default="balanced", description="Чувствительность к потенциальным рискам")
 
 
 class RerunRequest(StartRequest):

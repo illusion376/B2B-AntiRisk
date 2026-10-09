@@ -186,6 +186,7 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         # Для поставленных API задач всегда используем сохранённый выбор пользователя.
         mode = resolve_analysis_mode(doc.analysis_mode)
         doc.analysis_mode = mode
+        sensitivity = doc.analysis_sensitivity or "balanced"
         rules = applicable_rules(db, doc.law_type, rule_ids)
         ensure_rule_embeddings(db, rules)
         contexts = [
@@ -203,11 +204,11 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         document_name, law_type, analysis_id = doc.file_name, doc.law_type, doc.analysis_id
 
     if mode == "llm":
-        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type))
+        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type, sensitivity=sensitivity))
     elif mode == "nli":
         drafts = evaluate_nli(contexts, pages)
     else:
-        drafts = evaluate_heuristic(contexts, pages)
+        drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
 
 
     with session_scope() as db:
@@ -223,7 +224,9 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
             .where(RiskFinding.document_id == document_id, RiskFinding.review_status != "DISMISSED")
         ).all()
         db.execute(update(Document).where(Document.id == document_id).values(
-            risk_score=risk_score(severities), status="COMPLETED", progress=100, error_message=None,
+            risk_score=risk_score(severities), status="COMPLETED", progress=100,
+            error_message=("Не удалось проверить часть правил: ошибка ИИ-сервиса. Повторите анализ."
+                           if any(draft.source == "ERROR" for draft in drafts) else None),
         ))
         refresh_analysis(db, analysis_id)
 

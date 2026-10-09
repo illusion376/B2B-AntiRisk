@@ -254,6 +254,19 @@ test('an unavailable LLM exposes the server message and never retries in another
   assert.equal(calls, 1);
 });
 
+test('start, project rerun and document rerun transmit the selected sensitivity to the server', async t => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push([url, body.analysis_sensitivity]);
+    return url.endsWith('/reanalyze') ? response({ ...document, analysis_sensitivity: body.analysis_sensitivity }) : response({ documents: 1 });
+  });
+  await api.startProjectAnalysis(project.id, { analysisMode: 'llm', sensitivity: 'strict' });
+  await api.rerunProject(project.id, { sensitivity: 'sensitive' });
+  assert.equal((await api.reanalyzeDocument(document.id, { sensitivity: 'balanced' })).analysisSensitivity, 'balanced');
+  assert.deepEqual(calls.map(call => call[1]), ['strict', 'sensitive', 'balanced']);
+});
+
 test('unknown findings and an incomplete traffic light remain distinct from no risk', () => {
   const mappedFinding = mapFinding({ ...finding, severity: 'unknown', source: 'LLM', quote: '', quote_verified: false });
   assert.equal(mappedFinding.severity, 'unknown');

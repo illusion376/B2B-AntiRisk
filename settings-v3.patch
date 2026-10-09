@@ -1,0 +1,1373 @@
+diff --git a/backend/app/api/analyses.py b/backend/app/api/analyses.py
+index 394289b..e3fadaf 100644
+--- a/backend/app/api/analyses.py
++++ b/backend/app/api/analyses.py
+@@ -200,12 +200,13 @@ def rerun_analysis(
+     user: User = Depends(current_user),
+ ):
+     analysis = get_analysis_or_404(db, analysis_id, user)
+-    rerun(db, user, [analysis], body.rule_ids if body else None, body.analysis_mode if body else None)
++    rerun(db, user, [analysis], body.rule_ids if body else None, body.analysis_mode if body else None,
++          body.analysis_sensitivity if body else "balanced")
+     return analysis_detail(db, analysis)
+ 
+ 
+ def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str] | None,
+-          analysis_mode: str | None = None) -> int:
++          analysis_mode: str | None = None, analysis_sensitivity: str = "balanced") -> int:
+     mode = analysis_mode_or_422(analysis_mode)
+     if any(a.analysis_status not in TERMINAL for a in analyses):
+         raise HTTPException(409, "Проверка ещё выполняется")
+@@ -217,11 +218,13 @@ def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str]
+     for doc in docs:
+         doc.status, doc.progress = ("ANALYZING", 70) if doc.status == "COMPLETED" else ("QUEUED", 0)
+         doc.analysis_mode = mode
++        doc.analysis_sensitivity = analysis_sensitivity
+         doc.error_message = None
+     for analysis in analyses:
+         if any(d.analysis_id == analysis.id for d in docs):
+             log_action(db, user.id, "ANALYSIS_RERUN", "analysis", analysis.id,
+-                       {"file": analysis.original_filename, "rule_ids": rule_ids, "analysis_mode": mode})
++                       {"file": analysis.original_filename, "rule_ids": rule_ids, "analysis_mode": mode,
++                        "analysis_sensitivity": analysis_sensitivity})
+             analysis.error_message = None
+     db.flush()
+     for analysis in analyses:
+diff --git a/backend/app/api/documents.py b/backend/app/api/documents.py
+index ee4005f..d147cd9 100644
+--- a/backend/app/api/documents.py
++++ b/backend/app/api/documents.py
+@@ -226,9 +226,11 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User
+         raise HTTPException(409, "Документ ещё не обработан")
+     doc.status, doc.progress = "ANALYZING", 70
+     doc.analysis_mode = mode
++    doc.analysis_sensitivity = body.analysis_sensitivity if body else "balanced"
+     doc.error_message = None
+     log_action(db, user.id, "DOCUMENT_REANALYZE", "document", doc.id,
+-               {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None})
++               {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None,
++                "analysis_sensitivity": doc.analysis_sensitivity})
+     db.flush()
+     refresh_analysis(db, doc.analysis_id)
+     db.commit()
+diff --git a/backend/app/api/projects.py b/backend/app/api/projects.py
+index 564ba1d..8fdf799 100644
+--- a/backend/app/api/projects.py
++++ b/backend/app/api/projects.py
+@@ -162,6 +162,7 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
+                   body: StartRequest | None = None):
+     project = get_project_or_404(db, project_id, user)
+     mode = analysis_mode_or_422(body.analysis_mode if body else None)
++    sensitivity = body.analysis_sensitivity if body else "balanced"
+     # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
+     # или одновременном запуске из нескольких вкладок.
+     analyses = list(db.scalars(select(Analysis).where(
+@@ -175,10 +176,12 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
+     for doc in docs:
+         doc.status, doc.progress, doc.error_message = "QUEUED", 0, None
+         doc.analysis_mode = mode
++        doc.analysis_sensitivity = sensitivity
+     for analysis in analyses:
+         analysis.analysis_status, analysis.progress, analysis.error_message = "QUEUED", 0, None
+         log_action(db, user.id, "ANALYSIS_STARTED", "analysis", analysis.id,
+-                   {"file": analysis.original_filename, "project": project.title, "analysis_mode": mode})
++                   {"file": analysis.original_filename, "project": project.title, "analysis_mode": mode,
++                    "analysis_sensitivity": sensitivity})
+     project.updated_at = func.now()
+     db.commit()
+     enqueue_documents(db, docs)
+@@ -191,5 +194,5 @@ def rerun_project(project_id: uuid.UUID, body: RerunRequest | None = None, db: S
+                   user: User = Depends(current_user)):
+     project = get_project_or_404(db, project_id, user)
+     documents = rerun(db, user, list(project.analyses), body.rule_ids if body else None,
+-                      body.analysis_mode if body else None)
++                      body.analysis_mode if body else None, body.analysis_sensitivity if body else "balanced")
+     return {"documents": documents}
+diff --git a/backend/app/models.py b/backend/app/models.py
+index 161587c..a486212 100644
+--- a/backend/app/models.py
++++ b/backend/app/models.py
+@@ -83,6 +83,7 @@ class Document(Base):
+     status: Mapped[str] = mapped_column(String(50), default="QUEUED")
+     # Последний выбранный режим; source отдельного замечания описывает его фактический источник.
+     analysis_mode: Mapped[str | None] = mapped_column(String(20))
++    analysis_sensitivity: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")
+     progress: Mapped[int] = mapped_column(Integer, default=0)
+     risk_score: Mapped[int | None] = mapped_column(Integer)
+     law_type: Mapped[str | None] = mapped_column(String(20))
+diff --git a/backend/app/schemas.py b/backend/app/schemas.py
+index cf617c5..b057678 100644
+--- a/backend/app/schemas.py
++++ b/backend/app/schemas.py
+@@ -10,6 +10,7 @@ from app.vocab import ReviewStatus, RiskLevel, Severity
+ LawType = Literal["ALL", "44-FZ", "223-FZ"]
+ TrafficLight = Literal["critical", "warning", "ok", "unknown"]
+ AnalysisMode = Literal["llm", "nli", "keyword"]
++AnalysisSensitivity = Literal["strict", "balanced", "sensitive"]
+ # Стадия обработки файла для интерфейса (как getProcessing() во фронтенде) + ошибки
+ Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
+ 
+@@ -58,6 +59,7 @@ class DocumentOut(ORM):
+         "предыдущие результаты; источник каждого замечания указан в source. NULL — старый запуск без записи режима."
+     ))
+     phase: Phase = "queued"
++    analysis_sensitivity: AnalysisSensitivity | None = None
+     label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
+     progress: int
+     total_pages: int
+@@ -329,6 +331,7 @@ class RuleTestResult(BaseModel):
+ 
+ class StartRequest(BaseModel):
+     analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")
++    analysis_sensitivity: AnalysisSensitivity = Field(default="balanced", description="Чувствительность к потенциальным рискам")
+ 
+ 
+ class RerunRequest(StartRequest):
+diff --git a/backend/app/services/analyzer.py b/backend/app/services/analyzer.py
+index 5bff35c..e9c2ac9 100644
+--- a/backend/app/services/analyzer.py
++++ b/backend/app/services/analyzer.py
+@@ -18,6 +18,16 @@ log = logging.getLogger(__name__)
+ 
+ LAW_NAMES = {"44-FZ": "44-ФЗ", "223-FZ": "223-ФЗ"}
+ 
++SENSITIVITY_INSTRUCTIONS = {
++    "strict": "Фиксируй RISK только при явно выраженном опасном условии, подтверждённом цитатой. "
++              "Если вывод зависит от предположений или дополнительных обстоятельств, используй UNKNOWN, а не OK.",
++    "balanced": "Учитывай явные и обоснованные потенциальные риски. Отделяй подтверждённое условие от предположения; "
++                "если данных недостаточно, используй UNKNOWN, а не OK.",
++    "sensitive": "Дополнительно ищи неоднозначные формулировки, ограничения и потенциальные риски. "
++                 "Для каждого RISK нужна дословная цитата и конкретное объяснение возможных последствий. "
++                 "Не выдавай потенциальный риск за установленное нарушение; при недостатке оснований используй UNKNOWN.",
++}
++
+ SYSTEM_PROMPT = """Ты — опытный юрист по государственным и корпоративным закупкам (44-ФЗ, 223-ФЗ, ГК РФ).
+ Ты проверяешь документацию закупки на стороне ПОСТАВЩИКА: ищешь условия, которые грозят штрафами,
+ убытками, односторонним расторжением контракта и включением в реестр недобросовестных поставщиков (РНП).
+@@ -276,7 +286,8 @@ def _short(value) -> str | None:
+ 
+ 
+ async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: RuleContext,
+-                         pages: list[dict], document_name: str, law_type: str | None) -> list[FindingDraft]:
++                         pages: list[dict], document_name: str, law_type: str | None,
++                         sensitivity: str = "balanced") -> list[FindingDraft]:
+     rule = ctx.rule
+     if not ctx.chunks:
+         return []
+@@ -290,12 +301,15 @@ async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: R
+         fragments=_format_fragments(ctx.chunks),
+     )
+     async with semaphore:
+-        answer = await client.complete_json(SYSTEM_PROMPT, prompt)
++        answer = await client.complete_json(SYSTEM_PROMPT + "\nЧувствительность проверки: "
++                                            + SENSITIVITY_INSTRUCTIONS[sensitivity], prompt)
+     return _build_drafts(rule, ctx, answer, pages)
+ 
+ 
+ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], document_name: str,
+-                            law_type: str | None) -> list[FindingDraft]:
++                            law_type: str | None, sensitivity: str = "balanced") -> list[FindingDraft]:
++    if sensitivity not in SENSITIVITY_INSTRUCTIONS:
++        raise ValueError("Неизвестная чувствительность анализа")
+     contexts = [ctx for ctx in contexts if ctx.chunks]
+     if not contexts:
+         return []
+@@ -303,7 +317,7 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
+     try:
+         async with LLMClient(response_schema=LLMResult.model_json_schema()) as client:
+             results = await asyncio.gather(
+-                *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type) for ctx in contexts),
++                *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type, sensitivity) for ctx in contexts),
+                 return_exceptions=True,
+             )
+     except Exception as exc:
+@@ -329,20 +343,24 @@ def _stems(text: str) -> set[str]:
+     return {w[:6] for w in _WORD.findall(text.lower().replace("ё", "е"))}
+ 
+ 
+-def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict]) -> list[FindingDraft]:
++def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivity: str = "balanced") -> list[FindingDraft]:
+     """Без LLM: показываем самый релевантный фрагмент как «требует внимания».
+ 
+     Режим нужен, чтобы система работала «из коробки» без ключей API; замечания помечаются
+     source=HEURISTIC и низкой уверенностью.
+     """
++    if sensitivity not in SENSITIVITY_INSTRUCTIONS:
++        raise ValueError("Неизвестная чувствительность анализа")
+     drafts: list[FindingDraft] = []
+     for ctx in contexts:
+         rule = ctx.rule
+-        relevant = [c for c in ctx.chunks if c.fts_hit]
++        query_stems = _stems(rule.semantic_query)
++        relevant = [c for c in ctx.chunks if c.fts_hit or (sensitivity == "sensitive" and c.score > 0)]
++        if sensitivity == "strict":
++            relevant = [c for c in relevant if len(_stems(c.content) & query_stems) >= min(2, len(query_stems))]
+         if not relevant:
+             continue
+         best = max(relevant, key=lambda c: c.score)
+-        query_stems = _stems(rule.semantic_query)
+         sentences = [s for s in _SENTENCE.split(best.content.replace("\n", " ")) if len(s) > 20] or [best.content]
+         sentence = max(sentences, key=lambda s: len(_stems(s) & query_stems))
+         match = locate_quote(pages, sentence[:400], _page_hint(best))
+diff --git a/backend/app/services/pipeline.py b/backend/app/services/pipeline.py
+index c89dd76..3f142e6 100644
+--- a/backend/app/services/pipeline.py
++++ b/backend/app/services/pipeline.py
+@@ -186,6 +186,7 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None)
+         # Для поставленных API задач всегда используем сохранённый выбор пользователя.
+         mode = resolve_analysis_mode(doc.analysis_mode)
+         doc.analysis_mode = mode
++        sensitivity = doc.analysis_sensitivity or "balanced"
+         rules = applicable_rules(db, doc.law_type, rule_ids)
+         ensure_rule_embeddings(db, rules)
+         contexts = [
+@@ -203,11 +204,11 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None)
+         document_name, law_type, analysis_id = doc.file_name, doc.law_type, doc.analysis_id
+ 
+     if mode == "llm":
+-        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type))
++        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type, sensitivity=sensitivity))
+     elif mode == "nli":
+         drafts = evaluate_nli(contexts, pages)
+     else:
+-        drafts = evaluate_heuristic(contexts, pages)
++        drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
+ 
+ 
+     with session_scope() as db:
+@@ -223,7 +224,9 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None)
+             .where(RiskFinding.document_id == document_id, RiskFinding.review_status != "DISMISSED")
+         ).all()
+         db.execute(update(Document).where(Document.id == document_id).values(
+-            risk_score=risk_score(severities), status="COMPLETED", progress=100, error_message=None,
++            risk_score=risk_score(severities), status="COMPLETED", progress=100,
++            error_message=("Не удалось проверить часть правил: ошибка ИИ-сервиса. Повторите анализ."
++                           if any(draft.source == "ERROR" for draft in drafts) else None),
+         ))
+         refresh_analysis(db, analysis_id)
+ 
+diff --git a/backend/tests/test_analysis_modes.py b/backend/tests/test_analysis_modes.py
+index c63b392..ecf6f4b 100644
+--- a/backend/tests/test_analysis_modes.py
++++ b/backend/tests/test_analysis_modes.py
+@@ -230,6 +230,28 @@ def test_worker_dispatches_persisted_engine(mode_settings, monkeypatch, stored,
+         assert evaluate.call_count == (1 if mode == expected else 0)
+ 
+ 
++@pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
++def test_worker_uses_persisted_sensitivity(mode_settings, monkeypatch, sensitivity):
++    doc = Document(id=uuid.uuid4(), analysis_id=uuid.uuid4(), file_name="contract.txt",
++                   analysis_mode="keyword", analysis_sensitivity=sensitivity)
++    db = MagicMock()
++    db.get.return_value = doc
++    db.scalars.return_value.all.return_value = []
++
++    @contextmanager
++    def session():
++        yield db
++
++    monkeypatch.setattr(pipeline, "session_scope", session)
++    monkeypatch.setattr(pipeline, "applicable_rules", lambda *_: [])
++    for name in ("ensure_rule_embeddings", "_save_findings", "_renumber", "refresh_analysis"):
++        monkeypatch.setattr(pipeline, name, MagicMock())
++    evaluator = MagicMock(return_value=[])
++    monkeypatch.setattr(pipeline, "evaluate_heuristic", evaluator)
++    pipeline.analyze_document(doc.id)
++    assert evaluator.call_args.kwargs == {"sensitivity": sensitivity}
++
++
+ def test_worker_cannot_silently_fallback_from_persisted_llm(mode_settings, monkeypatch):
+     doc = Document(id=uuid.uuid4(), analysis_mode="llm")
+     db = MagicMock()
+diff --git a/backend/tests/test_analysis_sensitivity.py b/backend/tests/test_analysis_sensitivity.py
+new file mode 100644
+index 0000000..008ccf8
+--- /dev/null
++++ b/backend/tests/test_analysis_sensitivity.py
+@@ -0,0 +1,53 @@
++import asyncio
++import uuid
++
++import pytest
++
++from app.models import RiskRule
++from app.services import analyzer
++from app.services.analyzer import RuleContext
++from app.services.retrieval import RetrievedChunk
++
++
++def context(text, fts=True):
++    rule = RiskRule(id="test", title="Условия оплаты", description="Потенциальный риск", severity="RED",
++                    semantic_query="оплата ответственность", llm_prompt="Проверь условия", law_type="44-FZ")
++    return RuleContext(rule, [RetrievedChunk(uuid.uuid4(), 0, 1, 1, None, text, 0.03, fts)])
++
++
++@pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
++def test_llm_receives_sensitivity_without_relaxing_evidence_checks(monkeypatch, sensitivity):
++    calls = []
++
++    class Client:
++        def __init__(self, **_): pass
++        async def __aenter__(self): return self
++        async def __aexit__(self, *_): pass
++        async def complete_json(self, system, _user):
++            calls.append(system)
++            return {"verdict": "RISK", "issues": [{"fragment": "F1", "quote": "Этой цитаты не существует в настоящем документе.",
++                "severity": "RED", "summary": "Риск", "comment": "Обоснование", "recommendation": "Проверить", "confidence": 0.99}],
++                "evidence": [], "explanation": "Результат"}
++
++    monkeypatch.setattr(analyzer, "LLMClient", Client)
++    drafts = asyncio.run(analyzer.evaluate_with_llm([context("Оплата производится после приёмки документов.")], [], "Договор", None, sensitivity))
++    assert len(calls) == 1 and analyzer.SENSITIVITY_INSTRUCTIONS[sensitivity] in calls[0]
++    assert "дословно" in calls[0].lower()
++    assert drafts[0].severity == "UNKNOWN" and not drafts[0].quote_verified
++
++
++def test_keyword_sensitivity_changes_match_breadth_without_claiming_verified_violations():
++    partial = context("Оплата производится после подписания акта приёмки товара.")
++    assert analyzer.evaluate_heuristic([partial], [], "strict") == []
++    balanced = analyzer.evaluate_heuristic([partial], [], "balanced")
++    assert len(balanced) == 1 and balanced[0].severity == "YELLOW" and balanced[0].source == "HEURISTIC"
++    semantic = context("Покупатель перечисляет вознаграждение после приёмки товара.", fts=False)
++    assert analyzer.evaluate_heuristic([semantic], [], "balanced") == []
++    assert len(analyzer.evaluate_heuristic([semantic], [], "sensitive")) == 1
++
++
++def test_unknown_sensitivity_is_rejected_by_evaluators():
++    with pytest.raises(ValueError):
++        analyzer.evaluate_heuristic([], [], "typo")
++    with pytest.raises(ValueError):
++        asyncio.run(analyzer.evaluate_with_llm([], [], "Договор", None, "typo"))
+diff --git a/backend/tests/test_manual_analysis.py b/backend/tests/test_manual_analysis.py
+index fbc20f4..768f1bc 100644
+--- a/backend/tests/test_manual_analysis.py
++++ b/backend/tests/test_manual_analysis.py
+@@ -289,3 +289,34 @@ def test_delete_file_also_checks_child_document_status(workspace):
+         db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])).status = "QUEUED"
+     assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 409
+     assert (settings.storage_dir / uploaded["id"]).is_dir()
++
++
++@pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
++def test_sensitivity_is_committed_before_enqueue_and_can_change_on_rerun(workspace, sensitivity):
++    client, pid, queue, sessions = workspace
++    uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
++    did = uuid.UUID(uploaded["documents"][0]["id"])
++    expected = sensitivity
++
++    def verify_committed(ids):
++        assert ids == [did]
++        with sessions() as db:
++            assert db.get(Document, did).analysis_sensitivity == expected
++    queue.side_effect = verify_committed
++    assert client.post(f"/api/projects/{pid}/start", json={"analysis_mode": "keyword", "analysis_sensitivity": sensitivity}).status_code == 202
++    assert client.get(f"/api/projects/{pid}").json()["files"][0]["documents"][0]["analysis_sensitivity"] == sensitivity
++    with sessions.begin() as db:
++        db.get(Document, did).status = "FAILED"
++        db.get(Analysis, uuid.UUID(uploaded["id"])).analysis_status = "FAILED"
++    expected = "sensitive" if sensitivity == "strict" else "strict"
++    assert client.post(f"/api/projects/{pid}/rerun", json={"analysis_sensitivity": expected}).status_code == 202
++    assert queue.call_count == 2
++
++
++@pytest.mark.parametrize("sensitivity", ["invalid", "", None, 0])
++def test_invalid_sensitivity_does_not_start_documents(workspace, sensitivity):
++    client, pid, queue, _ = workspace
++    client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))])
++    assert client.post(f"/api/projects/{pid}/start", json={"analysis_sensitivity": sensitivity}).status_code == 422
++    assert client.get(f"/api/projects/{pid}").json()["files"][0]["phase"] == "uploaded"
++    queue.assert_not_called()
+diff --git a/database/migrations/004_analysis_sensitivity.sql b/database/migrations/004_analysis_sensitivity.sql
+new file mode 100644
+index 0000000..dcb7985
+--- /dev/null
++++ b/database/migrations/004_analysis_sensitivity.sql
+@@ -0,0 +1,4 @@
++-- Профиль сохраняется до постановки задачи в очередь и применяется воркером.
++ALTER TABLE documents ADD COLUMN IF NOT EXISTS analysis_sensitivity VARCHAR(20)
++    NOT NULL DEFAULT 'balanced'
++    CHECK (analysis_sensitivity IN ('strict', 'balanced', 'sensitive'));
+diff --git a/frontend/app/layout.tsx b/frontend/app/layout.tsx
+index 05216e1..1ab1ba7 100644
+--- a/frontend/app/layout.tsx
++++ b/frontend/app/layout.tsx
+@@ -4,7 +4,7 @@ import './globals.css';
+ export const metadata: Metadata = {
+   title: 'B2B AntiRisk',
+   description: 'Рабочее пространство для просмотра документов и разбора замечаний.',
+-  icons: { icon: '/favicon.svg' },
++  icons: { icon: '/favicon.svg?v=shield' },
+ };
+ 
+ export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+diff --git a/frontend/components/document-workspace.tsx b/frontend/components/document-workspace.tsx
+index 5f7fb39..ead1d68 100644
+--- a/frontend/components/document-workspace.tsx
++++ b/frontend/components/document-workspace.tsx
+@@ -6,6 +6,8 @@ import { documentFileUrl, thumbnailUrl } from '@/lib/api';
+ import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
+ import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
+ import { riskLabels } from '@/lib/rules';
++import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences';
++import type { DisplaySeverity } from '@/lib/workspace-preferences';
+ import { HighlightedText, IconButton, Modal } from './ui';
+ import { FindingEvidenceBadges } from './shared-badges';
+ import './review-enhancements.css';
+@@ -35,6 +37,7 @@ export type DocumentWorkspaceProps = {
+   selected: string | null;
+   search: string;
+   findings: Finding[];
++  defaultSeverities?: readonly DisplaySeverity[];
+   statuses: Record<string, ReviewStatus>;
+   onPage: (page: number) => void;
+   onSelect: (finding: Finding) => void;
+@@ -96,7 +99,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
+   </div>;
+ }
+ 
+-export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
++export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+   const [zoom, setZoom] = useState(100);
+   const [hand, setHand] = useState(false);
+   const [expanded, setExpanded] = useState(false);
+@@ -104,7 +107,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
+   const [pageInput, setPageInput] = useState(String(page));
+   const [tab, setTab] = useState<ReviewTab>('findings');
+   const [category, setCategory] = useState('all');
+-  const [severity, setSeverity] = useState('all');
++  const [severity, setSeverity] = useState('default');
++  const defaultSeverityKey = defaultSeverities.join(',');
+   const [status, setStatus] = useState('all');
+   const [filterText, setFilterText] = useState('');
+   const [searchVisible, setSearchVisible] = useState(false);
+@@ -126,7 +130,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
+   const categories = [...new Set(findings.map(finding => finding.category).filter(Boolean))];
+   const filtered = useMemo(() => findings.filter(finding =>
+     (category === 'all' || category === finding.category)
+-    && (severity === 'all' || severity === finding.severity)
++    && matchesSeverity(finding.severity, severity, defaultSeverities)
+     && (status === 'all' || (statuses[finding.id] ?? finding.status) === status)
+     && `${finding.title} ${finding.description} ${finding.quote}`.toLocaleLowerCase('ru').includes(filterText.trim().toLocaleLowerCase('ru'))
+   ).sort((a, b) => {
+@@ -134,8 +138,9 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
+     if (a.number === null) return b.number === null ? 0 : 1;
+     if (b.number === null) return -1;
+     return order === 'asc' ? a.number - b.number : b.number - a.number;
+-  }), [findings, category, severity, status, statuses, filterText, order]);
+-  const activeFilterCount = [category !== 'all', severity !== 'all', status !== 'all', Boolean(filterText.trim())].filter(Boolean).length;
++  }), [findings, category, severity, defaultSeverities, status, statuses, filterText, order]);
++  const severityFiltered = severity === 'default' ? defaultSeverities.length < displaySeverities.length : severity !== 'all';
++  const activeFilterCount = [category !== 'all', severityFiltered, status !== 'all', Boolean(filterText.trim())].filter(Boolean).length;
+   const hasFilters = activeFilterCount > 0;
+   const selectedFinding = findings.find(finding => finding.id === selected);
+   const detail = findings.find(finding => finding.id === detailId);
+@@ -145,6 +150,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
+   const reviewPercent = riskFindings.length ? Math.round(reviewed / riskFindings.length * 100) : 0;
+   const hasText = sections.some(section => section.paragraphs.some(paragraph => paragraph.text.trim()));
+ 
++  useEffect(() => { setSeverity('default'); }, [document.id, defaultSeverityKey]);
++
+   useEffect(() => {
+     setViewerMode(document.hasPreview ? 'pdf' : 'text');
+     setDetailId(null);
+@@ -306,9 +313,9 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
+       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
+       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
+         <div className="filters">
+-          <label><span className="sr-only">Категория</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
+-          <label><span className="sr-only">Статус проверки</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
+-          <label><span className="sr-only">Уровень риска</span><select value={severity} onChange={event => setSeverity(event.target.value)}><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
++          <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
++          <label><span className="sr-only">Статус проверки</span><select aria-label="Статус проверки" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
++          <label><span className="sr-only">Уровень риска</span><select aria-label="Уровень риска" value={severity} onChange={event => setSeverity(event.target.value)}><option value="default">{defaultSeverities.length === displaySeverities.length ? 'Все уровни (по умолчанию)' : 'По настройкам'}</option><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
+           <button type="button" ref={searchToggleRef} className={`icon-button ${searchVisible ? 'is-active' : ''}`} aria-label={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} title={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} aria-expanded={searchVisible} aria-controls={searchVisible ? 'finding-search' : undefined} onClick={() => searchVisible ? closeSearch() : setSearchVisible(true)}><Search size={18} /></button>
+         </div>
+         {searchVisible && <div id="finding-search" className="finding-search field-search" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeSearch(); } }}><Search size={16} /><input autoFocus placeholder="Название, описание или цитата" aria-label="Поиск замечаний" value={filterText} onChange={event => setFilterText(event.target.value)} /><IconButton label="Очистить поиск замечаний" disabled={!filterText} onClick={() => setFilterText('')}><X size={15} /></IconButton></div>}
+diff --git a/frontend/components/notification-center.tsx b/frontend/components/notification-center.tsx
+new file mode 100644
+index 0000000..d15d525
+--- /dev/null
++++ b/frontend/components/notification-center.tsx
+@@ -0,0 +1,44 @@
++'use client';
++
++import { useEffect, useRef, useState } from 'react';
++import { AlertCircle, Bell, CheckCheck, CircleCheck, ShieldAlert } from 'lucide-react';
++import type { AnalysisNotice } from '@/lib/analysis-notifications';
++import './notifications.css';
++
++interface Props {
++  notices: AnalysisNotice[];
++  unread: number;
++  onRead: (id: string) => void;
++  onReadAll: () => void;
++  onOpen: (notice: AnalysisNotice) => void;
++}
++
++export function NotificationCenter({ notices, unread, onRead, onReadAll, onOpen }: Props) {
++  const [open, setOpen] = useState(false);
++  const root = useRef<HTMLDivElement>(null);
++  const trigger = useRef<HTMLButtonElement>(null);
++  useEffect(() => {
++    if (!open) return;
++    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
++    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); } };
++    window.addEventListener('pointerdown', outside);
++    window.addEventListener('keydown', escape);
++    return () => { window.removeEventListener('pointerdown', outside); window.removeEventListener('keydown', escape); };
++  }, [open]);
++  return <div className="notification-center" ref={root}>
++    <button ref={trigger} type="button" className="icon-button notification-trigger" aria-label={unread ? `Уведомления: ${unread} новых` : 'Уведомления'} title="Уведомления" aria-expanded={open} aria-controls={open ? 'analysis-notices' : undefined} onClick={() => setOpen(value => !value)}>
++      <Bell size={18} />{unread > 0 && <span className="notification-badge" aria-hidden="true">{Math.min(unread, 99)}</span>}
++    </button>
++    {open && <section className="notification-popover" id="analysis-notices" aria-label="Уведомления анализа">
++      <div className="notification-heading"><h2>Уведомления</h2>{unread > 0 && <button type="button" onClick={onReadAll} title="Отметить все прочитанными" aria-label="Отметить все прочитанными"><CheckCheck size={17} /></button>}</div>
++      {notices.length ? <ul>{notices.map(notice => {
++        const Icon = notice.kind === 'critical' ? ShieldAlert : notice.kind === 'error' ? AlertCircle : CircleCheck;
++        return <li key={notice.id}><button type="button" className={`notification-item ${notice.kind}${notice.read ? '' : ' unread'}`} onClick={() => { onRead(notice.id); onOpen(notice); setOpen(false); }}>
++          <span className="notification-kind-icon"><Icon size={17} /></span><span><strong>{notice.title}</strong><span>{notice.body}</span><time dateTime={new Date(notice.createdAt).toISOString()}>{new Date(notice.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</time></span>
++          {!notice.read && <i aria-label="Не прочитано" />}
++        </button></li>;
++      })}</ul> : <p className="notification-empty">Здесь появятся сообщения о новых результатах проверки.</p>}
++    </section>}
++    <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{unread > 0 ? `Новых уведомлений: ${unread}. ${notices[0]?.title ?? ''}` : ''}</span>
++  </div>;
++}
+diff --git a/frontend/components/notifications.css b/frontend/components/notifications.css
+new file mode 100644
+index 0000000..8133b62
+--- /dev/null
++++ b/frontend/components/notifications.css
+@@ -0,0 +1,23 @@
++.dashboard-shell .notification-center { position: relative; }
++.dashboard-shell .notification-trigger { position: relative; }
++.dashboard-shell .notification-badge { position: absolute; top: -5px; right: -5px; min-width: 14px; height: 14px; padding: 0 3px; display: grid; place-items: center; border-radius: 7px; background: #ae302b; color: #fff; font-size: 8px; line-height: 1; border: 1px solid #fff; }
++.dashboard-shell .notification-popover { position: absolute; top: calc(100% + 10px); right: 0; z-index: 90; width: min(350px, calc(100vw - 32px)); border: 1px solid #e6e6e6; border-radius: 8px; box-shadow: 0 8px 28px #00000012; background: #fff; color: #242424; }
++.dashboard-shell .notification-heading { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border-bottom: 1px solid #eeeeee; }
++.dashboard-shell .notification-heading h2 { margin: 0; font-size: .8125rem; }
++.dashboard-shell .notification-heading button { display: flex; padding: 3px; color: #737373; }
++.dashboard-shell .notification-popover ul { list-style: none; margin: 0; padding: 0; max-height: 330px; overflow-y: auto; }
++.dashboard-shell .notification-popover li + li { border-top: 1px solid #eeeeee; }
++.dashboard-shell .notification-item { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 13px 14px; text-align: left; }
++.dashboard-shell .notification-item:hover, .dashboard-shell .notification-item.unread { background: #fafafa; }
++.dashboard-shell .notification-kind-icon { display: flex; margin-top: 1px; color: #308058; flex-shrink: 0; }
++.dashboard-shell .notification-item.critical .notification-kind-icon, .dashboard-shell .notification-item.error .notification-kind-icon { color: #b13c34; }
++.dashboard-shell .notification-item > span:nth-child(2) { flex: 1; min-width: 0; }
++.dashboard-shell .notification-item strong { display: block; font-size: .75rem; margin-bottom: 5px; }
++.dashboard-shell .notification-item > span > span { display: block; font-size: .6875rem; line-height: 1.5; color: #7b7b7b; overflow-wrap: anywhere; }
++.dashboard-shell .notification-item time { display: block; margin-top: 6px; color: #9a9a9a; font-size: .625rem; }
++.dashboard-shell .notification-item i { width: 5px; height: 5px; border-radius: 50%; background: #323232; margin-top: 5px; flex-shrink: 0; }
++.dashboard-shell .notification-empty { margin: 0; padding: 22px 18px; font-size: .75rem; line-height: 1.6; color: #898989; }
++.dashboard-shell .toast.notice-error > span, .dashboard-shell .toast.notice-critical > span { color: #b43d35; background: #fff0ee; }
++@media (max-width: 600px) {
++  .dashboard-shell .notification-popover { position: fixed; top: 65px; right: 16px; width: calc(100vw - 32px); }
++}
+diff --git a/frontend/components/project-enhancements.css b/frontend/components/project-enhancements.css
+index 3286d40..c28020a 100644
+--- a/frontend/components/project-enhancements.css
++++ b/frontend/components/project-enhancements.css
+@@ -104,15 +104,7 @@
+ 
+ /* Project overview and the two upload states. Keep the uploader mounted to retain errors. */
+ .dashboard-shell .project-files-view { padding: 22px 28px; background: #fafbfc; }
+-.dashboard-shell .project-files-view .project-overview-card { min-height: 134px; padding: 22px 24px; border: 1px solid #eef0f2; border-radius: 10px; background: #fff; }
+-.dashboard-shell .project-overview-card .project-overview-actions { display: flex; flex-shrink: 0; align-items: center; gap: 8px; }
+-.dashboard-shell .project-overview-actions .secondary-button { min-height: 36px; padding: 8px 13px; color: #444851; }
+-.dashboard-shell .project-files-view .view-title p { color: #787d89; font-size: .8125rem; line-height: 1.5; }
+-.dashboard-shell .project-files-view.has-files .project-overview-card { min-height: 104px; padding: 16px 20px; }
+-.dashboard-shell .project-files-view.has-files .view-title h1 { font-size: 1.5rem; }
+-.dashboard-shell .project-files-view.has-files .view-title .eyebrow { margin-bottom: 5px; }
+-.dashboard-shell .project-files-view.has-files .view-title p { margin-top: 5px; }
+-.dashboard-shell .project-upload-section { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin: 16px 0 20px; }
++.dashboard-shell .project-upload-section { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin: 0 0 20px; }
+ .dashboard-shell .project-upload-section > h2 { font-size: .875rem; line-height: 1.5; }
+ .dashboard-shell .project-upload-section > h2 > span { margin-left: 5px; color: #9297a0; }
+ .dashboard-shell .project-upload-section .upload-errors { grid-column: 1 / -1; margin: 0; }
+@@ -178,16 +170,13 @@
+ .dashboard-shell .project-file-table .project-files-empty h3 { margin-top: 0; }
+ 
+ @media (max-width: 1100px) {
+-  .dashboard-shell .project-overview-card { flex-wrap: wrap; }
+   .dashboard-shell .project-file-controls { flex: 1; }
+   .dashboard-shell .project-files-view .project-files-toolbar .field-search { flex: 1; width: auto; }
+ }
+ @media (max-width: 760px) {
+   .dashboard-shell .project-files-view { padding: 16px; }
+-  .dashboard-shell .project-files-view .project-overview-card { padding: 18px; }
+   .dashboard-shell .project-upload-section.has-files { grid-template-columns: minmax(0, 1fr) auto; }
+   .dashboard-shell .project-upload-section.has-files > .project-files-heading-actions { grid-column: 1 / -1; grid-row: 2; width: auto; justify-content: flex-end; }
+-  .dashboard-shell .project-overview-actions { flex-wrap: wrap; }
+   .dashboard-shell .project-file-controls { width: 100%; flex-wrap: wrap; }
+   .dashboard-shell .project-file-sort { flex: 1; }
+   .dashboard-shell .project-file-sort select { width: 100%; }
+diff --git a/frontend/components/project-files.tsx b/frontend/components/project-files.tsx
+index 60d85aa..4df1768 100644
+--- a/frontend/components/project-files.tsx
++++ b/frontend/components/project-files.tsx
+@@ -5,7 +5,6 @@ import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3,
+ import { errorMessage } from '@/lib/api';
+ import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
+ import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
+-import { ProjectActions } from './project-actions';
+ import { Modal } from './ui';
+ import './project-enhancements.css';
+ 
+@@ -21,8 +20,6 @@ interface ProjectFilesViewProps {
+   onRetryAnalysisModes: () => void;
+   selectedAnalysisMode: AnalysisMode | null;
+   onOpenSettings: () => void;
+-  onRename: (project: Project) => void;
+-  onDelete: (project: Project) => void;
+   onRemoveFile: (file: ProjectFile) => Promise<void>;
+ }
+ 
+@@ -41,7 +38,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
+ export function ProjectFilesView({
+   project, onUpload, onOpenDocument, onStart, onRerun,
+   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
+-  selectedAnalysisMode, onOpenSettings, onRename, onDelete, onRemoveFile,
++  selectedAnalysisMode, onOpenSettings, onRemoveFile,
+ }: ProjectFilesViewProps) {
+   const [query, setQuery] = useState('');
+   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
+@@ -116,16 +113,6 @@ export function ProjectFilesView({
+ 
+   return (
+     <section className={`secondary-view project-files-view${hasFiles ? ' has-files' : ''}`}>
+-      <div className="view-title project-overview-card">
+-        <div>
+-          <span className="eyebrow">ПРОЕКТ</span>
+-          <h1>{project.title}</h1>
+-          <p>{project.description || 'Храните и проверяйте документы в рамках проекта.'}</p>
+-        </div>
+-        <div className="project-overview-actions">
+-          <ProjectActions project={project} onRename={onRename} onDelete={onDelete} disabled={busy || !!fileToRemove} />
+-        </div>
+-      </div>
+       <div className={`project-upload-section${hasFiles ? ' has-files' : ''}`}>
+         {hasFiles && <h2>Документы <span>{project.files.length}</span></h2>}
+         <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting || removing || !!fileToRemove} onBusyChange={setUploading} />
+diff --git a/frontend/components/settings-view.tsx b/frontend/components/settings-view.tsx
+index b941959..5d1fb62 100644
+--- a/frontend/components/settings-view.tsx
++++ b/frontend/components/settings-view.tsx
+@@ -1,7 +1,9 @@
+ 'use client';
+ 
+-import { Check, LoaderCircle, RefreshCw, Settings2 } from 'lucide-react';
++import { Bell, Check, CircleCheck, LoaderCircle, RefreshCw, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+ import type { AnalysisMode, AnalysisModes } from '@/lib/types';
++import { displaySeverities, sensitivityOptions } from '@/lib/workspace-preferences';
++import type { NoticeKind, WorkspacePreferences } from '@/lib/workspace-preferences';
+ import './settings.css';
+ 
+ interface Props {
+@@ -12,36 +14,88 @@ interface Props {
+   onChange: (mode: AnalysisMode) => void;
+   onRetry: () => void;
+   storageError: boolean;
++  preferences: WorkspacePreferences;
++  preferencesReady: boolean;
++  onPreferences: (patch: Partial<WorkspacePreferences>) => void;
++  desktopPermission: NotificationPermission | 'unsupported';
++  desktopRequesting: boolean;
++  onDesktop: () => void;
+ }
+ 
+-export function SettingsView({ config, loading, error, selectedMode, onChange, onRetry, storageError }: Props) {
++const riskLabels = { critical: 'Критические', warning: 'Требуют внимания', low: 'Низкий риск', ok: 'Без замечаний' };
++const notices: { id: NoticeKind; title: string; description: string }[] = [
++  { id: 'completed', title: 'Анализ завершён', description: 'Документы готовы к просмотру.' },
++  { id: 'error', title: 'Ошибка проверки', description: 'Загрузка в очередь или обработка не удалась.' },
++  { id: 'critical', title: 'Критические риски', description: 'В результатах есть критические замечания.' },
++];
++
++export function SettingsView({ config, loading, error, selectedMode, onChange, onRetry, storageError,
++  preferences, preferencesReady, onPreferences, desktopPermission, desktopRequesting, onDesktop }: Props) {
+   const selected = config?.modes.find(mode => mode.id === selectedMode);
+-  return (
+-    <section className="secondary-view settings-view">
+-      <div className="view-title">
+-        <div><span className="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</span><h1>Настройки</h1><p>Выберите способ проверки документов для всех проектов.</p></div>
+-        <span className="settings-heading-icon"><Settings2 size={24} /></span>
+-      </div>
+-      <div className="analysis-settings-card">
+-        <fieldset className="analysis-mode-fieldset" disabled={loading || Boolean(error)} aria-describedby="analysis-settings-help">
+-          <legend>Режим анализа</legend>
+-          <p id="analysis-settings-help">Применяется при запуске и повторной проверке. Уже запущенный анализ продолжится в выбранном для него режиме.</p>
+-          {loading && <p className="settings-status" role="status"><LoaderCircle size={17} className="spin" />Загружаем доступные режимы…</p>}
+-          {!error && <div className="analysis-mode-options">
+-            {config?.modes.map(mode => (
+-              <label key={mode.id} className={`analysis-mode-option ${mode.id === selectedMode ? 'is-selected' : ''} ${!mode.available ? 'is-unavailable' : ''}`}>
+-                <input type="radio" name="analysis-mode" value={mode.id} checked={mode.id === selectedMode} disabled={!mode.available} onChange={() => onChange(mode.id)} />
+-                <span className="analysis-mode-copy"><strong>{mode.label}{!mode.available && <small>Недоступен</small>}</strong><span>{mode.description}</span></span>
+-                {mode.id === selectedMode && <Check size={19} aria-hidden="true" />}
+-              </label>
+-            ))}
+-          </div>}
++  const desktopEnabled = preferences.notifications.desktop && desktopPermission === 'granted';
++  return <section className="secondary-view settings-view">
++    <div className="view-title settings-title">
++      <div><h1>Настройки</h1><p>Проверка документов и отображение результатов.</p></div>
++      <span className="settings-autosave"><CircleCheck size={14} />Автосохранение</span>
++    </div>
++    <div className="settings-grid">
++      <section className="settings-card" aria-labelledby="mode-card-title">
++        <div className="settings-card-heading"><span className="settings-card-icon"><ShieldCheck size={17} /></span><h2 id="mode-card-title">Режим анализа</h2><small>01</small></div>
++        <p className="settings-card-description">Как система проверяет документы.</p>
++        <fieldset className="settings-fieldset" disabled={loading || Boolean(error)}>
++          <legend className="sr-only">Режим анализа</legend>
++          {loading && <p className="settings-status" role="status"><LoaderCircle size={15} className="spin" />Загружаем режимы…</p>}
++          {!error && config?.modes.map(mode => <label key={mode.id} className={`settings-choice${mode.id === selectedMode ? ' is-selected' : ''}${!mode.available ? ' is-unavailable' : ''}`}>
++            <input type="radio" name="analysis-mode" value={mode.id} checked={mode.id === selectedMode} disabled={!mode.available} onChange={() => onChange(mode.id)} />
++            <span><strong>{mode.id === 'llm' ? 'ИИ-анализ' : mode.label}{!mode.available && <small>Недоступен</small>}</strong><span>{mode.id === 'llm' ? 'Проверка смысла условий и возможных рисков.' : mode.id === 'keyword' ? 'Поиск фрагментов для ручной проверки.' : 'Выберите другой доступный режим.'}</span></span>
++            {mode.id === selectedMode && <Check size={15} />}
++          </label>)}
++        </fieldset>
++        {error && <div className="settings-error" role="alert"><p>Не удалось загрузить режимы.</p><button className="secondary-button" onClick={onRetry}><RefreshCw size={14} />Повторить</button></div>}
++        {!loading && !error && selectedMode && !selected?.available && <p className="settings-warning" role="alert">Выберите доступный режим, чтобы запустить анализ.</p>}
++        {config?.configuredModel && !error && <p className="settings-model">Модель: {config.configuredModel}</p>}
++      </section>
++      <section className="settings-card" aria-labelledby="risk-card-title">
++        <div className="settings-card-heading"><span className="settings-card-icon"><SlidersHorizontal size={17} /></span><h2 id="risk-card-title">Уровни риска</h2><small>02</small></div>
++        <p className="settings-card-description">Какие результаты показывать при открытии документа.</p>
++        <fieldset className="settings-fieldset" disabled={!preferencesReady}>
++          <legend className="sr-only">Уровни риска по умолчанию</legend>
++          <div className="settings-risk-levels">{displaySeverities.map(level => <label key={level} className={`settings-risk-choice ${level}${preferences.defaultSeverities.includes(level) ? ' is-selected' : ''}`}>
++            <input type="checkbox" checked={preferences.defaultSeverities.includes(level)} disabled={preferences.defaultSeverities.length === 1 && preferences.defaultSeverities[0] === level}
++              onChange={event => onPreferences({ defaultSeverities: event.target.checked ? [...preferences.defaultSeverities, level] : preferences.defaultSeverities.filter(value => value !== level) })} />
++            <i aria-hidden="true" /><span>{riskLabels[level]}</span>
++          </label>)}</div>
++        </fieldset>
++        <p className="settings-card-note">Изначально выбраны все уровни. Полный набор результатов всегда доступен в фильтре документа.</p>
++      </section>
++      <section className="settings-card" aria-labelledby="sensitivity-card-title">
++        <div className="settings-card-heading"><span className="settings-card-icon"><SlidersHorizontal size={17} /></span><h2 id="sensitivity-card-title">Чувствительность</h2><small>03</small></div>
++        <p className="settings-card-description">Внимание к потенциальным нарушениям.</p>
++        <fieldset className="settings-fieldset" disabled={!preferencesReady}>
++          <legend className="sr-only">Чувствительность проверки</legend>
++          {sensitivityOptions.map(option => <label key={option.id} className={`settings-choice${preferences.sensitivity === option.id ? ' is-selected' : ''}`}>
++            <input type="radio" name="analysis-sensitivity" value={option.id} checked={preferences.sensitivity === option.id} onChange={() => onPreferences({ sensitivity: option.id })} />
++            <span><strong>{option.label}</strong><span>{option.description}</span></span>{preferences.sensitivity === option.id && <Check size={15} />}
++          </label>)}
++        </fieldset>
++        <p className="settings-card-note">Применяется при следующем запуске и повторной проверке.{selectedMode === 'keyword' && ' В поиске по словам меняется широта совпадений.'}</p>
++      </section>
++      <section className="settings-card" aria-labelledby="notifications-card-title">
++        <div className="settings-card-heading"><span className="settings-card-icon"><Bell size={17} /></span><h2 id="notifications-card-title">Уведомления</h2><small>04</small></div>
++        <p className="settings-card-description">Сообщения о результатах и проблемах проверки.</p>
++        <fieldset className="settings-fieldset" disabled={!preferencesReady}>
++          <legend className="sr-only">События для уведомлений</legend>
++          {notices.map(notice => <label key={notice.id} className="settings-notification-row">
++            <span><strong>{notice.title}</strong><span>{notice.description}</span></span>
++            <input type="checkbox" className="settings-switch" checked={preferences.notifications[notice.id]} onChange={event => onPreferences({ notifications: { ...preferences.notifications, [notice.id]: event.target.checked } })} />
++          </label>)}
+         </fieldset>
+-        {error && <div className="settings-error" role="alert"><p>{error}</p><button className="secondary-button" onClick={onRetry}><RefreshCw size={15} />Повторить</button></div>}
+-        {!loading && !error && selectedMode && !selected?.available && <p className="settings-warning" role="alert">Выбранный режим недоступен. Выберите доступный вариант, чтобы запустить проверку.</p>}
+-        {config?.configuredModel && !error && <p className="settings-model">Модель: <strong>{config.configuredModel}</strong></p>}
+-        <p className="settings-save-note" role="status">{storageError ? 'Браузер не разрешил сохранить настройку. Выбор действует до перезагрузки страницы.' : 'Выбор сохраняется автоматически в этом браузере.'}</p>
+-      </div>
+-    </section>
+-  );
++        <div className="settings-desktop-row"><span>Уведомления браузера</span><button type="button" className="secondary-button" disabled={!preferencesReady || desktopRequesting || desktopPermission === 'unsupported' || desktopPermission === 'denied'} onClick={onDesktop}>
++          {desktopRequesting ? 'Подключаем…' : desktopPermission === 'unsupported' ? 'Недоступны' : desktopPermission === 'denied' ? 'Заблокированы' : desktopEnabled ? 'Выключить' : 'Включить'}
++        </button></div>
++        <p className="settings-card-note">Уведомления приходят, пока сайт открыт.{desktopPermission === 'denied' && ' Разрешение можно изменить в настройках браузера.'}</p>
++      </section>
++    </div>
++    <p className={`settings-save-note${storageError ? ' has-error' : ''}`} role="status">{storageError ? 'Браузер не разрешил сохранить настройки. Изменения действуют до перезагрузки страницы.' : 'Настройки автоматически сохраняются в этом браузере.'}</p>
++  </section>;
+ }
+diff --git a/frontend/components/settings.css b/frontend/components/settings.css
+index db7334f..c7c7e1a 100644
+--- a/frontend/components/settings.css
++++ b/frontend/components/settings.css
+@@ -1,29 +1,56 @@
+-.dashboard-shell .settings-view { max-width: 920px; }
+-.dashboard-shell .settings-heading-icon { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; color: #697064; }
+-.dashboard-shell .analysis-settings-card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+-.dashboard-shell .analysis-mode-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+-.dashboard-shell .analysis-mode-fieldset legend { margin-bottom: 6px; padding: 0; font-size: 1rem; font-weight: 700; }
+-.dashboard-shell #analysis-settings-help { max-width: 760px; color: #626b5d; font-size: .875rem; line-height: 1.45; }
+-.dashboard-shell .analysis-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+-.dashboard-shell .analysis-mode-option { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #d9ddd4; border-radius: 8px; cursor: pointer; }
+-.dashboard-shell .analysis-mode-option:hover { border-color: #929a88; }
+-.dashboard-shell .analysis-mode-option.is-selected { border-color: #657254; box-shadow: inset 0 0 0 1px #657254; background: #f7f9f4; }
+-.dashboard-shell .analysis-mode-option.is-unavailable { cursor: not-allowed; background: #f7f7f5; }
+-.dashboard-shell .analysis-mode-option input { width: 17px; height: 17px; margin: 2px 0 0; flex-shrink: 0; accent-color: #596b47; }
+-.dashboard-shell .analysis-mode-option:focus-within { outline: 2px solid #657254; outline-offset: 3px; }
+-.dashboard-shell .analysis-mode-option > svg { flex-shrink: 0; color: #596b47; }
+-.dashboard-shell .analysis-mode-copy { display: grid; flex: 1; gap: 5px; min-width: 0; }
+-.dashboard-shell .analysis-mode-copy strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: .875rem; font-weight: 700; }
+-.dashboard-shell .analysis-mode-copy strong small { padding: 2px 7px; border-radius: 4px; background: #e9eae6; font-size: .75rem; font-weight: 700; color: #62695b; }
+-.dashboard-shell .analysis-mode-copy > span { font-size: .8125rem; color: #626b5d; line-height: 1.45; }
+-.dashboard-shell .settings-status, .dashboard-shell .settings-error { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 18px; font-size: .875rem; }
+-.dashboard-shell .settings-error, .dashboard-shell .settings-warning { color: #922b29; }
+-.dashboard-shell .settings-warning { margin-top: 18px; line-height: 1.6; font-size: .875rem; }
+-.dashboard-shell .settings-model { margin-top: 12px; font-size: .8125rem; color: #626b5d; overflow-wrap: anywhere; }
+-.dashboard-shell .settings-save-note { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: #626b5d; font-size: .8125rem; }
++.dashboard-shell .settings-view { max-width: 1080px; }
++.dashboard-shell .settings-title { margin-bottom: 22px; }
++.dashboard-shell .settings-autosave { display: flex; align-items: center; gap: 6px; color: #8b8b8b; font-size: .6875rem; white-space: nowrap; }
++.dashboard-shell .settings-autosave svg { color: #609474; }
++.dashboard-shell .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
++.dashboard-shell .settings-card { padding: 18px; min-width: 0; border: 1px solid #e6e6e6; border-radius: 8px; background: #fff; }
++.dashboard-shell .settings-card-heading { display: flex; align-items: center; gap: 9px; }
++.dashboard-shell .settings-card-icon { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid #eaeaea; border-radius: 6px; color: #595959; flex-shrink: 0; }
++.dashboard-shell .settings-card-heading h2 { margin: 0; font-size: .875rem; color: #292929; letter-spacing: -.15px; }
++.dashboard-shell .settings-card-heading > small { margin-left: auto; font-size: .625rem; color: #adadad; }
++.dashboard-shell .settings-card-description { margin: 10px 0 14px; color: #929292; font-size: .75rem; line-height: 1.6; }
++.dashboard-shell .settings-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
++.dashboard-shell .settings-choice { display: flex; align-items: flex-start; gap: 8px; padding: 10px 11px; border: 1px solid #ededed; border-radius: 5px; cursor: pointer; }
++.dashboard-shell .settings-choice + .settings-choice { margin-top: 6px; }
++.dashboard-shell .settings-choice.is-selected { border-color: #515151; background: #fafafa; }
++.dashboard-shell .settings-choice.is-unavailable { opacity: .55; cursor: not-allowed; }
++.dashboard-shell .settings-choice input { width: 13px; height: 13px; margin: 1px 0 0; flex-shrink: 0; accent-color: #292929; }
++.dashboard-shell .settings-choice > span { min-width: 0; flex: 1; }
++.dashboard-shell .settings-choice strong, .dashboard-shell .settings-notification-row strong { display: block; font-size: .75rem; line-height: 1.4; color: #424242; }
++.dashboard-shell .settings-choice strong small { font-size: .625rem; padding: 1px 4px; margin-left: 5px; background: #eeeeee; border-radius: 3px; }
++.dashboard-shell .settings-choice > span > span, .dashboard-shell .settings-notification-row > span > span { display: block; margin-top: 3px; color: #999; font-size: .6875rem; line-height: 1.5; }
++.dashboard-shell .settings-choice > svg { color: #383838; flex-shrink: 0; }
++.dashboard-shell .settings-choice:focus-within, .dashboard-shell .settings-risk-choice:focus-within { outline: 2px solid #707070; outline-offset: 2px; }
++.dashboard-shell .settings-risk-levels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
++.dashboard-shell .settings-risk-choice { display: flex; align-items: center; gap: 7px; padding: 12px 10px; border: 1px solid #eaeaea; border-radius: 5px; color: #8a8a8a; font-size: .6875rem; cursor: pointer; }
++.dashboard-shell .settings-risk-choice.is-selected { border-color: #a8a8a8; color: #404040; background: #fafafa; }
++.dashboard-shell .settings-risk-choice input { width: 12px; height: 12px; margin: 0; accent-color: #292929; flex-shrink: 0; }
++.dashboard-shell .settings-risk-choice i { width: 5px; height: 5px; background: #8c8c8c; border-radius: 50%; flex-shrink: 0; }
++.dashboard-shell .settings-risk-choice.critical i { background: #cf5047; }
++.dashboard-shell .settings-risk-choice.warning i { background: #d0a637; }
++.dashboard-shell .settings-risk-choice.low i, .dashboard-shell .settings-risk-choice.ok i { background: #5c9c77; }
++.dashboard-shell .settings-card-note { margin: 12px 0 0; color: #999; font-size: .6875rem; line-height: 1.6; }
++.dashboard-shell .settings-notification-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; cursor: pointer; }
++.dashboard-shell .settings-notification-row + .settings-notification-row { border-top: 1px solid #f0f0f0; }
++.dashboard-shell .settings-notification-row > span { flex: 1; min-width: 0; }
++.dashboard-shell .settings-switch { appearance: none; width: 28px; height: 16px; flex-shrink: 0; margin: 0; border: 1px solid #d7d7d7; border-radius: 8px; background: #e8e8e8; position: relative; cursor: pointer; transition: background .15s; }
++.dashboard-shell .settings-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #0002; transition: transform .15s; }
++.dashboard-shell .settings-switch:checked { background: #343434; border-color: #343434; }
++.dashboard-shell .settings-switch:checked::after { transform: translateX(12px); }
++.dashboard-shell .settings-switch:disabled { opacity: .5; cursor: not-allowed; }
++.dashboard-shell .settings-desktop-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; margin-top: 8px; border-top: 1px solid #ededed; color: #828282; font-size: .6875rem; }
++.dashboard-shell .settings-desktop-row .secondary-button { min-height: 26px; padding: 5px 9px; font-size: .625rem; }
++.dashboard-shell .settings-save-note { margin-top: 18px; color: #999; font-size: .6875rem; line-height: 1.5; }
++.dashboard-shell .settings-save-note.has-error, .dashboard-shell .settings-warning, .dashboard-shell .settings-error { color: #ae3b34; }
++.dashboard-shell .settings-warning, .dashboard-shell .settings-status, .dashboard-shell .settings-error { margin-top: 12px; font-size: .75rem; line-height: 1.5; }
++.dashboard-shell .settings-status { display: flex; align-items: center; gap: 7px; }
++.dashboard-shell .settings-error p { margin: 0 0 8px; }
++.dashboard-shell .settings-model { margin: 12px 0 0; font-size: .6875rem; color: #969696; overflow-wrap: anywhere; }
+ .dashboard-shell .project-analysis-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0; font-size: .8125rem; color: #626b5d; }
+ .dashboard-shell .project-analysis-summary button { font-size: .8125rem; text-decoration: underline; text-underline-offset: 3px; }
+-@media (max-width: 700px) {
+-  .dashboard-shell .analysis-mode-options { grid-template-columns: 1fr; }
+-  .dashboard-shell .analysis-settings-card { padding: 14px; }
++@media (max-width: 760px) {
++  .dashboard-shell .settings-grid { grid-template-columns: 1fr; }
++  .dashboard-shell .settings-card { padding: 15px; }
++  .dashboard-shell .settings-title { gap: 12px; }
++  .dashboard-shell .settings-autosave { display: none; }
+ }
+diff --git a/frontend/components/use-analysis-notifications.ts b/frontend/components/use-analysis-notifications.ts
+new file mode 100644
+index 0000000..9ddd77f
+--- /dev/null
++++ b/frontend/components/use-analysis-notifications.ts
+@@ -0,0 +1,64 @@
++'use client';
++
++import { useEffect, useRef, useState } from 'react';
++import { analysisEvents, analysisSnapshot } from '@/lib/analysis-notifications';
++import type { AnalysisNotice, AnalysisSnapshot } from '@/lib/analysis-notifications';
++import type { Project } from '@/lib/types';
++import type { WorkspacePreferences } from '@/lib/workspace-preferences';
++
++type DesktopPermission = NotificationPermission | 'unsupported';
++const browserPermission = (): DesktopPermission =>
++  window.isSecureContext && 'Notification' in window ? Notification.permission : 'unsupported';
++
++export function useAnalysisNotifications(projects: Project[], ready: boolean, preferences: WorkspacePreferences,
++  onPreferences: (patch: Partial<WorkspacePreferences>) => void) {
++  const [notices, setNotices] = useState<AnalysisNotice[]>([]);
++  const [permission, setPermission] = useState<DesktopPermission>('unsupported');
++  const [requesting, setRequesting] = useState(false);
++  const previous = useRef<AnalysisSnapshot | null>(null);
++  const permissionLock = useRef(false);
++  useEffect(() => {
++    const sync = () => setPermission(browserPermission());
++    sync();
++    window.addEventListener('focus', sync);
++    return () => window.removeEventListener('focus', sync);
++  }, []);
++  useEffect(() => {
++    if (!ready) return;
++    const current = analysisSnapshot(projects);
++    const fresh = previous.current ? analysisEvents(previous.current, current)
++      .filter(notice => preferences.notifications[notice.kind]) : [];
++    previous.current = current;
++    if (!fresh.length) return;
++    setNotices(items => [...fresh.reverse(), ...items].slice(0, 30));
++    if (preferences.notifications.desktop && browserPermission() === 'granted') {
++      for (const notice of fresh) {
++        try { new Notification(notice.title, { body: notice.body, icon: '/favicon.svg', tag: notice.id }); }
++        catch { /* Уведомление остаётся доступным на сайте, включая мобильные браузеры. */ }
++      }
++    }
++  }, [projects, ready, preferences.notifications]);
++
++  async function toggleDesktop() {
++    if (permissionLock.current) return;
++    if (preferences.notifications.desktop && browserPermission() === 'granted') {
++      onPreferences({ notifications: { ...preferences.notifications, desktop: false } });
++      return;
++    }
++    if (browserPermission() === 'unsupported' || browserPermission() === 'denied') return;
++    permissionLock.current = true;
++    setRequesting(true);
++    try {
++      const granted = await Notification.requestPermission();
++      setPermission(granted);
++      onPreferences({ notifications: { ...preferences.notifications, desktop: granted === 'granted' } });
++    } catch { setPermission(browserPermission()); }
++    finally { permissionLock.current = false; setRequesting(false); }
++  }
++
++  return { notices, permission, requesting, toggleDesktop,
++    unread: notices.filter(notice => !notice.read).length,
++    markRead: (id: string) => setNotices(items => items.map(item => item.id === id ? { ...item, read: true } : item)),
++    markAllRead: () => setNotices(items => items.map(item => ({ ...item, read: true }))),
++  };
++}
+diff --git a/frontend/components/use-workspace-preferences.ts b/frontend/components/use-workspace-preferences.ts
+new file mode 100644
+index 0000000..3350dd3
+--- /dev/null
++++ b/frontend/components/use-workspace-preferences.ts
+@@ -0,0 +1,30 @@
++'use client';
++
++import { useCallback, useEffect, useState } from 'react';
++import { defaultPreferences, normalizePreferences, parsePreferences, preferenceKey } from '@/lib/workspace-preferences';
++import type { WorkspacePreferences } from '@/lib/workspace-preferences';
++
++export function useWorkspacePreferences() {
++  const [preferences, setPreferences] = useState(defaultPreferences);
++  const [ready, setReady] = useState(false);
++  const [storageError, setStorageError] = useState(false);
++  useEffect(() => {
++    try { setPreferences(parsePreferences(window.localStorage.getItem(preferenceKey))); }
++    catch { setStorageError(true); }
++    setReady(true);
++    const sync = (event: StorageEvent) => {
++      if (event.key === preferenceKey || event.key === null) setPreferences(parsePreferences(event.newValue));
++    };
++    window.addEventListener('storage', sync);
++    return () => window.removeEventListener('storage', sync);
++  }, []);
++  useEffect(() => {
++    if (!ready) return;
++    try { window.localStorage.setItem(preferenceKey, JSON.stringify(preferences)); setStorageError(false); }
++    catch { setStorageError(true); }
++  }, [preferences, ready]);
++  const update = useCallback((patch: Partial<WorkspacePreferences>) => {
++    setPreferences(previous => normalizePreferences({ ...previous, ...patch }));
++  }, []);
++  return { preferences, ready, storageError, update };
++}
+diff --git a/frontend/components/workspace.tsx b/frontend/components/workspace.tsx
+index e18e8d5..9421fb0 100644
+--- a/frontend/components/workspace.tsx
++++ b/frontend/components/workspace.tsx
+@@ -15,6 +15,10 @@ import {useWorkspaceNavigation} from './use-workspace-navigation';
+ import {useLiveDocument,useWorkspaceData} from './use-workspace-data';
+ import {useAnalysisModes} from './use-analysis-modes';
+ import {SettingsView} from './settings-view';
++import {useWorkspacePreferences} from './use-workspace-preferences';
++import {useAnalysisNotifications} from './use-analysis-notifications';
++import {NotificationCenter} from './notification-center';
++import type {AnalysisNotice} from '@/lib/analysis-notifications';
+ import './dashboard.css';
+ import './integration.css';
+ 
+@@ -26,6 +30,8 @@ export function Workspace() {
+   const {view,page,projectId,documentId,findingId,navigate}=useWorkspaceNavigation();
+   const data=useWorkspaceData();
+   const analysisModes=useAnalysisModes();
++  const preferences=useWorkspacePreferences();
++  const notifications=useAnalysisNotifications(data.projects,!data.loading&&preferences.ready,preferences.preferences,preferences.update);
+   const selectedAnalysisMode=analysisModes.selectedMode;
+   const {projects,rules,user,reportModes}=data;
+   const live=useLiveDocument(view==='document'?documentId:null,page);
+@@ -48,7 +54,11 @@ export function Workspace() {
+   const [saving,setSaving]=useState(false);
+   const [modalError,setModalError]=useState<string|null>(null);
+   const [actionError,setActionError]=useState<string|null>(null);
+-  const [toast,setToast]=useState('');
++  const [toast,setToastValue]=useState('');
++  const [toastKind,setToastKind]=useState<'completed'|'error'|'critical'>('completed');
++  const latestNotice=useRef<string|null>(null);
++  function setToast(message:string){setToastValue(message);setToastKind('completed');}
++  useEffect(()=>{const notice=notifications.notices[0];if(notice&&!notice.read&&latestNotice.current!==notice.id){latestNotice.current=notice.id;setToastValue(`${notice.title}: ${notice.body}`);setToastKind(notice.kind);}},[notifications.notices]);
+   const [reportMode,setReportMode]=useState<ReportModeId>('detailed');
+   const [reportFormat,setReportFormat]=useState<ReportFormat>('docx');
+   const [includeDismissed,setIncludeDismissed]=useState(false);
+@@ -59,6 +69,7 @@ export function Workspace() {
+   const categories=[...new Set(rules.map(rule=>rule.category))];
+   const modeInfo=reportModes.find(mode=>mode.id===reportMode);
+   const setView=(next:View)=>{navigate({view:next});setPopover(null);setSearchOpen(false);setActionError(null);};
++  const openNotice=(notice:AnalysisNotice)=>navigate({view:notice.documentId?'document':'project',projectId:notice.projectId,documentId:notice.documentId,page:1,findingId:null});
+   const openProject=(project:Project)=>navigate({view:'project',projectId:project.id,documentId:null,page:1,findingId:null});
+   const openDocument=(document:DocumentInfo)=>navigate({view:'document',projectId,documentId:document.id,page:1,findingId:null});
+   const navigatePage=(next:number)=>navigate({page:Math.max(1,Math.min(activeDocument?.totalPages||1,next)),findingId:null});
+@@ -117,8 +128,8 @@ export function Workspace() {
+       setToast('Файл удалён');
+     }catch(cause){data.refresh();throw cause;}
+   }
+-  async function startAnalysis(mode:AnalysisMode){try{await api.startProjectAnalysis(projectId,{analysisMode:mode});setToast('Анализ запущен');}finally{refreshAll();}}
+-  async function rerunProject(mode:AnalysisMode){try{await api.rerunProject(projectId,{analysisMode:mode});setToast('Повторная проверка запущена');}finally{refreshAll();}}
++  async function startAnalysis(mode:AnalysisMode){try{await api.startProjectAnalysis(projectId,{analysisMode:mode,sensitivity:preferences.preferences.sensitivity});setToast('Анализ запущен');}finally{refreshAll();}}
++  async function rerunProject(mode:AnalysisMode){try{await api.rerunProject(projectId,{analysisMode:mode,sensitivity:preferences.preferences.sensitivity});setToast('Повторная проверка запущена');}finally{refreshAll();}}
+   async function toggleRule(rule:CheckRule){await api.updateRule(rule.id,{enabled:!rule.enabled});refreshAll();}
+   async function saveRule(draft:RuleDraft){try{if(ruleDialog?.mode==='edit')await api.updateRule(ruleDialog.rule.id,draft);else await api.createRule(draft);refreshAll();setRuleDialog(null);setToast('Правило сохранено');}catch(cause){return errorMessage(cause);}}
+   async function deleteRule(){if(ruleDialog?.mode!=='delete')return;try{await api.deleteRule(ruleDialog.rule.id);refreshAll();setRuleDialog(null);setToast('Правило удалено');}catch(cause){return errorMessage(cause);}}
+@@ -133,7 +144,7 @@ export function Workspace() {
+       {view!=='document'?<label className="dashboard-search"><Search size={15}/><input ref={searchRef} aria-label="Поиск проектов и документов" placeholder="Поиск проектов и документов" value={dashboardQuery} onChange={event=>{setDashboardQuery(event.target.value);if(view!=='documents')setView('documents');}}/><kbd>⌘ K</kbd>{dashboardQuery&&<button aria-label="Очистить поиск" onClick={()=>setDashboardQuery('')}><X size={13}/></button>}</label>:<div className="global-search"><Search size={17}/><input ref={searchRef} maxLength={200} placeholder="Поиск по документу…" aria-label="Поиск по документу" value={search} onFocus={()=>setSearchOpen(true)} onChange={event=>{setSearch(event.target.value);setSearchOpen(true);}}/>{search?<button aria-label="Очистить поиск" onClick={()=>setSearch('')}><X size={15}/></button>:<kbd>⌘ K</kbd>}
+       {searchOpen&&search.trim().length>=2&&<div className="search-results popover"><div className="popover-heading">{searchLoading?'Ищем фрагменты…':`Найдено фрагментов: ${searchResults?.total??0}`}</div>{searchError&&<p role="alert" className="empty-small">{searchError}</p>}{searchResults?.hits.map((hit,index)=><button key={`${hit.page}-${index}`} onClick={()=>{navigatePage(hit.page);setSearchOpen(false);}}><FileText size={17}/><span><strong>Страница {hit.page}{hit.clause?` · п. ${hit.clause}`:''}</strong><small>{hit.snippet}</small></span><ChevronRight size={15}/></button>)}{!searchLoading&&!searchError&&searchResults?.total===0&&<p className="muted empty-small">Ничего не найдено.</p>}</div>}</div>}
+       <span className="dashboard-topbar-caption">{view==='document'?'ПРОВЕРКА ДОКУМЕНТА':view==='documents'?'ДОКУМЕНТЫ':'РАБОЧЕЕ ПРОСТРАНСТВО'}</span>
+-      <div className="topbar-right"><IconButton label="Обновить данные" onClick={refreshAll}><RefreshCw size={18}/></IconButton><div className="popover-anchor"><button className="profile-button" aria-label="Профиль" aria-expanded={popover==='profile'} onClick={()=>setPopover(popover==='profile'?null:'profile')}><span className="avatar">{user?.initials||'…'}</span><ChevronDown size={15}/></button>{popover==='profile'&&<div className="popover profile-popover"><strong>{user?.fullName||'Профиль недоступен'}</strong><span className="muted">{user?.email}</span><div className="popover-divider"/><button onClick={()=>openModal('info')}><CircleHelp size={17}/>О рабочем пространстве</button></div>}</div></div>
++      <div className="topbar-right"><NotificationCenter notices={notifications.notices} unread={notifications.unread} onRead={notifications.markRead} onReadAll={notifications.markAllRead} onOpen={openNotice}/><IconButton label="Обновить данные" onClick={refreshAll}><RefreshCw size={18}/></IconButton><div className="popover-anchor"><button className="profile-button" aria-label="Профиль" aria-expanded={popover==='profile'} onClick={()=>setPopover(popover==='profile'?null:'profile')}><span className="avatar">{user?.initials||'…'}</span><ChevronDown size={15}/></button>{popover==='profile'&&<div className="popover profile-popover"><strong>{user?.fullName||'Профиль недоступен'}</strong><span className="muted">{user?.email}</span><div className="popover-divider"/><button onClick={()=>openModal('info')}><CircleHelp size={17}/>О рабочем пространстве</button></div>}</div></div>
+     </header>
+     {(view==='project'||view==='document')&&<div className="project-breadcrumb"><button onClick={()=>setView('documents')}><Files size={14}/>Документы</button><ChevronRight size={13}/>{view==='document'?<><button onClick={()=>setView('project')}>{activeProject?.title||'Проект'}</button><ChevronRight size={13}/><span>Просмотр документа</span></>:<span>{activeProject?.title||'Загрузка проекта…'}</span>}</div>}
+     {view==='document'&&activeDocument&&<section className="document-heading" aria-label="Текущий документ"><div className="document-icon"><FileText size={29}/><span>{activeDocument.type?.toUpperCase()||'ФАЙЛ'}</span></div><div className="document-heading-text"><span className="analysis-eyebrow">РЕЗУЛЬТАТЫ АНАЛИЗА</span><div className="document-title-line"><h1 title={activeDocument.name}>{activeDocument.name}</h1></div><div className="document-heading-meta"><p>Страниц: {activeDocument.totalPages} <span>·</span> Проверено правил: {activeDocument.rulesChecked}</p><small>{dateTime(activeDocument.updatedAt||activeDocument.createdAt)} · {activeDocument.label}</small></div></div><div className="document-actions"><button className="primary-button" disabled={activeDocument.phase!=='ready'||!reportModes.length} onClick={()=>openModal('report')}><Download size={17}/><span>Скачать отчёт</span></button><div className="popover-anchor"><IconButton label="Действия с документом" className="outlined" onClick={()=>setPopover(popover==='document'?null:'document')}><EllipsisVertical size={20}/></IconButton>{popover==='document'&&<div className="popover document-menu"><button onClick={()=>{setDraftName(activeDocument.name);openModal('rename');}}><Pencil size={16}/>Переименовать</button></div>}</div></div></section>}
+@@ -142,10 +153,10 @@ export function Workspace() {
+       {data.error&&<ErrorNotice message={data.error} onRetry={data.refresh}/>}{actionError&&<ErrorNotice message={actionError}/>}
+       {data.loading&&view!=='settings'?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
+       {view==='documents'&&(!data.error||projects.length>0)&&<ProjectsView projects={projects} onOpen={openProject} onRename={project=>setProjectDialog({mode:'rename',project})} onDelete={project=>setProjectDialog({mode:'delete',project})} onCreate={()=>openModal('create-project')} query={dashboardQuery} onQueryChange={setDashboardQuery}/>}
+-      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onRename={project=>setProjectDialog({mode:'rename',project})} onDelete={project=>setProjectDialog({mode:'delete',project})} onUpload={uploadFiles} onRemoveFile={removeFile} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
+-      {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {activeDocument?.phase==='ready'&&activeDocument.errorMessage&&<ErrorNotice message={`${live.findings.length?'Повторная проверка не удалась. Показаны предыдущие результаты. ':''}${activeDocument.errorMessage}`}/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={visibleFindings} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
++      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onRemoveFile={removeFile} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
++      {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {activeDocument?.phase==='ready'&&activeDocument.errorMessage&&<ErrorNotice message={activeDocument.errorMessage}/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={visibleFindings} defaultSeverities={preferences.preferences.defaultSeverities} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
+       {view==='rules'&&<RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule}/>}
+-      {view==='settings'&&<SettingsView config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError}/>}
++      {view==='settings'&&<SettingsView config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError||preferences.storageError} preferences={preferences.preferences} preferencesReady={preferences.ready} onPreferences={preferences.update} desktopPermission={notifications.permission} desktopRequesting={notifications.requesting} onDesktop={()=>void notifications.toggleDesktop()}/>}
+       </>}
+     </main>
+     <footer className="statusbar"><span><span className="local-indicator"/>{data.error?'Нет связи с API':'Обработка на сервере'}</span><span><ShieldCheck size={13}/>Решения сохраняются в базе данных</span><button onClick={()=>openModal('info')}><CircleHelp size={13}/>Помощь</button></footer>
+@@ -153,7 +164,7 @@ export function Workspace() {
+     {modal==='create-project'&&<NewProjectDialog onCreate={createProject} onClose={()=>setModal(null)}/>}
+     {ruleDialog&&ruleDialog.mode!=='delete'&&<RuleEditor rule={ruleDialog.mode==='edit'?ruleDialog.rule:null} categories={categories} onSave={saveRule} onClose={()=>setRuleDialog(null)}/>}
+     {ruleDialog?.mode==='delete'&&<DeleteRuleDialog rule={ruleDialog.rule} onConfirm={deleteRule} onClose={()=>setRuleDialog(null)}/>}
+-    {toast&&<div className="toast" role="status"><span><Check size={16}/></span>{toast}<button aria-label="Скрыть уведомление" onClick={()=>setToast('')}><X size={16}/></button></div>}
++    {toast&&<div className={`toast notice-${toastKind}`} role="status"><span>{toastKind==='completed'?<Check size={16}/>:<AlertCircle size={16}/>}</span>{toast}<button aria-label="Скрыть уведомление" onClick={()=>setToast('')}><X size={16}/></button></div>}
+     {modal==='rename'&&<Modal title="Переименовать документ" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={renameDocument}><label className="form-label" htmlFor="document-name">Название документа</label><div className="name-input"><input id="document-name" autoFocus required disabled={saving} maxLength={255} value={draftName} onChange={event=>setDraftName(event.target.value)}/></div>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!draftName.trim()}>{saving?'Сохраняем…':'Сохранить'}</button></div></form></Modal>}
+     {modal==='report'&&<Modal title="Скачать отчёт" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={exportReport}><label className="form-label" htmlFor="report-mode">Содержание отчёта</label><select id="report-mode" className="form-select" disabled={saving} value={reportMode} onChange={event=>{const value=event.target.value as ReportModeId;setReportMode(value);setReportFormat((reportModes.find(item=>item.id===value)?.formats[0]||'docx') as ReportFormat);}}>{reportModes.map(mode=><option key={mode.id} value={mode.id}>{mode.title}</option>)}</select><p className="report-description">{modeInfo?.description}</p><label className="form-label" htmlFor="report-format">Формат</label><select id="report-format" className="form-select" disabled={saving} value={reportFormat} onChange={event=>setReportFormat(event.target.value as ReportFormat)}>{modeInfo?.formats.map(format=><option key={format} value={format}>{format.toUpperCase()}</option>)}</select><label className="report-option"><input type="checkbox" disabled={saving} checked={includeDismissed} onChange={event=>setIncludeDismissed(event.target.checked)}/>Включить отклонённые замечания</label>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!modeInfo}>{saving?'Формируем отчёт…':'Скачать'}</button></div></form></Modal>}
+     {modal==='info'&&<Modal title="О рабочем пространстве" onClose={()=>setModal(null)}><div className="info-content"><p>Создайте проект, загрузите документы, нажмите «Начать анализ» и дождитесь завершения проверки. Файлы и решения по замечаниям сохраняются на сервере.</p><p>Откройте документ, чтобы сопоставить замечания с исходным текстом, принять или отклонить их и скачать отчёт. Поиск работает по всем страницам.</p><p>Для документов из ZIP доступен отдельный просмотр. Повторная проверка использует текущие включённые правила. Источник каждого результата указан в подробностях замечания.</p><p>Текущий профиль предоставляется API; вход и управление доступом в этой версии не реализованы.</p></div><div className="modal-actions"><button className="primary-button" onClick={()=>setModal(null)}>Понятно</button></div></Modal>}
+diff --git a/frontend/lib/analysis-notifications.ts b/frontend/lib/analysis-notifications.ts
+new file mode 100644
+index 0000000..41ad12c
+--- /dev/null
++++ b/frontend/lib/analysis-notifications.ts
+@@ -0,0 +1,60 @@
++import type { ProcessingPhase, Project } from './types';
++import type { NoticeKind } from './workspace-preferences';
++
++interface FileSnapshot {
++  phase: ProcessingPhase;
++  error: string | null;
++  critical: number;
++  name: string;
++  projectId: string;
++  projectTitle: string;
++  documentId: string | null;
++}
++export type AnalysisSnapshot = Map<string, FileSnapshot>;
++export interface AnalysisNotice {
++  id: string;
++  kind: NoticeKind;
++  title: string;
++  body: string;
++  projectId: string;
++  fileId: string;
++  documentId: string | null;
++  createdAt: number;
++  read: boolean;
++}
++
++export function analysisSnapshot(projects: Project[]): AnalysisSnapshot {
++  return new Map(projects.flatMap(project => project.files.map(file => {
++    const errors = file.documents.filter(document => document.phase === 'failed' || document.errorMessage);
++    const error = file.errorMessage || errors.map(document => document.errorMessage || `${document.name}: ошибка проверки`).join('; ')
++      || (file.phase === 'failed' ? 'Не удалось выполнить анализ.' : null);
++    const document = file.documents.find(document => document.phase === 'ready' && document.counts.critical > 0)
++      ?? (file.documents.length === 1 && file.documents[0].phase === 'ready' ? file.documents[0] : null);
++    return [file.id, { phase: file.phase, error, critical: file.counts.critical, name: file.name,
++      projectId: project.id, projectTitle: project.title, documentId: document?.id ?? null }] as const;
++  })));
++}
++
++export function analysisEvents(previous: AnalysisSnapshot, current: AnalysisSnapshot, now = Date.now()): AnalysisNotice[] {
++  const notices: AnalysisNotice[] = [];
++  for (const [fileId, file] of current) {
++    const before = previous.get(fileId);
++    if (!before) continue; // Не сообщаем о старых результатах при открытии сайта.
++    const wasRunning = before.phase === 'uploaded' || before.phase === 'queued' || before.phase === 'processing';
++    const finished = file.phase === 'ready' || file.phase === 'failed';
++    const push = (kind: NoticeKind, title: string, body: string) => notices.push({
++      id: `${fileId}:${kind}:${now}`, kind, title, body, projectId: file.projectId, fileId,
++      documentId: file.documentId, createdAt: now, read: false,
++    });
++    if (finished && file.error && (wasRunning || file.error !== before.error)) {
++      push('error', 'Ошибка анализа', `${file.name} · ${file.projectTitle}. ${file.error}`);
++    }
++    if (wasRunning && file.phase === 'ready' && !file.error) {
++      push('completed', 'Анализ завершён', `${file.name} · ${file.projectTitle}`);
++    }
++    if (wasRunning && file.phase === 'ready' && file.critical > 0) {
++      push('critical', 'Критические риски в документе', `${file.name}: ${file.critical} · ${file.projectTitle}`);
++    }
++  }
++  return notices;
++}
+diff --git a/frontend/lib/api-types.ts b/frontend/lib/api-types.ts
+index 81fba98..537d539 100644
+--- a/frontend/lib/api-types.ts
++++ b/frontend/lib/api-types.ts
+@@ -1,5 +1,5 @@
+ /** HTTP payloads from backend/app/schemas.py. Keep snake_case at this boundary. */
+-import type { AnalysisMode, AnalysisModeOption, Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
++import type { AnalysisMode, AnalysisModeOption, AnalysisSensitivity, Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
+ 
+ export interface AnalysisModesDto {
+   default_mode: AnalysisMode;
+@@ -10,6 +10,7 @@ export interface AnalysisModesDto {
+ export interface DocumentDto {
+   id: string; analysis_id: string; file_name: string; relative_path: string | null;
+   analysis_mode: AnalysisMode | null;
++  analysis_sensitivity?: AnalysisSensitivity | null;
+   file_type: string | null; file_size: number | null; status: string; phase: ProcessingPhase;
+   label: string; progress: number; total_pages: number; is_scanned: boolean; ocr_pages: number;
+   ocr_confidence: number | null; law_type: string | null; risk_score: number | null;
+diff --git a/frontend/lib/api.ts b/frontend/lib/api.ts
+index 3644dbf..3f3f250 100644
+--- a/frontend/lib/api.ts
++++ b/frontend/lib/api.ts
+@@ -3,13 +3,13 @@ import type {
+   ProjectFileDto, RuleDto, UploadDto, UserDto,
+ } from './api-types';
+ import type {
+-  AnalysisMode, AnalysisModes, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
++  AnalysisMode, AnalysisModes, AnalysisSensitivity, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
+   ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User,
+ } from './types';
+ import { reportFilename, saveDownload } from './report';
+ 
+ export interface RequestOptions { signal?: AbortSignal }
+-export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode }
++export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity }
+ export interface ReportOptions extends RequestOptions { mode?: string; format?: string; includeDismissed?: boolean }
+ export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
+ export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
+@@ -128,6 +128,7 @@ export function mapDocument(value: DocumentDto): DocumentInfo {
+   return {
+     id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
+     analysisMode: value.analysis_mode ?? null,
++    analysisSensitivity: value.analysis_sensitivity ?? null,
+     relativePath: value.relative_path, type: value.file_type, size: value.file_size,
+     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
+     totalPages: value.total_pages, isScanned: value.is_scanned, ocrPages: value.ocr_pages,
+@@ -254,12 +255,12 @@ export const api = {
+   startProjectAnalysis: (projectId: string, options: AnalysisRequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
+     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
+     return value;
+-  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
++  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+   rerunProject: (projectId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
+     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
+     return value;
+-  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode }) }),
+-  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode }) }),
++  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
++  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+   thumbnailUrl,
+   documentFileUrl,
+   documentOriginalUrl,
+diff --git a/frontend/lib/types.ts b/frontend/lib/types.ts
+index 184bfc2..2be7636 100644
+--- a/frontend/lib/types.ts
++++ b/frontend/lib/types.ts
+@@ -6,6 +6,7 @@ export type ProcessingPhase = 'uploaded' | 'queued' | 'processing' | 'ready' | '
+ export type TrafficLight = 'critical' | 'warning' | 'ok' | 'unknown';
+ export type LawType = 'ALL' | '44-FZ' | '223-FZ';
+ export type AnalysisMode = 'llm' | 'nli' | 'keyword';
++export type AnalysisSensitivity = 'strict' | 'balanced' | 'sensitive';
+ 
+ export interface AnalysisModeOption {
+   id: AnalysisMode;
+@@ -48,6 +49,7 @@ export interface DocumentInfo extends ProcessingState {
+   id: string;
+   analysisId: string;
+   analysisMode: AnalysisMode | null;
++  analysisSensitivity: AnalysisSensitivity | null;
+   name: string;
+   relativePath: string | null;
+   type: string | null;
+diff --git a/frontend/lib/workspace-preferences.ts b/frontend/lib/workspace-preferences.ts
+new file mode 100644
+index 0000000..c03f0c9
+--- /dev/null
++++ b/frontend/lib/workspace-preferences.ts
+@@ -0,0 +1,49 @@
++import type { AnalysisSensitivity, Severity } from './types';
++
++export const preferenceKey = 'b2b-antirisk.workspace-preferences.v1';
++export const displaySeverities = ['critical', 'warning', 'low', 'ok'] as const;
++export type DisplaySeverity = typeof displaySeverities[number];
++export type NoticeKind = 'completed' | 'error' | 'critical';
++export interface WorkspacePreferences {
++  defaultSeverities: DisplaySeverity[];
++  sensitivity: AnalysisSensitivity;
++  notifications: Record<NoticeKind, boolean> & { desktop: boolean };
++}
++export const sensitivityOptions: { id: AnalysisSensitivity; label: string; description: string }[] = [
++  { id: 'strict', label: 'Только явные', description: 'Меньше предположений, больше внимания к явно выраженным условиям.' },
++  { id: 'balanced', label: 'Сбалансированная', description: 'Явные и обоснованные потенциальные риски.' },
++  { id: 'sensitive', label: 'Повышенная', description: 'Дополнительное внимание к неоднозначным условиям и возможным рискам.' },
++];
++
++export function defaultPreferences(): WorkspacePreferences {
++  return { defaultSeverities: [...displaySeverities], sensitivity: 'balanced',
++    notifications: { completed: true, error: true, critical: true, desktop: false } };
++}
++
++export function normalizePreferences(value: unknown): WorkspacePreferences {
++  const fallback = defaultPreferences();
++  if (!value || typeof value !== 'object') return fallback;
++  const input = value as Partial<WorkspacePreferences>;
++  const levels = Array.isArray(input.defaultSeverities)
++    ? displaySeverities.filter(level => input.defaultSeverities!.includes(level)) : [];
++  const notifications = input.notifications;
++  return {
++    defaultSeverities: levels.length ? levels : fallback.defaultSeverities,
++    sensitivity: sensitivityOptions.some(option => option.id === input.sensitivity) ? input.sensitivity! : 'balanced',
++    notifications: {
++      completed: typeof notifications?.completed === 'boolean' ? notifications.completed : true,
++      error: typeof notifications?.error === 'boolean' ? notifications.error : true,
++      critical: typeof notifications?.critical === 'boolean' ? notifications.critical : true,
++      desktop: typeof notifications?.desktop === 'boolean' ? notifications.desktop : false,
++    },
++  };
++}
++
++export function parsePreferences(raw: string | null): WorkspacePreferences {
++  try { return normalizePreferences(raw ? JSON.parse(raw) : null); }
++  catch { return defaultPreferences(); }
++}
++
++export function matchesSeverity(severity: Severity, filter: string, defaults: readonly DisplaySeverity[]): boolean {
++  return filter === 'all' || (filter === 'default' ? defaults.some(value => value === severity) : severity === filter);
++}
+diff --git a/frontend/public/favicon.svg b/frontend/public/favicon.svg
+index a864032..08d8f6a 100644
+--- a/frontend/public/favicon.svg
++++ b/frontend/public/favicon.svg
+@@ -1 +1 @@
+-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="0" y="0" width="64" height="64" rx="16" fill="#faf9f7"/><circle cx="14" cy="32" r="8" fill="#d92d26"/><circle cx="32" cy="32" r="8" fill="#efaa13"/><circle cx="50" cy="32" r="8" fill="#278557"/></svg>
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="#202521"/><g transform="translate(5 5) scale(.9167)" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/></g></svg>
+diff --git a/frontend/scripts/api.test.mjs b/frontend/scripts/api.test.mjs
+index 4a26e13..70ae648 100644
+--- a/frontend/scripts/api.test.mjs
++++ b/frontend/scripts/api.test.mjs
+@@ -254,6 +254,19 @@ test('an unavailable LLM exposes the server message and never retries in another
+   assert.equal(calls, 1);
+ });
+ 
++test('start, project rerun and document rerun transmit the selected sensitivity to the server', async t => {
++  const calls = [];
++  t.mock.method(globalThis, 'fetch', async (url, options) => {
++    const body = JSON.parse(options.body);
++    calls.push([url, body.analysis_sensitivity]);
++    return url.endsWith('/reanalyze') ? response({ ...document, analysis_sensitivity: body.analysis_sensitivity }) : response({ documents: 1 });
++  });
++  await api.startProjectAnalysis(project.id, { analysisMode: 'llm', sensitivity: 'strict' });
++  await api.rerunProject(project.id, { sensitivity: 'sensitive' });
++  assert.equal((await api.reanalyzeDocument(document.id, { sensitivity: 'balanced' })).analysisSensitivity, 'balanced');
++  assert.deepEqual(calls.map(call => call[1]), ['strict', 'sensitive', 'balanced']);
++});
++
+ test('unknown findings and an incomplete traffic light remain distinct from no risk', () => {
+   const mappedFinding = mapFinding({ ...finding, severity: 'unknown', source: 'LLM', quote: '', quote_verified: false });
+   assert.equal(mappedFinding.severity, 'unknown');
+diff --git a/frontend/scripts/preferences.test.mjs b/frontend/scripts/preferences.test.mjs
+new file mode 100644
+index 0000000..20dc67e
+--- /dev/null
++++ b/frontend/scripts/preferences.test.mjs
+@@ -0,0 +1,70 @@
++import assert from 'node:assert/strict';
++import { test } from 'node:test';
++import { loadLib } from './load-lib.mjs';
++
++const { defaultPreferences, normalizePreferences, parsePreferences, matchesSeverity } = await loadLib('workspace-preferences');
++const { analysisSnapshot, analysisEvents } = await loadLib('analysis-notifications');
++
++test('defaults show every supported level and corrupt storage cannot hide all results', () => {
++  assert.deepEqual(defaultPreferences().defaultSeverities, ['critical', 'warning', 'low', 'ok']);
++  assert.equal(defaultPreferences().sensitivity, 'balanced');
++  for (const raw of [null, '{broken', 'null', '[]', '{"defaultSeverities":[]}', '{"defaultSeverities":["unknown"]}']) {
++    assert.deepEqual(parsePreferences(raw).defaultSeverities, defaultPreferences().defaultSeverities);
++  }
++});
++
++test('saved preferences preserve false flags, deduplicate levels and reject unknown values', () => {
++  const value = normalizePreferences({ defaultSeverities: ['warning', 'critical', 'critical', 'oops'], sensitivity: 'sensitive',
++    notifications: { completed: false, error: true, critical: false, desktop: false } });
++  assert.deepEqual(parsePreferences(JSON.stringify(value)), value);
++  assert.deepEqual(value.defaultSeverities, ['critical', 'warning']);
++  assert.equal(value.notifications.completed, false);
++  assert.equal(normalizePreferences({ sensitivity: 'typo', notifications: { error: 'false' } }).sensitivity, 'balanced');
++  assert.equal(normalizePreferences({ notifications: { error: 'false' } }).notifications.error, true);
++});
++
++test('default display filter hides unchecked levels while explicit all and single-level filters still work', () => {
++  assert.ok(matchesSeverity('critical', 'default', ['critical', 'warning']));
++  assert.ok(!matchesSeverity('low', 'default', ['critical', 'warning']));
++  assert.ok(matchesSeverity('low', 'all', ['critical']));
++  assert.ok(matchesSeverity('ok', 'ok', ['critical']));
++  assert.ok(!matchesSeverity('critical', 'ok', ['critical']));
++});
++
++const project = (phase, critical = 0, error = null) => [{ id: 'p', title: 'Закупка', files: [{
++  id: 'f', name: 'Договор.pdf', phase, errorMessage: error, counts: { critical },
++  documents: [{ id: 'd', name: 'Договор.pdf', phase, errorMessage: error, counts: { critical } }],
++}] }];
++
++test('completion and critical events follow a finished run and never repeat on unchanged polls or initial results', () => {
++  const waiting = analysisSnapshot(project('uploaded'));
++  const done = analysisSnapshot(project('ready', 2));
++  const events = analysisEvents(waiting, done, 123);
++  assert.deepEqual(events.map(event => event.kind), ['completed', 'critical']);
++  assert.equal(events[1].documentId, 'd');
++  assert.equal(events[1].projectId, 'p');
++  assert.deepEqual(analysisEvents(done, done), []);
++  assert.deepEqual(analysisEvents(new Map(), done), []);
++  assert.deepEqual(analysisEvents(done, new Map()), []);
++});
++
++test('queue failures, failed documents inside ZIP and failed reruns produce an error instead of successful completion', () => {
++  const before = analysisSnapshot(project('processing'));
++  for (const phase of ['ready', 'failed']) {
++    const after = analysisSnapshot(project(phase, 0, 'Ошибка обработки'));
++    assert.deepEqual(analysisEvents(before, after).map(event => event.kind), ['error']);
++    assert.deepEqual(analysisEvents(after, after), []);
++  }
++  const zip = project('ready');
++  zip[0].files[0].documents[0].phase = 'failed';
++  assert.deepEqual(analysisEvents(before, analysisSnapshot(zip)).map(event => event.kind), ['error']);
++  assert.deepEqual(analysisEvents(analysisSnapshot(project('uploaded')), analysisSnapshot(project('failed'))).map(event => event.kind), ['error']);
++  assert.deepEqual(analysisEvents(before, analysisSnapshot(project('ready', 2, 'Часть правил не проверена'))).map(event => event.kind), ['error', 'critical']);
++});
++
++test('a repeated run can report critical findings again, independently of the display preference', () => {
++  const prefs = normalizePreferences({ defaultSeverities: ['ok'] });
++  assert.ok(!matchesSeverity('critical', 'default', prefs.defaultSeverities));
++  const events = analysisEvents(analysisSnapshot(project('processing', 2)), analysisSnapshot(project('ready', 2)));
++  assert.ok(events.some(event => event.kind === 'critical'));
++});

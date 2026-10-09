@@ -230,6 +230,28 @@ def test_worker_dispatches_persisted_engine(mode_settings, monkeypatch, stored, 
         assert evaluate.call_count == (1 if mode == expected else 0)
 
 
+@pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
+def test_worker_uses_persisted_sensitivity(mode_settings, monkeypatch, sensitivity):
+    doc = Document(id=uuid.uuid4(), analysis_id=uuid.uuid4(), file_name="contract.txt",
+                   analysis_mode="keyword", analysis_sensitivity=sensitivity)
+    db = MagicMock()
+    db.get.return_value = doc
+    db.scalars.return_value.all.return_value = []
+
+    @contextmanager
+    def session():
+        yield db
+
+    monkeypatch.setattr(pipeline, "session_scope", session)
+    monkeypatch.setattr(pipeline, "applicable_rules", lambda *_: [])
+    for name in ("ensure_rule_embeddings", "_save_findings", "_renumber", "refresh_analysis"):
+        monkeypatch.setattr(pipeline, name, MagicMock())
+    evaluator = MagicMock(return_value=[])
+    monkeypatch.setattr(pipeline, "evaluate_heuristic", evaluator)
+    pipeline.analyze_document(doc.id)
+    assert evaluator.call_args.kwargs == {"sensitivity": sensitivity}
+
+
 def test_worker_cannot_silently_fallback_from_persisted_llm(mode_settings, monkeypatch):
     doc = Document(id=uuid.uuid4(), analysis_mode="llm")
     db = MagicMock()

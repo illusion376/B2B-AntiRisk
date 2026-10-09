@@ -6,6 +6,8 @@ import { documentFileUrl, thumbnailUrl } from '@/lib/api';
 import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
 import { riskLabels } from '@/lib/rules';
+import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences';
+import type { DisplaySeverity } from '@/lib/workspace-preferences';
 import { HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
 import './review-enhancements.css';
@@ -35,6 +37,7 @@ export type DocumentWorkspaceProps = {
   selected: string | null;
   search: string;
   findings: Finding[];
+  defaultSeverities?: readonly DisplaySeverity[];
   statuses: Record<string, ReviewStatus>;
   onPage: (page: number) => void;
   onSelect: (finding: Finding) => void;
@@ -96,7 +99,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
   </div>;
 }
 
-export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
   const [zoom, setZoom] = useState(100);
   const [hand, setHand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -104,7 +107,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const [pageInput, setPageInput] = useState(String(page));
   const [tab, setTab] = useState<ReviewTab>('findings');
   const [category, setCategory] = useState('all');
-  const [severity, setSeverity] = useState('all');
+  const [severity, setSeverity] = useState('default');
+  const defaultSeverityKey = defaultSeverities.join(',');
   const [status, setStatus] = useState('all');
   const [filterText, setFilterText] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
@@ -126,7 +130,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const categories = [...new Set(findings.map(finding => finding.category).filter(Boolean))];
   const filtered = useMemo(() => findings.filter(finding =>
     (category === 'all' || category === finding.category)
-    && (severity === 'all' || severity === finding.severity)
+    && matchesSeverity(finding.severity, severity, defaultSeverities)
     && (status === 'all' || (statuses[finding.id] ?? finding.status) === status)
     && `${finding.title} ${finding.description} ${finding.quote}`.toLocaleLowerCase('ru').includes(filterText.trim().toLocaleLowerCase('ru'))
   ).sort((a, b) => {
@@ -134,8 +138,9 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
     if (a.number === null) return b.number === null ? 0 : 1;
     if (b.number === null) return -1;
     return order === 'asc' ? a.number - b.number : b.number - a.number;
-  }), [findings, category, severity, status, statuses, filterText, order]);
-  const activeFilterCount = [category !== 'all', severity !== 'all', status !== 'all', Boolean(filterText.trim())].filter(Boolean).length;
+  }), [findings, category, severity, defaultSeverities, status, statuses, filterText, order]);
+  const severityFiltered = severity === 'default' ? defaultSeverities.length < displaySeverities.length : severity !== 'all';
+  const activeFilterCount = [category !== 'all', severityFiltered, status !== 'all', Boolean(filterText.trim())].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
   const selectedFinding = findings.find(finding => finding.id === selected);
   const detail = findings.find(finding => finding.id === detailId);
@@ -144,6 +149,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const reviewed = riskFindings.filter(finding => (statuses[finding.id] ?? finding.status) !== 'unseen').length;
   const reviewPercent = riskFindings.length ? Math.round(reviewed / riskFindings.length * 100) : 0;
   const hasText = sections.some(section => section.paragraphs.some(paragraph => paragraph.text.trim()));
+
+  useEffect(() => { setSeverity('default'); }, [document.id, defaultSeverityKey]);
 
   useEffect(() => {
     setViewerMode(document.hasPreview ? 'pdf' : 'text');
@@ -306,9 +313,9 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
-          <label><span className="sr-only">Категория</span><select value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
-          <label><span className="sr-only">Статус проверки</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
-          <label><span className="sr-only">Уровень риска</span><select value={severity} onChange={event => setSeverity(event.target.value)}><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
+          <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
+          <label><span className="sr-only">Статус проверки</span><select aria-label="Статус проверки" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
+          <label><span className="sr-only">Уровень риска</span><select aria-label="Уровень риска" value={severity} onChange={event => setSeverity(event.target.value)}><option value="default">{defaultSeverities.length === displaySeverities.length ? 'Все уровни (по умолчанию)' : 'По настройкам'}</option><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
           <button type="button" ref={searchToggleRef} className={`icon-button ${searchVisible ? 'is-active' : ''}`} aria-label={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} title={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} aria-expanded={searchVisible} aria-controls={searchVisible ? 'finding-search' : undefined} onClick={() => searchVisible ? closeSearch() : setSearchVisible(true)}><Search size={18} /></button>
         </div>
         {searchVisible && <div id="finding-search" className="finding-search field-search" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeSearch(); } }}><Search size={16} /><input autoFocus placeholder="Название, описание или цитата" aria-label="Поиск замечаний" value={filterText} onChange={event => setFilterText(event.target.value)} /><IconButton label="Очистить поиск замечаний" disabled={!filterText} onClick={() => setFilterText('')}><X size={15} /></IconButton></div>}
