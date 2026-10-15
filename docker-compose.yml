@@ -68,6 +68,7 @@ services:
       - "8000:8000"
     volumes:
       - storage:/data/storage
+      - ./database/migrations:/app/migrations:ro
     depends_on:
       db:
         condition: service_healthy
@@ -88,6 +89,7 @@ services:
     environment: *backend-env
     volumes:
       - storage:/data/storage
+      - ./database/migrations:/app/migrations:ro
     depends_on:
       backend:
         condition: service_healthy
