@@ -1,0 +1,64 @@
+.document-review { display: flex; flex: 1; flex-direction: column; gap: 10px; width: 100%; min-width: 0; min-height: 0; overflow: auto; }
+.dashboard-shell.analysis-shell .document-review > .document-workspace { flex: 1 0 340px; height: auto; min-height: 340px; }
+.dashboard-shell.analysis-shell .document-review .col-more { width: 58px; }
+.document-review .more-cell { white-space: nowrap; }
+.document-review .more-cell .icon-button { display: inline-flex; width: 25px; }
+.document-assistant { flex: 0 0 auto; display: flex; flex-direction: column; min-width: 0; border: 1px solid #e4e5e8; border-radius: 12px; background: #fff; padding: 10px; color: #292b30; }
+.assistant-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 1px 5px 9px; font-size: 12px; }
+.assistant-heading > span, .assistant-heading > button { display: flex; align-items: center; gap: 8px; }
+.assistant-heading > span > svg { color: #e52d37; }
+.assistant-heading strong { font-weight: 650; }
+.assistant-heading small { font-size: 11px; color: #8b8d94; }
+.assistant-heading > button { color: #777b85; font-size: 11px; }
+.assistant-log { max-height: min(35vh, 350px); overflow-y: auto; overscroll-behavior: contain; padding: 8px; margin-bottom: 10px; background: #f7f8fa; border: 1px solid #e8e9ec; border-radius: 8px; }
+.assistant-log[hidden] { display: none; }
+.assistant-welcome { margin: 10px; color: #7f828c; font-size: 12px; }
+.assistant-message { max-width: 90%; width: fit-content; padding: 12px 15px; margin: 0 0 10px; border-radius: 9px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.assistant-message > strong { display: block; font-size: 10px; color: #8a8e98; margin-bottom: 4px; }
+.assistant-message > p { margin: 0; white-space: pre-wrap; }
+.assistant-message-assistant { background: #fff; border: 1px solid #e6e7eb; }
+.assistant-message-user { margin-left: auto; background: #ededf0; }
+.assistant-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.assistant-sources > button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #e4e6ea; padding: 4px 7px; border-radius: 5px; color: #595e69; font-size: 10px; max-width: 100%; text-align: left; }
+.assistant-sources > button:hover { background: #f3f4f6; }
+.assistant-draft { border: 1px solid #e4e5e9; border-radius: 6px; padding: 10px; margin-top: 10px; }
+.assistant-draft summary { cursor: pointer; font-weight: 600; }
+.assistant-draft summary > svg { display: inline; vertical-align: middle; margin-right: 6px; }
+.assistant-draft details > div { white-space: pre-wrap; margin-top: 12px; }
+.assistant-draft > button { display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 11px; color: #525966; }
+.assistant-pending { display: flex; align-items: center; gap: 8px; padding: 10px; color: #737883; font-size: 12px; }
+.assistant-finding { display: flex; align-items: center; gap: 7px; padding: 7px 9px; margin-bottom: 8px; border-radius: 5px; background: #fff5f5; color: #9a4148; font-size: 11px; }
+.assistant-finding > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.assistant-finding > svg, .assistant-finding > button { flex-shrink: 0; }
+.assistant-error, .assistant-unavailable { font-size: 12px; line-height: 1.5; padding: 8px; margin: 0 0 8px; background: #fff6f4; border-radius: 5px; color: #9b4840; }
+.assistant-error > span { display: block; }
+.assistant-error > button { display: block; margin-top: 5px; text-decoration: underline; }
+.assistant-composer { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid #e2e4e9; border-radius: 10px; background: #fff; }
+.assistant-composer:focus-within { border-color: #999da7; box-shadow: 0 0 0 2px #f1f2f4; }
+.assistant-document-icon { flex-shrink: 0; background: #f3f3f4; padding: 7px; width: 36px; height: 36px; border-radius: 7px; }
+.assistant-composer textarea { min-width: 0; flex: 1; resize: vertical; min-height: 43px; max-height: 130px; border: 0; outline: none; background: transparent; color: #30333a; padding: 4px 0; font: inherit; font-size: 13px; line-height: 1.6; box-shadow: none; }
+.assistant-composer textarea::placeholder { color: #8d9099; }
+.assistant-send-controls { display: flex; align-self: flex-end; align-items: center; gap: 8px; }
+.assistant-send-controls select { max-width: 165px; background: transparent; color: #797e89; border: 0; padding: 6px; font: inherit; font-size: 11px; }
+.document-assistant .assistant-send { display: grid; place-items: center; width: 34px; height: 34px; background: #ef2332; color: #fff; border-radius: 8px; }
+.document-assistant .assistant-send:hover:not(:disabled) { background: #d81d2b; }
+.document-assistant button:disabled, .document-assistant textarea:disabled, .document-assistant select:disabled { opacity: .5; cursor: not-allowed; }
+.document-assistant button:focus-visible, .document-assistant select:focus-visible, .document-assistant summary:focus-visible { outline: 2px solid #777f91; outline-offset: 3px; }
+.assistant-suggestions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 8px 4px 0; }
+.assistant-suggestions > button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid #e6e7eb; border-radius: 7px; font-size: 11px; background: #fafafa; }
+.assistant-suggestions > button > svg { color: #e62e3b; }
+.assistant-suggestions > button:hover:not(:disabled) { background: #f1f2f4; }
+.assistant-suggestions > small { color: #a1a4ad; font-size: 10px; margin-left: auto; }
+@media (max-width: 1100px) { .assistant-suggestions > small { display: none; } }
+@media (max-width: 760px) {
+  .document-review { gap: 8px; }
+  .document-assistant { padding: 8px; border-radius: 8px; }
+  .assistant-heading small { display: none; }
+  .assistant-composer { flex-wrap: wrap; padding: 9px; gap: 8px; }
+  .assistant-composer textarea { flex-basis: calc(100% - 46px); }
+  .assistant-send-controls { width: 100%; justify-content: flex-end; }
+  .assistant-message { max-width: 100%; padding: 10px; }
+  .assistant-log { max-height: 40vh; }
+  .assistant-suggestions { gap: 5px; }
+  .assistant-suggestions > button { padding: 6px 8px; font-size: 10px; }
+}

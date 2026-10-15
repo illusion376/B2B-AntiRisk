@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analyses, documents, findings, history, projects, reports, rules, system
+from app.api import analyses, chat, documents, findings, history, projects, reports, rules, system
 from app.config import settings
 from app.migrations import run_migrations
 
@@ -33,5 +33,5 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-for module in (system, projects, analyses, documents, findings, rules, reports, history):
+for module in (system, projects, analyses, documents, findings, rules, reports, history, chat):
     app.include_router(module.router)

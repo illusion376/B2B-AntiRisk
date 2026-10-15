@@ -224,7 +224,7 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
             .where(RiskFinding.document_id == document_id, RiskFinding.review_status != "DISMISSED")
         ).all()
         db.execute(update(Document).where(Document.id == document_id).values(
-            risk_score=risk_score(severities), status="COMPLETED", progress=100,
+            risk_score=risk_score(severities), status="COMPLETED", progress=100, chat_revision=uuid.uuid4(),
             error_message=("Не удалось проверить часть правил: ошибка ИИ-сервиса. Повторите анализ."
                            if any(draft.source == "ERROR" for draft in drafts) else None),
         ))

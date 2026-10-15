@@ -84,6 +84,7 @@ class Document(Base):
     # Последний выбранный режим; source отдельного замечания описывает его фактический источник.
     analysis_mode: Mapped[str | None] = mapped_column(String(20))
     analysis_sensitivity: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")
+    chat_revision: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4)
     progress: Mapped[int] = mapped_column(Integer, default=0)
     risk_score: Mapped[int | None] = mapped_column(Integer)
     law_type: Mapped[str | None] = mapped_column(String(20))
@@ -173,6 +174,22 @@ class RiskFinding(Base):
     reviewer_comment: Mapped[str | None] = mapped_column(Text)
     reviewed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentChatMessage(Base):
+    __tablename__ = "document_chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    context_version: Mapped[str] = mapped_column(String(64))
+    role: Mapped[str] = mapped_column(String(20))
+    content: Mapped[str] = mapped_column(Text)
+    finding_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("risk_findings.id", ondelete="SET NULL"))
+    sources: Mapped[list] = mapped_column(JSONB, default=list)
+    draft_title: Mapped[str | None] = mapped_column(String(255))
+    draft_content: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

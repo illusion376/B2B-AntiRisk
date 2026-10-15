@@ -11,6 +11,7 @@ export interface DocumentDto {
   id: string; analysis_id: string; file_name: string; relative_path: string | null;
   analysis_mode: AnalysisMode | null;
   analysis_sensitivity?: AnalysisSensitivity | null;
+  chat_revision?: string | null;
   file_type: string | null; file_size: number | null; status: string; phase: ProcessingPhase;
   label: string; progress: number; total_pages: number; is_scanned: boolean; ocr_pages: number;
   ocr_confidence: number | null; law_type: string | null; risk_score: number | null;
@@ -59,3 +60,14 @@ export interface HistoryDto {
 }
 export interface UploadDto { files: ProjectFileDto[]; errors: { name: string; detail: string }[] }
 export type ReportModeDto = ReportMode;
+export interface ChatMessageDto {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  finding_id: string | null;
+  sources: { id: string; label: string; page: number | null; finding_id: string | null; quote: string }[];
+  draft_title: string | null;
+  draft_content: string | null;
+  created_at: string;
+}
+export interface ChatHistoryDto { available: boolean; unavailable_reason: string | null; messages: ChatMessageDto[] }

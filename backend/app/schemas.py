@@ -60,6 +60,7 @@ class DocumentOut(ORM):
     ))
     phase: Phase = "queued"
     analysis_sensitivity: AnalysisSensitivity | None = None
+    chat_revision: uuid.UUID | None = None
     label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
     progress: int
     total_pages: int

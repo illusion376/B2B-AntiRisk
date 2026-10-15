@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
 import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
@@ -10,6 +10,7 @@ import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences'
 import type { DisplaySeverity } from '@/lib/workspace-preferences';
 import { HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
+import { DocumentAssistant } from './document-assistant';
 import './review-enhancements.css';
 import './live-document.css';
 
@@ -114,6 +115,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const [searchVisible, setSearchVisible] = useState(false);
   const [collapsed, setCollapsed] = useState<Severity[]>(['ok']);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ id: string; key: number } | null>(null);
   const [mobilePane, setMobilePane] = useState<'document' | 'findings'>('document');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [viewerMode, setViewerMode] = useState<'pdf' | 'text'>(document.hasPreview ? 'pdf' : 'text');
@@ -224,8 +226,20 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   function returnToFindings() { setMobilePane('findings'); setExpanded(false); setTab('findings'); }
   function openFinding(finding: Finding) { onSelect(finding); setDetailId(finding.id); }
   function reviewStatus(finding: Finding) { return statuses[finding.id] ?? finding.status; }
+  function askAssistant(finding: Finding) {
+    setChatTarget(previous => ({ id: finding.id, key: (previous?.key ?? 0) + 1 }));
+    setDetailId(null);
+  }
 
-  return <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
+  return <div className="document-review">
+    <DocumentAssistant key={`${document.id}-${document.chatRevision ?? 'initial'}`} documentId={document.id}
+      finding={findings.find(finding => finding.id === chatTarget?.id) ?? null} focusKey={chatTarget?.key ?? 0}
+      onClearFinding={() => setChatTarget(null)} onSource={source => {
+        const finding = findings.find(item => item.id === source.findingId);
+        if (finding) select(finding);
+        else if (source.page && source.page <= totalPages) { onPage(source.page); setMobilePane('document'); }
+      }} />
+    <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
     <div className="mobile-pane-tabs" role="group" aria-label="Панель документа">
       <button aria-pressed={mobilePane === 'document'} className={mobilePane === 'document' ? 'active' : ''} onClick={() => setMobilePane('document')}><FileSearch size={16} />Документ</button>
       <button aria-pressed={mobilePane === 'findings'} className={mobilePane === 'findings' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
@@ -340,7 +354,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
                     <span>{pendingIds.has(finding.id) ? <LoaderCircle className="live-loading-spinner" size={10} /> : reviewStatus(finding) === 'accepted' ? <Check size={10} /> : reviewStatus(finding) === 'dismissed' ? <X size={10} /> : null}</span>
                     <select aria-label={`Статус: ${finding.title}`} disabled={pendingIds.has(finding.id)} value={reviewStatus(finding)} onChange={event => onStatus(finding.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={12} aria-hidden="true" />
                   </div></td>
-                  <td className="more-cell"><IconButton label={`Подробнее: ${finding.title}`} onClick={() => setDetailId(finding.id)}><EllipsisVertical size={16} /></IconButton></td>
+                  <td className="more-cell"><IconButton label={`Спросить ИИ: ${finding.title}`} onClick={() => askAssistant(finding)}><MessageSquare size={15} /></IconButton><IconButton label={`Подробнее: ${finding.title}`} onClick={() => setDetailId(finding.id)}><EllipsisVertical size={16} /></IconButton></td>
                 </tr>)}
               </tbody>;
             })}
@@ -386,7 +400,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
         <select id="detail-status" className="form-select" disabled={pendingIds.has(detail.id)} aria-busy={pendingIds.has(detail.id)} value={reviewStatus(detail)} onChange={event => onStatus(detail.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         {pendingIds.has(detail.id) && <small className="detail-saving-status" role="status">Сохранение статуса…</small>}
       </div>
-      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>
+      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button><button className="secondary-button" onClick={() => askAssistant(detail)}><MessageSquare size={15} />Спросить ИИ</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>
     </Modal>}
+    </div>
   </div>;
 }
