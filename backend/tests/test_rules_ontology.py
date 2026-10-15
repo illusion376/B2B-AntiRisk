@@ -92,3 +92,73 @@ def test_excessive_application_demands_rule():
     assert rule["category"] == "Требования к составу заявки"
     assert "43 44-ФЗ" in rule["legal_reference"]
     assert "сертификат" in rule["semantic_query"]
+
+
+def _load_migration_006_rules() -> list[dict]:
+    candidate_paths = [
+        Path(__file__).resolve().parents[2] / "database" / "migrations" / "006_rules_consolidation_and_rnp.sql",
+        Path(__file__).resolve().parents[1] / "migrations" / "006_rules_consolidation_and_rnp.sql",
+        Path("/app/migrations/006_rules_consolidation_and_rnp.sql"),
+    ]
+    migration_path = next((p for p in candidate_paths if p.exists()), None)
+    assert migration_path is not None, "Файл миграции 006_rules_consolidation_and_rnp.sql должен существовать"
+    sql = migration_path.read_text(encoding="utf-8")
+
+    pattern = re.compile(
+        r"\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*(\d+),\s*(true|false)\s*\)",
+        re.MULTILINE | re.DOTALL,
+    )
+    matches = pattern.findall(sql)
+    rules = []
+    for match in matches:
+        rules.append({
+            "id": match[0],
+            "law_type": match[1],
+            "category": match[2],
+            "severity": match[3],
+            "title": match[4],
+            "description": match[5],
+            "semantic_query": match[6],
+            "llm_prompt": match[7],
+            "legal_reference": match[8],
+            "sort_order": int(match[9]),
+            "is_active": match[10].lower() == "true",
+        })
+    return rules
+
+
+def test_migration_006_rules_exist():
+    rules = _load_migration_006_rules()
+    rule_ids = {r["id"] for r in rules}
+
+    expected_ids = {
+        "unreasonable_penalty",
+        "short_delivery_time",
+        "payment_delay",
+        "unilateral_termination",
+        "rnp_short_cure_period",
+        "payment_contingent_on_budget",
+        "security_return_delay",
+        "unconditional_bg_claim",
+    }
+    assert expected_ids.issubset(rule_ids), f"Не все ожидаемые правила найдены в миграции 006: {expected_ids - rule_ids}"
+
+
+def test_migration_006_rules_structure():
+    rules = _load_migration_006_rules()
+    for rule in rules:
+        orm_rule = RiskRule(**rule)
+        assert orm_rule.severity in ("RED", "YELLOW", "LOW")
+        assert len(orm_rule.semantic_query.split()) >= 5
+        assert len(orm_rule.llm_prompt) >= 50
+        assert orm_rule.legal_reference is not None and len(orm_rule.legal_reference) > 0
+
+
+def test_rnp_short_cure_period_rule():
+    rules = {r["id"]: r for r in _load_migration_006_rules()}
+    rule = rules["rnp_short_cure_period"]
+
+    assert rule["severity"] == "RED"
+    assert "95" in rule["legal_reference"]
+    assert "устранить нарушения" in rule["semantic_query"]
+
