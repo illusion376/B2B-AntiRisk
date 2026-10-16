@@ -50,8 +50,9 @@ def _repeat_header(row) -> None:
     tr_pr.append(el)
 
 
-def _new_document(landscape: bool = False) -> DocxDocument:
+def _new_document(landscape: bool = False, author: str | None = None) -> DocxDocument:
     doc = DocxDocument()
+    doc.core_properties.author = author or ""
     style = doc.styles["Normal"]
     style.font.name = "Times New Roman"
     style.element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), "Times New Roman")
@@ -124,7 +125,8 @@ def _header(doc, data: ReportData, title: str) -> None:
         ("Дата загрузки", data.created_at.strftime("%d.%m.%Y %H:%M") if data.created_at else "—"),
         ("Дата отчёта", data.generated_at.strftime("%d.%m.%Y %H:%M")),
         ("Проверено правил", str(data.rules_checked)),
-        ("Подготовил", ", ".join(p for p in (data.author, data.company) if p) or "—"),
+        ("Подготовил", data.author or "—"),
+        ("Компания", data.company or "—"),
     ]
     for label, value in rows:
         cells = meta.add_row().cells
@@ -190,7 +192,7 @@ def _footer(doc) -> None:
 # ---------- режимы ----------
 
 def build_brief(data: ReportData, target: Path) -> Path:
-    doc = _new_document()
+    doc = _new_document(author=data.author)
     _header(doc, data, "Краткий отчёт о проверке документации")
     _summary(doc, data)
     multi = len(data.documents) > 1
@@ -218,7 +220,7 @@ def build_brief(data: ReportData, target: Path) -> Path:
 
 
 def build_detailed(data: ReportData, target: Path) -> Path:
-    doc = _new_document()
+    doc = _new_document(author=data.author)
     _header(doc, data, "Подробный отчёт о проверке документации")
     _summary(doc, data)
     multi = len(data.documents) > 1
@@ -287,13 +289,15 @@ def _labeled(doc, label: str, text: str) -> None:
 
 def build_protocol(data: ReportData, target: Path) -> Path:
     """Протокол разногласий: редакция заказчика -> предлагаемая редакция -> обоснование."""
-    doc = _new_document(landscape=True)
+    doc = _new_document(landscape=True, author=data.author)
     heading = doc.add_heading("ПРОТОКОЛ РАЗНОГЛАСИЙ", level=1)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     names = ", ".join(d.file_name for d in data.documents) or data.original_filename
     p = doc.add_paragraph(f"к проекту контракта (документы: {names})")
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Дата: {data.generated_at.strftime('%d.%m.%Y')}")
+    _labeled(doc, "Подготовил", data.author or "—")
+    _labeled(doc, "Компания", data.company or "—")
     if any(not rd.assessed for rd in data.documents):
         doc.add_paragraph(VERDICT["UNKNOWN"])
         for rd in data.documents:

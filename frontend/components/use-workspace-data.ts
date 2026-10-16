@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
-import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Project, ReportMode, User } from '@/lib/types';
+import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Project, ReportMode, User, UserProfileDraft } from '@/lib/types';
 
 export function useWorkspaceData() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -14,6 +14,12 @@ export function useWorkspaceData() {
   const [revision, setRevision] = useState(0);
   const generation = useRef(0);
   const refresh = useCallback(() => { generation.current += 1; setRevision(value => value + 1); }, []);
+  const saveUser = useCallback(async (draft: UserProfileDraft) => {
+    const saved = await api.updateUser(draft);
+    refresh();
+    setUser(saved);
+    return saved;
+  }, [refresh]);
   const replaceProject = useCallback((project: Project) => {
     refresh();
     setProjects(previous => previous.map(item => item.id === project.id ? project : item));
@@ -48,7 +54,7 @@ export function useWorkspaceData() {
     void read();
     return () => { clearTimeout(timer); controller.abort(); };
   }, [revision]);
-  return {projects, rules, user, reportModes, loading, error, refresh, replaceProject, removeProject, removeProjectFile};
+  return {projects, rules, user, reportModes, loading, error, refresh, replaceProject, removeProject, removeProjectFile, saveUser};
 }
 
 interface DocumentBundle { id: string; document: DocumentInfo; findings: Finding[]; outline: OutlineSection[] }

@@ -29,9 +29,19 @@ def thumbnail(pdf_path: Path, analysis_id: uuid.UUID, document_id: uuid.UUID, pa
     return target
 
 
-def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path) -> Path:
+def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author: str | None = None,
+                  company: str | None = None) -> Path:
     """Копия документа с подсветкой проблемных мест и всплывающими комментариями (для юриста)."""
     with PDF_LOCK, fitz.open(pdf_path) as doc:
+        profile = ([f"Подготовил: {author}"] if author else []) + ([f"Компания: {company}"] if company else [])
+        if profile:
+            doc.set_metadata({**(doc.metadata or {}), "author": author or "", "subject": " · ".join(profile)})
+            if doc.page_count:
+                page = doc[0]
+                header = page.add_text_annot(fitz.Point(page.rect.x1 - 26, page.rect.y0 + 20),
+                                             "\n".join(profile), icon="Note")
+                header.set_info(title=author or "Данные для отчёта")
+                header.update()
         for f in findings:
             if f["severity"] == "UNKNOWN":
                 continue
