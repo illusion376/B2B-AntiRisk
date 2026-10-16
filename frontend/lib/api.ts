@@ -4,7 +4,7 @@ import type {
 } from './api-types';
 import type {
   AnalysisMode, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
-  ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User,
+  ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 
@@ -270,6 +270,9 @@ export const api = {
     return request<HistoryDto[], HistoryEntry[]>(`/history?${query}`, values => values.map(mapHistory), { signal: options.signal });
   },
   getUser: (options: RequestOptions = {}): Promise<User> => request('/users/me', mapUser, options),
+  updateUser: (draft: UserProfileDraft, options: RequestOptions = {}): Promise<User> => request('/users/me', mapUser, {
+    ...options, method: 'PATCH', ...json({ full_name: draft.fullName.trim(), company_name: draft.companyName.trim() || null }),
+  }),
   getReportModes: (options: RequestOptions = {}): Promise<ReportMode[]> => request<ReportMode[], ReportMode[]>('/reports/modes', values => values.map(value => {
     if (typeof value.id !== 'string' || typeof value.title !== 'string' || !Array.isArray(value.formats)) throw new Error('Invalid report mode');
     return value;
