@@ -182,13 +182,13 @@ export function ProjectFilesView({
                     {(singleDocument?.errorMessage || file.errorMessage) && file.rulesChecked > 0 && <p>Предыдущие результаты проверки сохранены.</p>}
                   </div>
                   </div></td>
-                  <td className="file-processing">
+                  <td className="file-processing" data-label="Статус">
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
                   </td>
-                  <td className="project-file-size">{formatFileSize(file.size)}</td>
-                  <td className="project-file-date"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
+                  <td className="project-file-size" data-label="Размер">{formatFileSize(file.size)}</td>
+                  <td className="project-file-date" data-label="Дата добавления"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
                   <td className="project-file-actions">
                   {canOpen && (
                     <button className="secondary-button file-open-button" onClick={() => onOpenDocument(singleDocument)} aria-label={`Открыть документ «${singleDocument.name}»`}>

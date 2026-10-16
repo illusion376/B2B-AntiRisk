@@ -21,6 +21,7 @@ import {NotificationCenter} from './notification-center';
 import type {AnalysisNotice} from '@/lib/analysis-notifications';
 import './dashboard.css';
 import './integration.css';
+import './reference-theme.css';
 
 const dateTime=(value:number|string)=>new Date(value).toLocaleString('ru-RU',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
 function ErrorNotice({message,onRetry,autoDismiss=false}:{message:string;onRetry?:()=>void;autoDismiss?:boolean}) {
