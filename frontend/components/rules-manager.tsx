@@ -122,9 +122,9 @@ export function RulesManager({
                         <small>{rule.description || 'Описание не добавлено.'}</small>
                       </button>
                     </td>
-                    <td><span className="dashboard-rule-category">{rule.category}</span></td>
-                    <td><span className={`severity-tag ${rule.severity}`}>{riskLabels[rule.severity]}</span></td>
-                    <td>
+                    <td data-label="Категория"><span className="dashboard-rule-category">{rule.category}</span></td>
+                    <td data-label="Степень риска"><span className={`severity-tag ${rule.severity}`}>{riskLabels[rule.severity]}</span></td>
+                    <td data-label="Активно">
                       <button
                         type="button"
                         role="switch"

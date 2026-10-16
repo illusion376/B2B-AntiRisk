@@ -57,7 +57,7 @@ test('invalid identifiers cannot create malformed URLs',()=>{
 });
 test('workspace and analysis styles stay scoped to their containers',()=>{
   const postcss=require('postcss');
-  for(const filename of ['dashboard.css','review-enhancements.css']) {
+  for(const filename of ['dashboard.css','review-enhancements.css','reference-theme.css']) {
     const css=postcss.parse(readFileSync(new URL(`../components/${filename}`,import.meta.url),'utf8'));
     css.walkRules(rule=>{
       for(const selector of rule.selectors){
