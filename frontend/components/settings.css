@@ -9,6 +9,19 @@
 .dashboard-shell .settings-card-heading h2 { margin: 0; font-size: .875rem; color: #292929; letter-spacing: -.15px; }
 .dashboard-shell .settings-card-heading > small { margin-left: auto; font-size: .625rem; color: #adadad; }
 .dashboard-shell .settings-card-description { margin: 10px 0 14px; color: #929292; font-size: .75rem; line-height: 1.6; }
+.dashboard-shell .settings-profile-card { grid-column: 1 / -1; }
+.dashboard-shell .settings-profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.dashboard-shell .settings-profile-fields label { min-width: 0; color: #424242; font-size: .75rem; }
+.dashboard-shell .settings-profile-fields label small { color: #999; font-size: .625rem; margin-left: 5px; }
+.dashboard-shell .settings-profile-fields input { display: block; width: 100%; min-height: 36px; margin-top: 7px; padding: 8px 10px; border: 1px solid #e3e3e3; border-radius: 5px; background: #fff; color: #292929; font: inherit; }
+.dashboard-shell .settings-profile-fields input::placeholder { color: #a0a0a0; }
+.dashboard-shell .settings-profile-fields input:focus-visible { outline: 2px solid #707070; outline-offset: 2px; }
+.dashboard-shell .settings-profile-fields input:disabled { background: #fafafa; color: #999; }
+.dashboard-shell .settings-profile-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; }
+.dashboard-shell .settings-profile-actions .settings-card-note { margin: 0; }
+.dashboard-shell .settings-profile-actions .primary-button { min-height: 30px; padding: 7px 11px; font-size: .6875rem; flex-shrink: 0; }
+.dashboard-shell .settings-profile-feedback { margin: 10px 0 0; font-size: .6875rem; line-height: 1.5; color: #5b8068; }
+.dashboard-shell .settings-profile-feedback.has-error { color: #ae3b34; }
 .dashboard-shell .settings-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .dashboard-shell .settings-choice { display: flex; align-items: flex-start; gap: 8px; padding: 10px 11px; border: 1px solid #ededed; border-radius: 5px; cursor: pointer; }
 .dashboard-shell .settings-choice + .settings-choice { margin-top: 6px; }
@@ -50,6 +63,7 @@
 .dashboard-shell .project-analysis-summary button { font-size: .8125rem; text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 760px) {
   .dashboard-shell .settings-grid { grid-template-columns: 1fr; }
+  .dashboard-shell .settings-profile-fields { grid-template-columns: 1fr; gap: 12px; }
   .dashboard-shell .settings-card { padding: 15px; }
   .dashboard-shell .settings-title { gap: 12px; }
   .dashboard-shell .settings-autosave { display: none; }

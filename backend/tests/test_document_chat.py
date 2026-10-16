@@ -265,6 +265,14 @@ def test_draft_can_be_refined_and_downloaded_only_by_its_owner(chat):
     assert "Протокол разногласий" in content
     assert "Пункт 6.2" in content
     assert "Источники" in content
+    assert word.core_properties.author == "One"
+    profile = chat.client.patch("/api/users/me", json={"full_name": "Анна Петрова", "company_name": "ООО «Поставщик»"})
+    assert profile.status_code == 200
+    updated = WordDocument(BytesIO(chat.client.get(f"{chat.url}/{message['id']}/draft").content))
+    updated_text = "\n".join(p.text for p in updated.paragraphs)
+    assert "Подготовил: Анна Петрова" in updated_text
+    assert "Компания: ООО «Поставщик»" in updated_text
+    assert updated.core_properties.author == "Анна Петрова"
     assert chat.client.get(f"{chat.url}/{message['id']}/draft", headers={"X-User-Id": str(chat.other_user)}).status_code == 404
     assert chat.client.get(f"/api/documents/{chat.other_doc}/chat/{message['id']}/draft").status_code == 404
     assert chat.client.post(chat.url, json={"message": "Сократи черновик"}).status_code == 200

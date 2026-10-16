@@ -123,10 +123,14 @@ def download_draft(document_id: uuid.UUID, message_id: uuid.UUID, db: Session = 
     if message is None or not message.draft_content:
         raise HTTPException(404, "Черновик не найден для текущего анализа")
     report = WordDocument()
+    report.core_properties.author = user.full_name
     report.styles["Normal"].font.name = "Calibri"
     report.styles["Normal"].font.size = Pt(11)
     report.add_heading(message.draft_title or "Черновик отчёта", 0)
     report.add_paragraph(f"Документ: {document.file_name}")
+    report.add_paragraph(f"Подготовил: {user.full_name}")
+    if user.company_name:
+        report.add_paragraph(f"Компания: {user.company_name}")
     report.add_paragraph("Черновик ИИ-помощника на основе результатов анализа. Требует проверки перед использованием.")
     for paragraph in message.draft_content.splitlines():
         report.add_paragraph(paragraph)

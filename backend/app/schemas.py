@@ -35,6 +35,12 @@ class UserOut(ORM):
     initials: str
 
 
+class UserProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    company_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] | None = None
+
+
 class SeverityCounts(BaseModel):
     critical: int = 0
     warning: int = 0
