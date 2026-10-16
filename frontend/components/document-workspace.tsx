@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
 import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
@@ -10,13 +10,14 @@ import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences'
 import type { DisplaySeverity } from '@/lib/workspace-preferences';
 import { HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
+import { DocumentAssistant } from './document-assistant';
 import './review-enhancements.css';
 import './live-document.css';
 
 const reviewTabs = [
   { id: 'findings', label: 'Результаты' },
-  { id: 'navigation', label: 'Навигация' },
   { id: 'rules', label: 'Правила проверки' },
+  { id: 'assistant', label: 'ИИ-помощник' },
 ] as const;
 const severityOrder: Severity[] = ['critical', 'warning', 'low', 'ok'];
 const noPendingStatuses: ReadonlySet<string> = new Set();
@@ -99,7 +100,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
   </div>;
 }
 
-export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
   const [zoom, setZoom] = useState(100);
   const [hand, setHand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -114,6 +115,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   const [searchVisible, setSearchVisible] = useState(false);
   const [collapsed, setCollapsed] = useState<Severity[]>(['ok']);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<{ id: string; key: number } | null>(null);
   const [mobilePane, setMobilePane] = useState<'document' | 'findings'>('document');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [viewerMode, setViewerMode] = useState<'pdf' | 'text'>(document.hasPreview ? 'pdf' : 'text');
@@ -224,11 +226,19 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   function returnToFindings() { setMobilePane('findings'); setExpanded(false); setTab('findings'); }
   function openFinding(finding: Finding) { onSelect(finding); setDetailId(finding.id); }
   function reviewStatus(finding: Finding) { return statuses[finding.id] ?? finding.status; }
+  function openAssistant() { setTab('assistant'); setMobilePane('findings'); setExpanded(false); }
+  function askAssistant(finding: Finding) {
+    openAssistant();
+    setChatTarget(previous => ({ id: finding.id, key: (previous?.key ?? 0) + 1 }));
+    setDetailId(null);
+  }
 
-  return <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
+  return <div className="document-review">
+    <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
     <div className="mobile-pane-tabs" role="group" aria-label="Панель документа">
       <button aria-pressed={mobilePane === 'document'} className={mobilePane === 'document' ? 'active' : ''} onClick={() => setMobilePane('document')}><FileSearch size={16} />Документ</button>
-      <button aria-pressed={mobilePane === 'findings'} className={mobilePane === 'findings' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings' && tab !== 'assistant'} className={mobilePane === 'findings' && tab !== 'assistant' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings' && tab === 'assistant'} className={mobilePane === 'findings' && tab === 'assistant' ? 'active' : ''} onClick={openAssistant}><MessageSquare size={16} />Помощник</button>
     </div>
 
     {showPages && <aside className="pages-sidebar" aria-label="Страницы документа">
@@ -309,8 +319,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
       <div className="reader-footer"><span>{totalPages ? `Страница ${page} из ${totalPages}` : 'Нет страниц'}</span><span>{viewerMode === 'pdf' ? 'PDF' : currentPage?.isOcr ? 'Распознанный текст' : 'Текст документа'}</span></div>
     </section>
 
-    {!expanded && <aside className="review-panel" aria-label="Проверка документа">
-      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
+    <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
+      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
           <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
@@ -340,7 +350,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
                     <span>{pendingIds.has(finding.id) ? <LoaderCircle className="live-loading-spinner" size={10} /> : reviewStatus(finding) === 'accepted' ? <Check size={10} /> : reviewStatus(finding) === 'dismissed' ? <X size={10} /> : null}</span>
                     <select aria-label={`Статус: ${finding.title}`} disabled={pendingIds.has(finding.id)} value={reviewStatus(finding)} onChange={event => onStatus(finding.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={12} aria-hidden="true" />
                   </div></td>
-                  <td className="more-cell"><IconButton label={`Подробнее: ${finding.title}`} onClick={() => setDetailId(finding.id)}><EllipsisVertical size={16} /></IconButton></td>
+                  <td className="more-cell"><IconButton label={`Спросить ИИ: ${finding.title}`} onClick={() => askAssistant(finding)}><MessageSquare size={15} /></IconButton><IconButton label={`Подробнее: ${finding.title}`} onClick={() => setDetailId(finding.id)}><EllipsisVertical size={16} /></IconButton></td>
                 </tr>)}
               </tbody>;
             })}
@@ -352,20 +362,21 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
             : <span>{findings.length ? 'Замечаний по завершённым проверкам нет' : 'Нет результатов проверки'}</span>}
         </div>
       </div>}
-      {tab === 'navigation' && <div className="outline-pane" role="tabpanel" tabIndex={0} id="panel-navigation" aria-labelledby="tab-navigation">
-        <div className="pane-heading"><List size={18} /><span>Содержание документа</span></div>
-        {outline.map((section, index) => <div className="live-outline-section" key={`${section.page}-${index}`}>
-          <button className={page === section.page ? 'current' : ''} onClick={() => { onPage(section.page); setMobilePane('document'); }}><span>{section.title || `Страница ${section.page}`}</span><span className="outline-page">{section.page}<ChevronRight size={15} /></span></button>
-          {section.clauses.map((clause, clauseIndex) => <button className={`live-outline-clause ${page === clause.page ? 'current' : ''}`} key={`${clause.clause}-${clauseIndex}`} onClick={() => { onPage(clause.page); setMobilePane('document'); }}><span>{clause.clause}{clause.title ? ` · ${clause.title}` : ''}</span><span className="outline-page">{clause.page}</span></button>)}
-        </div>)}
-        {!outline.length && <div className="empty-state"><List size={28} /><h3>Оглавление не найдено</h3><p>Используйте миниатюры или номер страницы для перехода по документу.</p></div>}
-      </div>}
       {tab === 'rules' && <div className="inline-rules" role="tabpanel" tabIndex={0} id="panel-rules" aria-labelledby="tab-rules">
         <div className="pane-heading"><ShieldCheck size={18} /><span>Правила проверки · {rules.length}</span></div><div className="manage-rules-link"><button className="secondary-button" onClick={onManageRules}>Управление правилами</button></div>
         {rules.map(rule => <button key={rule.id} onClick={() => onEditRule(rule)} aria-label={`Редактировать правило «${rule.title}»`}><span className={`rule-check ${rule.severity}`}><FileCheck2 size={18} /></span><span><strong>{rule.title}</strong><small>{riskLabels[rule.severity]} · {!rule.enabled ? 'Выключено' : findings.some(finding => finding.ruleId === rule.id) ? 'Есть результат проверки' : 'Нет результата проверки'}</small></span><ChevronRight size={16} /></button>)}
         {!rules.length && <div className="empty-state"><p>Добавьте правила в разделе «Правила».</p></div>}
       </div>}
-    </aside>}
+      <div className="assistant-pane" role="tabpanel" id="panel-assistant" aria-labelledby="tab-assistant" hidden={tab !== 'assistant'}>
+        <DocumentAssistant key={`${document.id}-${document.chatRevision ?? 'initial'}`} documentId={document.id} active={tab === 'assistant' && !expanded}
+          finding={findings.find(finding => finding.id === chatTarget?.id) ?? null} focusKey={chatTarget?.key ?? 0}
+          onClearFinding={() => setChatTarget(null)} onSource={source => {
+            const finding = findings.find(item => item.id === source.findingId);
+            if (finding) select(finding);
+            else if (source.page && source.page <= totalPages) { onPage(source.page); setMobilePane('document'); }
+          }} />
+      </div>
+    </aside>
 
     {detail && <Modal title={findingLabel(detail)} onClose={() => setDetailId(null)}>
       <div className="finding-detail">
@@ -386,7 +397,8 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
         <select id="detail-status" className="form-select" disabled={pendingIds.has(detail.id)} aria-busy={pendingIds.has(detail.id)} value={reviewStatus(detail)} onChange={event => onStatus(detail.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         {pendingIds.has(detail.id) && <small className="detail-saving-status" role="status">Сохранение статуса…</small>}
       </div>
-      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>
+      <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button><button className="secondary-button" onClick={() => askAssistant(detail)}><MessageSquare size={15} />Спросить ИИ</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>
     </Modal>}
+    </div>
   </div>;
 }
