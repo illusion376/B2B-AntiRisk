@@ -7,7 +7,7 @@ from app.api.deps import current_user
 from app.config import settings
 from app.db import get_db
 from app.models import User
-from app.schemas import AnalysisModesOut, UserOut
+from app.schemas import AnalysisModesOut, UserOut, UserProfileUpdate
 from app.services.analysis_modes import capabilities, default_analysis_mode
 
 router = APIRouter(tags=["Система"])
@@ -49,8 +49,22 @@ def health(response: Response, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/users/me", response_model=UserOut, summary="Текущий пользователь (аватар в шапке)")
-def me(user: User = Depends(current_user)):
+def _user_out(user: User) -> UserOut:
     initials = "".join(part[0] for part in user.full_name.split()[:2] if part).upper()
     return UserOut(id=user.id, email=user.email, full_name=user.full_name, company_name=user.company_name,
                    role=user.role, initials=initials)
+
+
+@router.get("/api/users/me", response_model=UserOut, summary="Текущий пользователь (аватар в шапке)")
+def me(user: User = Depends(current_user)):
+    return _user_out(user)
+
+
+@router.patch("/api/users/me", response_model=UserOut, summary="Сохранить имя и компанию для отчётов")
+def update_profile(body: UserProfileUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    user.full_name = body.full_name
+    if "company_name" in body.model_fields_set:
+        user.company_name = body.company_name or None
+    db.commit()
+    db.refresh(user)
+    return _user_out(user)

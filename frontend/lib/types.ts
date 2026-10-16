@@ -154,6 +154,7 @@ export interface User {
   role: string;
   initials: string;
 }
+export interface UserProfileDraft { fullName: string; companyName: string }
 export type ReportFormat = 'docx' | 'pdf' | 'csv' | 'json';
 export type ReportModeId = 'brief' | 'detailed' | 'protocol' | 'annotated';
 export interface ReportMode { id: string; title: string; description: string; formats: string[] }

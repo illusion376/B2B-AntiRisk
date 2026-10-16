@@ -82,6 +82,8 @@ def _json_payload(data: ReportData, mode: str) -> dict:
         "title": data.title,
         "original_filename": data.original_filename,
         "generated_at": data.generated_at.isoformat(),
+        "author": data.author,
+        "company": data.company,
         "traffic_light": data.light,
         "risk_score": data.risk_score,
         "rules_checked": data.rules_checked,
@@ -123,6 +125,8 @@ def _write_csv(data: ReportData, mode: str, path: Path) -> None:
         writer = _SafeCsvWriter(f)
         writer.writerow(["Пакет", data.title])
         writer.writerow(["Режим", MODE_IDS[mode].title])
+        writer.writerow(["Подготовил", data.author or "—"])
+        writer.writerow(["Компания", data.company or "—"])
         writer.writerow(["Индекс риска", data.risk_score])
         writer.writerow(["Проверено правил", data.rules_checked])
         writer.writerow([])
@@ -161,7 +165,8 @@ def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
             raise ReportError("PDF с пометками недоступен: по части проверок недостаточно данных. "
                               "Скачайте подробный отчёт — он содержит причины неполной оценки.")
         findings = [f.__dict__ for f in doc.issues]
-        path = pdf_tools.annotated_pdf(Path(doc.preview_path), findings, target.with_suffix(".pdf"))
+        path = pdf_tools.annotated_pdf(Path(doc.preview_path), findings, target.with_suffix(".pdf"),
+                                       author=data.author, company=data.company)
         return ReportFile(path, f"{_slug(Path(doc.file_name).stem)}_с_пометками.pdf", MEDIA_TYPES["pdf"])
 
     if fmt == "csv":

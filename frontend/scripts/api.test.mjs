@@ -31,6 +31,24 @@ const finding = {
 };
 const response = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 
+test('profile updates persist the name and company through the current-user endpoint', async t => {
+  const controller = new AbortController();
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/users/me');
+    assert.equal(options.method, 'PATCH');
+    assert.equal(options.signal, controller.signal);
+    const payload = JSON.parse(options.body);
+    assert.deepEqual(payload, { full_name: 'Иван Иванов', company_name: calls++ ? null : 'ООО «Поставщик»' });
+    return response({ id: 'user-id', email: 'user@example.test', ...payload, role: 'USER', initials: 'ИИ' });
+  });
+  const saved = await api.updateUser({ fullName: '  Иван Иванов  ', companyName: ' ООО «Поставщик» ' }, { signal: controller.signal });
+  assert.equal(saved.fullName, 'Иван Иванов');
+  assert.equal(saved.companyName, 'ООО «Поставщик»');
+  assert.equal(saved.initials, 'ИИ');
+  assert.equal((await api.updateUser({ fullName: 'Иван Иванов', companyName: '   ' }, { signal: controller.signal })).companyName, null);
+});
+
 test('API project keeps analysis and document identifiers separate and exposes server processing state', () => {
   const mapped = mapProject(project);
   assert.equal(mapped.updatedAt, Date.parse(created));
