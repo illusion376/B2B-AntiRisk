@@ -50,6 +50,7 @@ export interface DocumentInfo extends ProcessingState {
   analysisId: string;
   analysisMode: AnalysisMode | null;
   analysisSensitivity: AnalysisSensitivity | null;
+  chatRevision?: string | null;
   name: string;
   relativePath: string | null;
   type: string | null;
@@ -156,3 +157,17 @@ export interface User {
 export type ReportFormat = 'docx' | 'pdf' | 'csv' | 'json';
 export type ReportModeId = 'brief' | 'detailed' | 'protocol' | 'annotated';
 export interface ReportMode { id: string; title: string; description: string; formats: string[] }
+
+export type ChatMode = 'question' | 'report' | 'protocol';
+export interface ChatSource { id: string; label: string; page: number | null; findingId: string | null; quote: string }
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  findingId: string | null;
+  sources: ChatSource[];
+  draftTitle: string | null;
+  draftContent: string | null;
+  createdAt: number;
+}
+export interface ChatHistory { available: boolean; unavailableReason: string | null; messages: ChatMessage[] }

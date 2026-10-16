@@ -1,9 +1,9 @@
 import type {
-  AnalysisModesDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
+  AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
   ProjectFileDto, RuleDto, UploadDto, UserDto,
 } from './api-types';
 import type {
-  AnalysisMode, AnalysisModes, AnalysisSensitivity, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
+  AnalysisMode, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
   ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User,
 } from './types';
 import { reportFilename, saveDownload } from './report';
@@ -129,6 +129,7 @@ export function mapDocument(value: DocumentDto): DocumentInfo {
     id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
     analysisMode: value.analysis_mode ?? null,
     analysisSensitivity: value.analysis_sensitivity ?? null,
+    chatRevision: value.chat_revision ?? null,
     relativePath: value.relative_path, type: value.file_type, size: value.file_size,
     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
     totalPages: value.total_pages, isScanned: value.is_scanned, ocrPages: value.ocr_pages,
@@ -191,6 +192,24 @@ export function mapHistory(value: HistoryDto): HistoryEntry {
   return { id: id(value.id), action: value.action, title: value.title, detail: value.detail, time: value.time, entityType: value.entity_type, entityId: value.entity_id };
 }
 
+export function mapChatMessage(value: ChatMessageDto): ChatMessage {
+  if (!['user', 'assistant'].includes(value.role) || typeof value.content !== 'string'
+    || !value.content.trim() || !Array.isArray(value.sources)
+    || (value.draft_title !== null && typeof value.draft_title !== 'string')
+    || (value.draft_content !== null && typeof value.draft_content !== 'string')) throw new Error('Invalid chat message');
+  return {
+    id: id(value.id), role: value.role, content: value.content,
+    findingId: value.finding_id === null ? null : id(value.finding_id),
+    draftTitle: value.draft_title, draftContent: value.draft_content, createdAt: timestamp(value.created_at),
+    sources: value.sources.map(source => {
+      if (typeof source.label !== 'string' || typeof source.quote !== 'string'
+        || (source.page !== null && (!Number.isInteger(source.page) || source.page < 1))) throw new Error('Invalid chat source');
+      return { id: id(source.id), label: source.label, page: source.page,
+        findingId: source.finding_id === null ? null : id(source.finding_id), quote: source.quote };
+    }),
+  };
+}
+
 /** Omitted fields must stay omitted: the backend updates generated prompts after a basic edit. */
 export function rulePayload(draft: Partial<RuleDraft>) {
   return {
@@ -207,6 +226,17 @@ export function documentFileUrl(documentId: string): string { return apiUrl(`/do
 export function documentOriginalUrl(documentId: string): string { return apiUrl(`/documents/${segment(documentId)}/original`); }
 
 export const api = {
+  getDocumentChat: (documentId: string, options: RequestOptions = {}): Promise<ChatHistory> => request<ChatHistoryDto, ChatHistory>(`/documents/${segment(documentId)}/chat`, value => {
+    if (typeof value.available !== 'boolean' || (value.unavailable_reason !== null && typeof value.unavailable_reason !== 'string')) throw new Error('Invalid chat availability');
+    return { available: value.available, unavailableReason: value.unavailable_reason, messages: value.messages.map(mapChatMessage) };
+  }, options),
+  sendDocumentMessage: (documentId: string, message: string, options: RequestOptions & { findingId?: string; mode?: ChatMode } = {}): Promise<ChatMessage[]> => request<{ messages: ChatMessageDto[] }, ChatMessage[]>(`/documents/${segment(documentId)}/chat`, value => value.messages.map(mapChatMessage), {
+    signal: options.signal, method: 'POST', ...json({ message: message.trim(), finding_id: options.findingId ?? null, mode: options.mode ?? 'question' }),
+  }),
+  downloadChatDraft: async (documentId: string, messageId: string, options: RequestOptions = {}): Promise<void> => {
+    const response = await requestResponse(`/documents/${segment(documentId)}/chat/${segment(messageId)}/draft`, options);
+    saveDownload(await response.blob(), reportFilename(response.headers.get('Content-Disposition'), 'Черновик_ИИ.docx'));
+  },
   getAnalysisModes: (options: RequestOptions = {}): Promise<AnalysisModes> => request('/analysis-modes', mapAnalysisModes, options),
   getProjects: (options: RequestOptions = {}): Promise<Project[]> => request<ProjectDto[], Project[]>('/projects', values => values.map(mapProject), options),
   getProject: (projectId: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, options),
