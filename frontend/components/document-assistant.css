@@ -5,6 +5,10 @@
 .document-review .more-cell .icon-button { display: inline-flex; width: 25px; }
 .document-review .review-tabs { overflow-x: auto; scrollbar-width: thin; }
 .dashboard-shell.analysis-shell .document-review .review-tabs > button { flex-shrink: 0; padding: 0 9px; font-size: 11px; }
+.dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab { margin-left: auto; gap: 6px; color: #a54b55; background: #fff8f8; }
+.dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab:hover { background: #fff0f1; }
+.dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab.active { color: #af3544; background: #fff2f3; }
+.dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab.active::after { background: #d94b59; }
 .document-review .review-panel[hidden], .assistant-pane[hidden] { display: none; }
 .assistant-pane { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .document-assistant { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding: 12px; background: #fff; color: #292b30; overflow: hidden; }

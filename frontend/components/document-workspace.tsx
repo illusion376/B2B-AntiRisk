@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
 import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
@@ -16,9 +16,8 @@ import './live-document.css';
 
 const reviewTabs = [
   { id: 'findings', label: 'Результаты' },
-  { id: 'assistant', label: 'ИИ-помощник' },
-  { id: 'navigation', label: 'Навигация' },
   { id: 'rules', label: 'Правила проверки' },
+  { id: 'assistant', label: 'ИИ-помощник' },
 ] as const;
 const severityOrder: Severity[] = ['critical', 'warning', 'low', 'ok'];
 const noPendingStatuses: ReadonlySet<string> = new Set();
@@ -101,7 +100,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
   </div>;
 }
 
-export function DocumentWorkspace({ document, pageContent, outline, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
   const [zoom, setZoom] = useState(100);
   const [hand, setHand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -321,7 +320,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
     </section>
 
     <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
-      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
+      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
           <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
@@ -362,14 +361,6 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
           {riskFindings.length > 0 ? <><span><Eye size={14} />Рассмотрено замечаний <strong>{reviewed} из {riskFindings.length}</strong></span><div className="review-progress-wrap"><div className="review-progress" role="progressbar" aria-label="Прогресс рассмотрения замечаний" aria-valuetext={`${reviewed} из ${riskFindings.length}, ${reviewPercent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewPercent}><i style={{ width: `${reviewPercent}%` }} /></div><span>{reviewPercent}%</span></div></>
             : <span>{findings.length ? 'Замечаний по завершённым проверкам нет' : 'Нет результатов проверки'}</span>}
         </div>
-      </div>}
-      {tab === 'navigation' && <div className="outline-pane" role="tabpanel" tabIndex={0} id="panel-navigation" aria-labelledby="tab-navigation">
-        <div className="pane-heading"><List size={18} /><span>Содержание документа</span></div>
-        {outline.map((section, index) => <div className="live-outline-section" key={`${section.page}-${index}`}>
-          <button className={page === section.page ? 'current' : ''} onClick={() => { onPage(section.page); setMobilePane('document'); }}><span>{section.title || `Страница ${section.page}`}</span><span className="outline-page">{section.page}<ChevronRight size={15} /></span></button>
-          {section.clauses.map((clause, clauseIndex) => <button className={`live-outline-clause ${page === clause.page ? 'current' : ''}`} key={`${clause.clause}-${clauseIndex}`} onClick={() => { onPage(clause.page); setMobilePane('document'); }}><span>{clause.clause}{clause.title ? ` · ${clause.title}` : ''}</span><span className="outline-page">{clause.page}</span></button>)}
-        </div>)}
-        {!outline.length && <div className="empty-state"><List size={28} /><h3>Оглавление не найдено</h3><p>Используйте миниатюры или номер страницы для перехода по документу.</p></div>}
       </div>}
       {tab === 'rules' && <div className="inline-rules" role="tabpanel" tabIndex={0} id="panel-rules" aria-labelledby="tab-rules">
         <div className="pane-heading"><ShieldCheck size={18} /><span>Правила проверки · {rules.length}</span></div><div className="manage-rules-link"><button className="secondary-button" onClick={onManageRules}>Управление правилами</button></div>
