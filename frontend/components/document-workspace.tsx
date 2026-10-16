@@ -16,6 +16,7 @@ import './live-document.css';
 
 const reviewTabs = [
   { id: 'findings', label: 'Результаты' },
+  { id: 'assistant', label: 'ИИ-помощник' },
   { id: 'navigation', label: 'Навигация' },
   { id: 'rules', label: 'Правила проверки' },
 ] as const;
@@ -226,23 +227,19 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
   function returnToFindings() { setMobilePane('findings'); setExpanded(false); setTab('findings'); }
   function openFinding(finding: Finding) { onSelect(finding); setDetailId(finding.id); }
   function reviewStatus(finding: Finding) { return statuses[finding.id] ?? finding.status; }
+  function openAssistant() { setTab('assistant'); setMobilePane('findings'); setExpanded(false); }
   function askAssistant(finding: Finding) {
+    openAssistant();
     setChatTarget(previous => ({ id: finding.id, key: (previous?.key ?? 0) + 1 }));
     setDetailId(null);
   }
 
   return <div className="document-review">
-    <DocumentAssistant key={`${document.id}-${document.chatRevision ?? 'initial'}`} documentId={document.id}
-      finding={findings.find(finding => finding.id === chatTarget?.id) ?? null} focusKey={chatTarget?.key ?? 0}
-      onClearFinding={() => setChatTarget(null)} onSource={source => {
-        const finding = findings.find(item => item.id === source.findingId);
-        if (finding) select(finding);
-        else if (source.page && source.page <= totalPages) { onPage(source.page); setMobilePane('document'); }
-      }} />
     <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
     <div className="mobile-pane-tabs" role="group" aria-label="Панель документа">
       <button aria-pressed={mobilePane === 'document'} className={mobilePane === 'document' ? 'active' : ''} onClick={() => setMobilePane('document')}><FileSearch size={16} />Документ</button>
-      <button aria-pressed={mobilePane === 'findings'} className={mobilePane === 'findings' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings' && tab !== 'assistant'} className={mobilePane === 'findings' && tab !== 'assistant' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings' && tab === 'assistant'} className={mobilePane === 'findings' && tab === 'assistant' ? 'active' : ''} onClick={openAssistant}><MessageSquare size={16} />Помощник</button>
     </div>
 
     {showPages && <aside className="pages-sidebar" aria-label="Страницы документа">
@@ -323,7 +320,7 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
       <div className="reader-footer"><span>{totalPages ? `Страница ${page} из ${totalPages}` : 'Нет страниц'}</span><span>{viewerMode === 'pdf' ? 'PDF' : currentPage?.isOcr ? 'Распознанный текст' : 'Текст документа'}</span></div>
     </section>
 
-    {!expanded && <aside className="review-panel" aria-label="Проверка документа">
+    <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
@@ -379,7 +376,16 @@ export function DocumentWorkspace({ document, pageContent, outline, pageLoading,
         {rules.map(rule => <button key={rule.id} onClick={() => onEditRule(rule)} aria-label={`Редактировать правило «${rule.title}»`}><span className={`rule-check ${rule.severity}`}><FileCheck2 size={18} /></span><span><strong>{rule.title}</strong><small>{riskLabels[rule.severity]} · {!rule.enabled ? 'Выключено' : findings.some(finding => finding.ruleId === rule.id) ? 'Есть результат проверки' : 'Нет результата проверки'}</small></span><ChevronRight size={16} /></button>)}
         {!rules.length && <div className="empty-state"><p>Добавьте правила в разделе «Правила».</p></div>}
       </div>}
-    </aside>}
+      <div className="assistant-pane" role="tabpanel" id="panel-assistant" aria-labelledby="tab-assistant" hidden={tab !== 'assistant'}>
+        <DocumentAssistant key={`${document.id}-${document.chatRevision ?? 'initial'}`} documentId={document.id} active={tab === 'assistant' && !expanded}
+          finding={findings.find(finding => finding.id === chatTarget?.id) ?? null} focusKey={chatTarget?.key ?? 0}
+          onClearFinding={() => setChatTarget(null)} onSource={source => {
+            const finding = findings.find(item => item.id === source.findingId);
+            if (finding) select(finding);
+            else if (source.page && source.page <= totalPages) { onPage(source.page); setMobilePane('document'); }
+          }} />
+      </div>
+    </aside>
 
     {detail && <Modal title={findingLabel(detail)} onClose={() => setDetailId(null)}>
       <div className="finding-detail">

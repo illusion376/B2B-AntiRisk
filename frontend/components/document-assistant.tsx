@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronDown, ChevronUp, Download, FileText, LoaderCircle, MessageSquare, Sparkles, X } from 'lucide-react';
+import { ArrowUp, Download, FileText, LoaderCircle, MessageSquare, X } from 'lucide-react';
 import { api, errorMessage } from '@/lib/api';
-import type { ChatHistory, ChatMessage, ChatMode, ChatSource, Finding } from '@/lib/types';
+import type { ChatHistory, ChatMessage, ChatSource, Finding } from '@/lib/types';
 import './document-assistant.css';
 
-export function DocumentAssistant({ documentId, finding, focusKey, onClearFinding, onSource }: {
+export function DocumentAssistant({ documentId, active, finding, focusKey, onClearFinding, onSource }: {
   documentId: string;
+  active: boolean;
   finding: Finding | null;
   focusKey: number;
   onClearFinding: () => void;
@@ -18,8 +19,6 @@ export function DocumentAssistant({ documentId, finding, focusKey, onClearFindin
   const [loadError, setLoadError] = useState('');
   const [revision, setRevision] = useState(0);
   const [text, setText] = useState('');
-  const [mode, setMode] = useState<ChatMode>('question');
-  const [expanded, setExpanded] = useState(false);
   const [sending, setSending] = useState(false);
   const [pendingText, setPendingText] = useState('');
   const [error, setError] = useState('');
@@ -41,24 +40,23 @@ export function DocumentAssistant({ documentId, finding, focusKey, onClearFindin
   }, [documentId, revision]);
   useEffect(() => () => { sendRef.current?.abort(); downloadRef.current?.abort(); }, []);
   useEffect(() => {
-    if (focusKey) { setExpanded(true); setMode('question'); inputRef.current?.focus(); }
-  }, [focusKey]);
+    if (active && focusKey && !loading) inputRef.current?.focus();
+  }, [active, focusKey, loading]);
   useEffect(() => {
     const log = logRef.current;
-    if (log && expanded) log.scrollTop = log.scrollHeight;
-  }, [history?.messages.length, pendingText, expanded]);
+    if (log && active) log.scrollTop = log.scrollHeight;
+  }, [history?.messages.length, pendingText, active]);
 
   const disabled = loading || Boolean(loadError) || !history?.available || sending;
-  async function send(question = text, nextMode = mode, wholeDocument = false) {
-    const trimmed = question.trim();
+  async function send() {
+    const trimmed = text.trim();
     if (disabled || sendRef.current || !trimmed || trimmed.length > 4000) return;
     const controller = new AbortController();
     sendRef.current = controller;
-    if (wholeDocument) onClearFinding();
-    setSending(true); setExpanded(true); setError(''); setPendingText(trimmed); setText(trimmed); setMode(nextMode);
+    setSending(true); setError(''); setPendingText(trimmed); setText(trimmed);
     try {
       const messages = await api.sendDocumentMessage(documentId, trimmed, {
-        signal: controller.signal, findingId: wholeDocument ? undefined : finding?.id, mode: nextMode,
+        signal: controller.signal, findingId: finding?.id,
       });
       if (controller.signal.aborted) return;
       setHistory(previous => previous && { ...previous, messages: [...previous.messages, ...messages].slice(-80) });
@@ -66,7 +64,7 @@ export function DocumentAssistant({ documentId, finding, focusKey, onClearFindin
     } catch (reason) {
       if (!controller.signal.aborted) setError(errorMessage(reason));
     } finally {
-      if (!controller.signal.aborted) { setSending(false); setPendingText(''); sendRef.current = null; inputRef.current?.focus(); }
+      if (!controller.signal.aborted) { setSending(false); setPendingText(''); sendRef.current = null; }
     }
   }
   async function download(message: ChatMessage) {
@@ -79,18 +77,12 @@ export function DocumentAssistant({ documentId, finding, focusKey, onClearFindin
   }
 
   return <section className="document-assistant" aria-label="ИИ-помощник по документу">
-    <div className="assistant-heading">
-      <span><Sparkles size={15} /><strong>ИИ-помощник</strong><small>По документу и результатам анализа</small></span>
-      <button type="button" aria-expanded={expanded} aria-controls="document-chat-log" onClick={() => setExpanded(!expanded)}>
-        {expanded ? 'Свернуть' : history?.messages.length ? `Диалог · ${history.messages.length}` : 'Открыть чат'}{expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
-    </div>
-    <div id="document-chat-log" hidden={!expanded} ref={logRef} className="assistant-log" role="log" aria-label="Диалог по документу" aria-live="polite" aria-relevant="additions text">
-      {!history?.messages.length && !pendingText && <p className="assistant-welcome">Спросите о рисках, уточните замечание или подготовьте итоговый документ.</p>}
+    <div id="document-chat-log" ref={logRef} className="assistant-log" role="log" aria-label="Диалог по документу" aria-live="polite" aria-relevant="additions text">
+      {!history?.messages.length && !pendingText && <div className="assistant-welcome"><MessageSquare size={24} /><strong>Чем помочь с документом?</strong><p>Задайте вопрос или выберите замечание в результатах проверки.</p></div>}
       {history?.messages.map(message => <article key={message.id} className={`assistant-message assistant-message-${message.role}`}>
         <strong>{message.role === 'user' ? 'Вы' : 'ИИ-помощник'}</strong>
         <p>{message.content}</p>
-        {message.sources.length > 0 && <div className="assistant-sources" aria-label="Источники ответа">{message.sources.map(source => <button key={source.id} type="button" disabled={!source.findingId && !source.page} onClick={() => { onSource(source); setExpanded(false); }} title={source.quote || source.label}>
+        {message.sources.length > 0 && <div className="assistant-sources" aria-label="Источники ответа">{message.sources.map(source => <button key={source.id} type="button" disabled={!source.findingId && !source.page} onClick={() => onSource(source)} title={source.quote || source.label}>
           <FileText size={13} />{source.findingId ? source.label : `Стр. ${source.page}`}
         </button>)}</div>}
         {message.draftContent && <div className="assistant-draft">
@@ -108,22 +100,10 @@ export function DocumentAssistant({ documentId, finding, focusKey, onClearFindin
     {!loading && !loadError && history && !history.available && <p className="assistant-unavailable" role="status">{history.unavailableReason || 'ИИ-помощник временно недоступен.'}</p>}
     {error && <div className="assistant-error" role="alert">{error}</div>}
     <form className="assistant-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
-      <FileText className="assistant-document-icon" size={21} />
-      <textarea ref={inputRef} aria-label={finding ? 'Вопрос по замечанию' : 'Вопрос по документу'} placeholder={finding ? 'Что уточнить по этому замечанию?' : 'Что вы хотите узнать о документе?'} value={text} disabled={disabled} maxLength={4000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => {
+      <textarea ref={inputRef} aria-label={finding ? 'Вопрос по замечанию' : 'Вопрос по документу'} placeholder={finding ? 'Что уточнить по этому замечанию?' : 'Вопрос по документу…'} value={text} disabled={disabled} maxLength={4000} rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => {
         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
       }} />
-      <div className="assistant-send-controls">
-        <select aria-label="Режим помощника" value={mode} disabled={disabled} onChange={event => setMode(event.target.value as ChatMode)}>
-          <option value="question">Вопрос</option><option value="report">Итоговый отчёт</option><option value="protocol">Протокол разногласий</option>
-        </select>
-        <button type="submit" className="assistant-send" aria-label="Отправить вопрос" disabled={disabled || !text.trim()}>{sending || loading ? <LoaderCircle size={18} className="spin" /> : <ArrowUp size={19} />}</button>
-      </div>
+      <button type="submit" className="assistant-send" aria-label="Отправить вопрос" disabled={disabled || !text.trim()}>{sending || loading ? <LoaderCircle size={18} className="spin" /> : <ArrowUp size={19} />}</button>
     </form>
-    <div className="assistant-suggestions">
-      <button type="button" disabled={disabled} onClick={() => void send('Составь краткую сводку основных рисков и укажи, что проверить в первую очередь.', 'question', true)}><Sparkles size={14} />Сводка по рискам</button>
-      <button type="button" disabled={disabled} onClick={() => void send('Подготовь итоговый отчёт по текущим результатам анализа с обоснованиями и рекомендациями.', 'report', true)}><FileText size={14} />Подготовить отчёт</button>
-      <button type="button" disabled={disabled} onClick={() => void send('Подготовь протокол разногласий по выявленным рискам с предложениями редакций спорных пунктов.', 'protocol', true)}><MessageSquare size={14} />Протокол разногласий</button>
-      <small>{text.length > 3500 ? `${text.length}/4000` : 'Enter — отправить · Shift+Enter — новая строка'}</small>
-    </div>
   </section>;
 }
