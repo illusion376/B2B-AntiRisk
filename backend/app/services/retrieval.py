@@ -6,6 +6,8 @@ import numpy as np
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.config import settings
+
 
 @dataclass
 class RetrievedChunk:
@@ -18,6 +20,7 @@ class RetrievedChunk:
     score: float
     fts_hit: bool
     embedding: list[float] | None = None
+    distance: float | None = None
 
 
 def vector_literal(vec: list[float]) -> str:
@@ -119,9 +122,12 @@ WITH q AS (
            NULLIF(replace(plainto_tsquery('russian', :query)::text, '&', '|'), '')::tsquery AS tsq
 ),
 vec AS (
-    SELECT c.id, row_number() OVER (ORDER BY (c.embedding <=> q.emb) + 0) AS r
+    SELECT c.id,
+           (c.embedding <=> q.emb) AS dist,
+           row_number() OVER (ORDER BY (c.embedding <=> q.emb) + 0) AS r
     FROM document_chunks c, q
     WHERE c.document_id = :document_id AND c.embedding IS NOT NULL
+      AND (c.embedding <=> q.emb) <= :max_distance
     ORDER BY (c.embedding <=> q.emb) + 0
     LIMIT :candidates
 ),
@@ -135,7 +141,8 @@ fts AS (
 SELECT c.id, c.chunk_index, c.page_number, c.page_end, c.clause_title, c.content,
        c.embedding,
        COALESCE(1.0 / (60 + vec.r), 0) + COALESCE(1.0 / (60 + fts.r), 0) AS score,
-       fts.id IS NOT NULL AS fts_hit
+       fts.id IS NOT NULL AS fts_hit,
+       vec.dist AS distance
 FROM document_chunks c
 LEFT JOIN vec ON vec.id = c.id
 LEFT JOIN fts ON fts.id = c.id
@@ -146,13 +153,22 @@ LIMIT :candidates
 
 
 def hybrid_search(
-    db: Session, document_id: uuid.UUID, query: str, embedding: list[float], top_k: int
+    db: Session,
+    document_id: uuid.UUID,
+    query: str,
+    embedding: list[float],
+    top_k: int,
+    max_distance: float | None = None,
 ) -> list[RetrievedChunk]:
+    if max_distance is None:
+        max_distance = settings.retrieval_max_distance
     rows = db.execute(_HYBRID_SQL, {
         "embedding": vector_literal(embedding),
         "query": query,
         "document_id": document_id,
         "candidates": max(top_k * 3, 12),
+        "top_k": top_k,
+        "max_distance": max_distance,
     }).mappings().all()
     candidate_chunks = [
         RetrievedChunk(
@@ -164,6 +180,7 @@ def hybrid_search(
             content=row["content"],
             score=float(row["score"]),
             fts_hit=bool(row["fts_hit"]),
+            distance=float(row["distance"]) if row.get("distance") is not None else None,
             embedding=_parse_embedding(row.get("embedding")),
         )
         for row in rows
