@@ -52,12 +52,6 @@
 .live-document-workspace .live-outline-section > button:hover { background: #f3f3ef; }
 .live-document-workspace .live-outline-section > .live-outline-clause { padding: 11px 15px 11px 26px; font-size: 11px; color: #7d7d72; }
 .live-document-workspace .live-outline-section .outline-page { flex-shrink: 0; }
-.finding-detail .finding-evidence { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding: 12px; background: #f6f6f2; border: 1px solid #e9e9e1; border-radius: 6px; font-size: 11px; color: #77776a; }
-.finding-detail .finding-evidence strong { color: #535346; font-weight: 700; }
-.finding-detail .finding-evidence > span { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
-.finding-detail .finding-evidence .quote-verified { color: #438155; }
-.finding-detail .finding-evidence .quote-unverified { color: #92702e; }
-.finding-detail .finding-evidence.evidence-error { background: #fbf0ed; border-color: #ead8d0; }
 .finding-detail .missing-quote { color: #939387; font-size: 12px; }
 .finding-detail .detail-saving-status { display: block; margin-top: 8px; color: #868679; font-size: 11px; }
 @keyframes live-document-spin { to { transform: rotate(360deg); } }
