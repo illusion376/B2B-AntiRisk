@@ -17,15 +17,14 @@ interface Props {
 
 export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,onNavigate,onCreate,onHelp}: Props) {
   const items = [
-    {view:'documents' as const,label:'Документы',Icon:FileText,count:projectCount},
+    {view:'documents' as const,label:'Проекты',Icon:FileText,count:projectCount},
     {view:'rules' as const,label:'Правила проверки',Icon:BookOpenCheck,count:ruleCount},
     {view:'settings' as const,label:'Настройки',Icon:Settings2,count:null},
   ];
   return <>
     {open && <button className="dashboard-scrim" aria-label="Закрыть меню" onClick={onClose} />}
     <aside className={`dashboard-sidebar ${open?'is-open':''}`} id="workspace-sidebar" aria-label="Рабочее пространство">
-      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="B2B AntiRisk — документы"><span className="sidebar-brand-mark"><ShieldCheck size={21} strokeWidth={1.6}/></span><strong>B2B AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
-      <div className="sidebar-workspace-label"><span className="workspace-online-dot"/>ЛИЧНОЕ ПРОСТРАНСТВО</div>
+      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="B2B AntiRisk — проекты"><span className="sidebar-brand-mark"><ShieldCheck size={21} strokeWidth={1.6}/></span><strong>B2B AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
       <button className="sidebar-create" onClick={()=>{onCreate();onClose();}}><Plus size={16}/><span>Новый проект</span><kbd>+</kbd></button>
       <nav className="sidebar-navigation" aria-label="Основная навигация">{items.map(item=>{
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
