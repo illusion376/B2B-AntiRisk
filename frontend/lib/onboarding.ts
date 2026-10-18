@@ -1,12 +1,15 @@
 import type { Project } from './types';
 
+export type DocumentTourStage = 'findings' | 'assistant';
+
 export interface OnboardingProgress {
   workspaceDone: boolean;
   projectDone: boolean;
   projectId: string | null;
+  documentStep: DocumentTourStage;
 }
 
-export const emptyOnboarding: OnboardingProgress = { workspaceDone: false, projectDone: false, projectId: null };
+export const emptyOnboarding: OnboardingProgress = { workspaceDone: false, projectDone: false, projectId: null, documentStep: 'findings' };
 export const onboardingKey = (userId: string) => `antirisk:onboarding:v1:${encodeURIComponent(userId)}`;
 
 export function parseOnboarding(raw: string | null): OnboardingProgress {
@@ -19,6 +22,7 @@ export function parseOnboarding(raw: string | null): OnboardingProgress {
       projectDone,
       projectId: !projectDone && typeof value.projectId === 'string' && value.projectId.trim()
         && value.projectId.length <= 200 && !/[\u0000-\u001f\u007f]/.test(value.projectId) ? value.projectId : null,
+      documentStep: !projectDone && value.documentStep === 'assistant' ? 'assistant' : 'findings',
     };
   } catch { return { ...emptyOnboarding }; }
 }
@@ -58,7 +62,7 @@ export const workspaceTour: TourStep[] = [
 
 export function projectTourStep(project: Project): TourStep {
   const stage = projectTourStage(project);
-  const common = { id: `project-${stage}`, total: 3, fallback: '[data-onboarding="project-files"]' };
+  const common = { id: `project-${stage}`, total: 5, fallback: '[data-onboarding="project-files"]' };
   switch (stage) {
     case 'upload': return { ...common, number: 1, title: 'Выберите файлы', description: 'Добавьте документы в проект с устройства или перетащите их в область загрузки. Можно загрузить несколько файлов или ZIP-архив.', target: '[data-onboarding="upload-files"]', action: 'Выбрать файлы' };
     case 'start': return { ...common, number: 2, title: 'Начните анализ', description: 'Файлы загружены. Нажмите «Начать анализ», чтобы проверить их по включённым правилам. Если режим недоступен, его можно изменить в настройках.', target: '[data-onboarding="start-analysis"]', action: 'Начать анализ' };
@@ -68,3 +72,8 @@ export function projectTourStep(project: Project): TourStep {
     case 'unavailable': return { ...common, number: 3, title: 'Проверьте результат обработки', description: 'Обработка завершена, но сервер не предоставил документ с доступным предпросмотром. Посмотрите сообщение рядом с файлом или добавьте другой документ.', target: '[data-onboarding="project-files"]', action: 'Предпросмотр недоступен', waiting: true };
   }
 }
+
+export const documentTour: Record<DocumentTourStage, TourStep> = {
+  findings: { id: 'document-findings', number: 4, total: 5, title: 'Замечания по документу', description: 'В «Результатах» замечания сгруппированы по уровню риска. Нажмите на замечание, чтобы перейти к его странице. Кнопка «⋮» открывает обоснование и рекомендации. В столбце «Статус проверки» можно принять или отклонить замечание.', target: '[data-onboarding="document-findings"]', action: 'Далее' },
+  assistant: { id: 'document-assistant', number: 5, total: 5, title: 'ИИ-помощник', description: 'Помощник отвечает по документу и результатам проверки. Чтобы задать вопрос по конкретному замечанию, нажмите значок чата в его строке. Здесь же можно попросить подготовить итоговый документ.', target: '[data-onboarding="document-assistant"]', action: 'Готово' },
+};

@@ -8,6 +8,7 @@ import './onboarding-tour.css';
 
 interface Props {
   step: TourStep;
+  intro: boolean;
   paused: boolean;
   onClose: () => void;
   onNext?: () => void;
@@ -16,7 +17,7 @@ interface Props {
 interface Position { top: number; left: number; width: number; height: number }
 interface Layout { spotlight: Position; card: Position; side: 'top' | 'bottom' | 'right'; arrow: number; canAct: boolean }
 
-export function OnboardingTour({ step, paused, onClose, onNext, onPrevious }: Props) {
+export function OnboardingTour({ step, intro, paused, onClose, onNext, onPrevious }: Props) {
   const id = useId();
   const cardRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -39,7 +40,7 @@ export function OnboardingTour({ step, paused, onClose, onNext, onPrevious }: Pr
     let frame = 0;
     let current: HTMLElement | null = null;
     let scrolled = false;
-    const activate = () => callbacks.current.onNext?.();
+    const activate = () => { if (intro) callbacks.current.onNext?.(); };
     const measure = () => {
       frame = 0;
       if (document.querySelector('dialog[open]')) { setLayout(null); return; }
@@ -100,7 +101,7 @@ export function OnboardingTour({ step, paused, onClose, onNext, onPrevious }: Pr
       window.removeEventListener('transitionend', schedule, true);
       targetRef.current = null;
     };
-  }, [step.id, step.target, step.fallback, step.placement, step.waiting, paused]);
+  }, [step.id, step.target, step.fallback, step.placement, step.waiting, intro, paused]);
 
   useEffect(() => {
     if (paused || !layout) return;
@@ -135,7 +136,7 @@ export function OnboardingTour({ step, paused, onClose, onNext, onPrevious }: Pr
     <section ref={cardRef} className="onboarding-card" role="dialog" aria-modal="false" aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
       style={layout ? { top: layout.card.top, left: layout.card.left, width: layout.card.width } : undefined}>
       <button type="button" className="onboarding-close" aria-label="Закрыть подсказки" onClick={onClose}><X size={17} /></button>
-      <p className="onboarding-caption">{onNext ? 'ЗНАКОМСТВО С ANTIRISK' : 'ПЕРВАЯ ПРОВЕРКА'}</p>
+      <p className="onboarding-caption">{intro ? 'ЗНАКОМСТВО С ANTIRISK' : 'ТУР ПРОЕКТА'}</p>
       <h2 id={`${id}-title`} ref={headingRef} tabIndex={-1}>{step.title}</h2>
       <p id={`${id}-description`} className="onboarding-description">{step.description}</p>
       <div className="onboarding-footer"><span>Шаг {step.number} из {step.total}</span>

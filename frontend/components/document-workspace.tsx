@@ -8,6 +8,7 @@ import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Rev
 import { riskLabels } from '@/lib/rules';
 import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences';
 import type { DisplaySeverity } from '@/lib/workspace-preferences';
+import type { DocumentTourStage } from '@/lib/onboarding';
 import { HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
 import { DocumentAssistant } from './document-assistant';
@@ -38,6 +39,7 @@ export type DocumentWorkspaceProps = {
   selected: string | null;
   search: string;
   findings: Finding[];
+  onboardingPane?: DocumentTourStage;
   defaultSeverities?: readonly DisplaySeverity[];
   statuses: Record<string, ReviewStatus>;
   onPage: (page: number) => void;
@@ -100,7 +102,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
   </div>;
 }
 
-export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, onboardingPane, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
   const [zoom, setZoom] = useState(100);
   const [hand, setHand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -153,6 +155,13 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
   const hasText = sections.some(section => section.paragraphs.some(paragraph => paragraph.text.trim()));
 
   useEffect(() => { setSeverity('default'); }, [document.id, defaultSeverityKey]);
+
+  useEffect(() => {
+    if (!onboardingPane) return;
+    setTab(onboardingPane);
+    setMobilePane('findings');
+    setExpanded(false);
+  }, [document.id, onboardingPane]);
 
   useEffect(() => {
     setViewerMode(document.hasPreview ? 'pdf' : 'text');
@@ -320,7 +329,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     </section>
 
     <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
-      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
+      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} data-onboarding={item.id === 'rules' ? undefined : `document-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
           <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
