@@ -33,7 +33,7 @@ export function useAnalysisNotifications(projects: Project[], ready: boolean, pr
     setNotices(items => [...fresh.reverse(), ...items].slice(0, 30));
     if (preferences.notifications.desktop && browserPermission() === 'granted') {
       for (const notice of fresh) {
-        try { new Notification(notice.title, { body: notice.body, icon: '/favicon.svg', tag: notice.id }); }
+        try { new Notification(notice.title, { body: notice.body, icon: '/antirisk-logo.png', tag: notice.id }); }
         catch { /* Уведомление остаётся доступным на сайте, включая мобильные браузеры. */ }
       }
     }

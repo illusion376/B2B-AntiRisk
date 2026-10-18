@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
-import { findingSourceLabels, isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
+import { isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
 import { riskLabels } from '@/lib/rules';
 import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences';
@@ -383,10 +383,6 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
         <span className={`severity-tag ${detail.severity}`}>{severityLabels[detail.severity]}</span>
         <h3>{detail.title}</h3><p>{detail.description}</p>
         <div className="detail-meta">{detail.clause && <span>Пункт {detail.clause}</span>}<span>{isLocated(detail) ? `Страница ${detail.page}` : 'Страница не определена'}</span>{detail.category && <span>{detail.category}</span>}</div>
-        <div className={`finding-evidence ${detail.source === 'ERROR' ? 'evidence-error' : ''}`}>
-          <span>Источник: <strong>{findingSourceLabels[detail.source] ?? (detail.source || 'Не указан')}</strong></span>
-          {detail.quote && <span className={detail.quoteVerified ? 'quote-verified' : 'quote-unverified'}>{detail.quoteVerified ? <ShieldCheck size={14} /> : <AlertCircle size={14} />}{detail.quoteVerified ? 'Цитата найдена в документе' : 'Цитата не подтверждена в тексте документа'}</span>}
-        </div>
         <h4>Фрагмент документа</h4>
         {detail.quote ? <blockquote className={!detail.quoteVerified ? 'unverified-quote' : undefined}>{detail.quote}</blockquote> : <p className="missing-quote">Цитата для этого результата отсутствует.</p>}
         {detail.quoteVerified && <p className="quote-evidence-note">Совпадение цитаты подтверждает её наличие в документе. Вывод по правилу приведён в обосновании ниже.</p>}
