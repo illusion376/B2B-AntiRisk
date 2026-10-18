@@ -7,8 +7,8 @@
 .dashboard-shell .dashboard-sidebar { padding: 24px 18px 18px; background: linear-gradient(150deg,#f1f3f7f7,#f5f6f9f2); border-right: 1px solid #e5e8efaa; }
 .dashboard-shell .sidebar-brand { gap: 12px; }
 .dashboard-shell .sidebar-brand strong,.dashboard-shell.analysis-shell .sidebar-brand strong { color: #11141a; font-size: 24px; letter-spacing: -1px; font-weight: 750; }
-.dashboard-shell .sidebar-brand-mark { width: 44px; height: 44px; background: linear-gradient(145deg,#fa2935,#d7091b); box-shadow: inset 0 0 0 1px #fff4,0 5px 15px #de192515; }
-.dashboard-shell .sidebar-brand-mark > svg { width: 27px; height: 27px; }
+.dashboard-shell .sidebar-brand-mark { width: 66px; height: 53px; }
+.dashboard-shell .sidebar-brand-mark > svg { width: 100%; height: 100%; }
 .dashboard-shell .sidebar-create { margin-bottom: 12px; padding: 14px 16px; gap: 12px; font-size: 15px; color: #111820; }
 .dashboard-shell .sidebar-create > svg { width: 21px; height: 21px; color: #4d5665; }
 .dashboard-shell .sidebar-create kbd { display: none; }
@@ -52,8 +52,6 @@
 .dashboard-shell .projects-view { padding-top: 28px; }
 .dashboard-shell .projects-hero { position: relative; display: flex; align-items: center; min-height: 240px; padding: 12px 0 36px; }
 .dashboard-shell .projects-hero-copy { position: relative; z-index: 1; max-width: calc(100% - 300px); }
-.dashboard-shell .projects-eyebrow { display: flex; align-items: center; gap: 17px; margin: 0 0 14px 5px; color: #8c94a5; font-size: 11px; font-weight: 500; letter-spacing: 2px; }
-.dashboard-shell .projects-eyebrow::before { content: ''; width: 4px; height: 23px; border-radius: 2px; background: #e0192b; transform: skew(-28deg); }
 .dashboard-shell .projects-hero h1 { color: #080c12; font-size: clamp(48px,5.7vw,85px); line-height: 1.08; font-weight: 800; letter-spacing: -4px; }
 .dashboard-shell .projects-hero p { margin: 12px 0 0 4px; color: #828b9d; font-size: 17px; line-height: 1.5; font-weight: 400; }
 .dashboard-shell .projects-hero-art { position: absolute; top: -12px; right: -16px; width: 400px; height: 240px; object-fit: contain; pointer-events: none; }
@@ -207,7 +205,7 @@
   .dashboard-shell .dashboard-sidebar { padding-left: 14px; padding-right: 14px; }
   .dashboard-shell .sidebar-brand { gap: 9px; }
   .dashboard-shell .sidebar-brand strong,.dashboard-shell.analysis-shell .sidebar-brand strong { font-size: 18px; }
-  .dashboard-shell .sidebar-brand-mark { width: 38px; height: 38px; }
+  .dashboard-shell .sidebar-brand-mark { width: 58px; height: 46px; }
   .dashboard-shell .sidebar-navigation button { font-size: 13px; gap: 10px; }
   .dashboard-shell .projects-view .dashboard-filter-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .dashboard-shell .projects-hero { min-height: 200px; }
@@ -233,7 +231,7 @@
   .dashboard-canvas .dashboard-shell.app-shell,.dashboard-canvas .dashboard-shell.app-shell.analysis-shell { grid-template-columns: minmax(0,1fr); }
   .dashboard-shell .dashboard-sidebar { top: 0; left: 0; bottom: 0; width: 270px; border-radius: 0 18px 18px 0; padding: 24px 18px 20px; background: #f3f5f9; }
   .dashboard-shell .sidebar-brand strong,.dashboard-shell.analysis-shell .sidebar-brand strong { font-size: 22px; }
-  .dashboard-shell .sidebar-brand-mark { width: 44px; height: 44px; }
+  .dashboard-shell .sidebar-brand-mark { width: 66px; height: 53px; }
   .dashboard-shell .sidebar-navigation button { font-size: 15px; }
   .dashboard-shell .sidebar-close { width: 24px; }
   .dashboard-shell .topbar,.dashboard-shell.analysis-shell .topbar { height: 64px; padding: 0 16px; gap: 10px; }
@@ -250,8 +248,6 @@
   .dashboard-shell .secondary-view { padding: 18px 16px 90px; }
   .dashboard-shell .projects-hero { min-height: 190px; padding: 8px 0 24px; align-items: flex-start; }
   .dashboard-shell .projects-hero-copy { max-width: 100%; }
-  .dashboard-shell .projects-eyebrow { font-size: 9px; letter-spacing: 1.5px; gap: 12px; margin-bottom: 14px; }
-  .dashboard-shell .projects-eyebrow::before { height: 18px; width: 3px; }
   .dashboard-shell .projects-hero h1 { font-size: clamp(40px,11vw,60px); letter-spacing: -2.5px; }
   .dashboard-shell .projects-hero p { position: relative; z-index: 1; max-width: 260px; margin: 10px 0 0; font-size: 13px; line-height: 1.5; }
   .dashboard-shell .projects-hero-art { top: 12px; right: -45px; width: 200px; height: 170px; opacity: .25; }

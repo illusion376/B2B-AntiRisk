@@ -71,7 +71,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
   return (
     <section className="secondary-view projects-view">
       <header className="projects-hero">
-        <div className="projects-hero-copy"><span className="projects-eyebrow">ЛИЧНОЕ ПРОСТРАНСТВО</span><h1>Проекты</h1><p>Здесь собраны все ваши проекты и загруженные документы</p></div>
+        <div className="projects-hero-copy"><h1>Проекты</h1><p>Здесь собраны все ваши проекты и загруженные документы</p></div>
         <img className="projects-hero-art" src="/document-stack.svg" alt="" aria-hidden="true" />
       </header>
       <div className="dashboard-filter-tabs" role="group" aria-label="Фильтр проектов по статусу">

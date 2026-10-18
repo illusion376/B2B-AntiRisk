@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpenCheck, ChevronRight, CircleHelp, FileText, Plus, Settings2, ShieldCheck, X } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, CircleHelp, FileText, Plus, Settings2, X } from 'lucide-react';
 import type { User, View } from '@/lib/types';
 
 interface Props {
@@ -24,7 +24,7 @@ export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,
   return <>
     {open && <button className="dashboard-scrim" aria-label="Закрыть меню" onClick={onClose} />}
     <aside className={`dashboard-sidebar ${open?'is-open':''}`} id="workspace-sidebar" aria-label="Рабочее пространство">
-      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="B2B AntiRisk — проекты"><span className="sidebar-brand-mark"><ShieldCheck size={21} strokeWidth={1.6}/></span><strong>B2B AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
+      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="AntiRisk — проекты"><span className="sidebar-brand-mark" aria-hidden="true"><svg viewBox="250 110 790 630"><image href="/antirisk-logo.png" width="1280" height="853" /></svg></span><strong>AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
       <button className="sidebar-create" onClick={()=>{onCreate();onClose();}}><Plus size={16}/><span>Новый проект</span><kbd>+</kbd></button>
       <nav className="sidebar-navigation" aria-label="Основная навигация">{items.map(item=>{
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
