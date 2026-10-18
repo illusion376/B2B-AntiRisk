@@ -1,4 +1,4 @@
-.dashboard-shell .settings-view { max-width: 1080px; }
+.dashboard-shell .settings-view { width: 100%; max-width: none; }
 .dashboard-shell .settings-title { margin-bottom: 22px; }
 .dashboard-shell .settings-autosave { display: flex; align-items: center; gap: 6px; color: #8b8b8b; font-size: .6875rem; white-space: nowrap; }
 .dashboard-shell .settings-autosave svg { color: #609474; }
