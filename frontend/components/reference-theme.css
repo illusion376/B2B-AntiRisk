@@ -101,7 +101,6 @@
 .dashboard-shell .dashboard-search-result { margin: 0 0 16px; font-size: 13px; }
 .dashboard-shell .dashboard-empty { min-height: 230px; }
 .dashboard-shell .statusbar { height: 26px; background: transparent; border: 0; color: #939cad; font-size: 9px; }
-.dashboard-shell .settings-view { max-width: 1250px; }
 .dashboard-shell .settings-grid { gap: 18px; }
 .dashboard-shell .settings-card { padding: 22px; background: #fffffff0; border: 1px solid #e7eaf1; border-radius: 15px; box-shadow: 0 7px 26px #77829c05; }
 .dashboard-shell .settings-card-heading h2 { font-size: 15px; font-weight: 600; color: #273041; }
