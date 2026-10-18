@@ -92,7 +92,7 @@
 .dashboard-shell .project-file-name .processing-error-text,
 .dashboard-shell .project-child-name .processing-error-text { color: #ae4d40; line-height: 1.6; overflow-wrap: anywhere; }
 .dashboard-shell .project-document-children { margin: 0 0 8px 24px; padding: 0 0 0 18px; border-left: 1px solid #e4e4e4; }
-.dashboard-shell .project-child-document { display: grid; grid-template-columns: 20px minmax(0, 1fr) 225px 88px; align-items: center; gap: 12px; padding: 14px 7px 14px 0; border-bottom: 1px solid #f0f0f0; }
+.dashboard-shell .project-child-document { display: grid; grid-template-columns: 20px minmax(0, 1fr) 225px auto; align-items: center; gap: 12px; padding: 14px 7px 14px 0; border-bottom: 1px solid #f0f0f0; }
 .dashboard-shell .project-child-document:last-child { border-bottom: 0; }
 .dashboard-shell .child-document-icon { color: #999; display: flex; }
 .dashboard-shell .project-child-name { min-width: 0; }
@@ -134,23 +134,24 @@
 .dashboard-shell .project-file-sort select { width: 135px; min-height: 34px; border: 0; background: transparent; color: #535964; font-size: .75rem; }
 .dashboard-shell .project-file-sort:focus-within { outline: 2px solid #353a36; outline-offset: 2px; }
 .dashboard-shell .project-file-sort select:focus { outline: 0; }
-.dashboard-shell .project-file-table-scroll { overflow-x: auto; border: 1px solid #e3e6eb; border-radius: 8px; background: #fff; }
-.dashboard-shell .project-file-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; text-align: left; }
-.dashboard-shell .project-file-table th { height: 42px; padding: 10px 16px; border-bottom: 1px solid #e3e6eb; background: #f8f9fb; color: #737986; font-size: .75rem; }
-.dashboard-shell .project-file-table th:first-child { width: 42%; }
-.dashboard-shell .project-file-table th:nth-child(2) { width: 24%; }
+.dashboard-shell .project-file-table-scroll { overflow-x: hidden; border: 1px solid #e3e6eb; border-radius: 8px; background: #fff; }
+.dashboard-shell .project-file-table { width: 100%; min-width: 0; border-collapse: collapse; table-layout: fixed; text-align: left; }
+.dashboard-shell .project-file-table th { height: 42px; padding: 10px 14px; border-bottom: 1px solid #e3e6eb; background: #f8f9fb; color: #737986; font-size: .75rem; }
+.dashboard-shell .project-file-table th:first-child { width: 25%; }
+.dashboard-shell .project-file-table th:nth-child(2) { width: 19%; }
 .dashboard-shell .project-file-table th:nth-child(3) { width: 8%; }
-.dashboard-shell .project-file-table th:nth-child(4) { width: 16%; }
-.dashboard-shell .project-file-table th:last-child { width: 10%; }
-.dashboard-shell .project-file-table td { padding: 13px 16px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
+.dashboard-shell .project-file-table th:nth-child(4) { width: 14%; }
+.dashboard-shell .project-file-table th:last-child { width: 34%; text-align: right; padding-right: 20px; }
+.dashboard-shell .project-file-table td { padding: 13px 14px; border-bottom: 1px solid #eef0f3; vertical-align: middle; }
 .dashboard-shell .project-file-table tbody > tr:last-child > td { border-bottom: 0; }
 .dashboard-shell .project-file-table-row:hover { background: #fcfcfd; }
-.dashboard-shell .project-file-title-cell { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.dashboard-shell .project-file-table .file-type-icon { width: 36px; height: 43px; }
-.dashboard-shell .project-file-table .project-file-name h3 { font-size: .875rem; line-height: 1.4; }
-.dashboard-shell .project-file-name h3 button { padding: 0; text-align: left; line-height: inherit; }
+.dashboard-shell .project-file-title-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dashboard-shell .project-file-table .file-type-icon { width: 36px; height: 43px; flex-shrink: 0; }
+.dashboard-shell .project-file-name { min-width: 0; flex: 1; }
+.dashboard-shell .project-file-table .project-file-name h3 { font-size: .875rem; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-shell .project-file-name h3 button { padding: 0; text-align: left; line-height: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; max-width: 100%; }
 .dashboard-shell .project-file-name h3 button:hover { text-decoration: underline; }
-.dashboard-shell .project-file-table .project-file-name p { margin-top: 3px; color: #858b97; }
+.dashboard-shell .project-file-table .project-file-name p { margin-top: 3px; color: #858b97; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-shell .project-file-table .file-processing { width: auto; }
 .dashboard-shell .project-file-table .file-status { display: inline-flex; padding: 4px 7px; border-radius: 5px; background: #f3f4f6; font-size: .75rem; }
 .dashboard-shell .project-file-table .file-status.ready { background: #eaf6ef; color: #278452; }
@@ -159,10 +160,68 @@
 .dashboard-shell .project-file-table .file-processing > small { color: #858b97; font-size: .625rem; }
 .dashboard-shell .project-file-size, .dashboard-shell .project-file-date { color: #858b97; font-size: .75rem; }
 .dashboard-shell .project-file-date time { white-space: nowrap; }
-.dashboard-shell .project-file-actions { text-align: right; }
-.dashboard-shell .project-file-remove-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid #e4e4e4; border-radius: 4px; background: #fff; color: #8f6666; }
-.dashboard-shell .project-file-remove-button:hover { border-color: #e8c5c5; background: #fff5f5; color: #b64343; }
-.dashboard-shell .project-file-table .file-open-button { min-height: 30px; padding: 6px 8px; font-size: .6875rem; }
+.dashboard-shell .project-file-actions { text-align: right; padding-right: 20px; }
+.dashboard-shell .file-actions-group,
+.dashboard-shell .project-child-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; flex-shrink: 0; }
+.dashboard-shell .project-file-actions .file-open-button,
+.dashboard-shell .project-file-actions .file-reanalyze-button,
+.dashboard-shell .project-file-actions .project-file-remove-button,
+.dashboard-shell .project-child-actions .file-open-button,
+.dashboard-shell .project-child-actions .file-reanalyze-button,
+.dashboard-shell .project-child-actions .project-file-remove-button,
+.dashboard-shell .project-file-table .file-open-button,
+.dashboard-shell .project-file-table .file-reanalyze-button,
+.dashboard-shell .project-file-table .project-file-remove-button {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #dfe5ee;
+  background: #fff;
+  color: #59667b;
+  font-size: .75rem;
+  line-height: 1;
+  transition: all .15s ease;
+}
+.dashboard-shell .project-file-remove-button {
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  padding: 0;
+  cursor: pointer;
+}
+.dashboard-shell .project-file-remove-button:hover:not(:disabled) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+}
+.dashboard-shell .project-file-table .file-open-button,
+.dashboard-shell .project-child-actions .file-open-button {
+  gap: 6px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.dashboard-shell .project-file-table .file-open-button:hover,
+.dashboard-shell .project-child-actions .file-open-button:hover {
+  border-color: #cbd2df;
+  background: #f2f4f8;
+  color: #273142;
+}
+.dashboard-shell .file-reanalyze-button {
+  gap: 5px;
+  padding: 0 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.dashboard-shell .file-reanalyze-button:hover {
+  border-color: #cbd2df;
+  background: #f2f4f8;
+  color: #273142;
+}
 .dashboard-shell .project-file-table .project-archive-row > td { padding-top: 0; }
 .dashboard-shell .project-file-table .project-document-children { margin: 0 0 0 18px; }
 .dashboard-shell .project-file-table .project-child-document { padding-top: 10px; padding-bottom: 10px; }
@@ -184,8 +243,7 @@
 }
 
 @media (max-width: 1000px) {
-  .dashboard-shell .project-child-document { grid-template-columns: 20px minmax(0, 1fr) 190px; }
-  .dashboard-shell .project-child-document .file-open-button { grid-column: 3; justify-self: start; }
+  .dashboard-shell .project-child-document { grid-template-columns: 20px minmax(0, 1fr) auto; }
 }
 @media (max-width: 700px) {
   .dashboard-shell .project-files-heading-actions { width: 100%; justify-content: space-between; gap: 9px; }

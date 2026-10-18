@@ -134,9 +134,43 @@
 .dashboard-shell .project-file-sort,.dashboard-shell .project-files-view .project-files-toolbar .field-search { border-radius: 9px; background: #fff9; border-color: #e0e6ef; }
 .dashboard-shell .project-file-table-scroll { border-color: #e5e9f0; border-radius: 15px; box-shadow: 0 10px 35px #78839b07; }
 .dashboard-shell .project-file-table th { background: #fbfcfe; border-color: #e5e9f0; color: #7b879a; font-weight: 500; }
+.dashboard-shell .project-file-table th:first-child { width: 25%; }
+.dashboard-shell .project-file-table th:nth-child(2) { width: 19%; }
+.dashboard-shell .project-file-table th:nth-child(3) { width: 8%; }
+.dashboard-shell .project-file-table th:nth-child(4) { width: 14%; }
+.dashboard-shell .project-file-table th:last-child { width: 34%; text-align: right; padding-right: 20px; }
 .dashboard-shell .project-file-table td { padding: 16px; border-color: #e9edf3; }
+.dashboard-shell .project-file-table td.project-file-actions,
+.dashboard-shell .project-file-actions { text-align: right; padding-right: 20px; }
 .dashboard-shell .project-file-table .project-file-name h3 { font-weight: 600; color: #273142; }
-.dashboard-shell .project-file-table .file-open-button { border-radius: 8px; border-color: #dfe5ee; color: #59667b; }
+.dashboard-shell .project-file-actions .file-open-button,
+.dashboard-shell .project-file-actions .file-reanalyze-button,
+.dashboard-shell .project-file-actions .project-file-remove-button,
+.dashboard-shell .project-child-actions .file-open-button,
+.dashboard-shell .project-child-actions .file-reanalyze-button,
+.dashboard-shell .project-child-actions .project-file-remove-button,
+.dashboard-shell .project-file-table .file-open-button,
+.dashboard-shell .project-file-table .file-reanalyze-button,
+.dashboard-shell .project-file-table .project-file-remove-button {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #dfe5ee;
+  color: #59667b;
+  font-size: 12px;
+  line-height: 1;
+}
+.dashboard-shell .project-file-actions .project-file-remove-button,
+.dashboard-shell .project-child-actions .project-file-remove-button,
+.dashboard-shell .project-file-table .project-file-remove-button {
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
+  padding: 0;
+}
 .dashboard-shell .modal { padding: 26px; border: 1px solid #e6eaf1; border-radius: 18px; box-shadow: 0 24px 100px #19243a30; color: #414e61; }
 .dashboard-shell .modal::backdrop { background: #25334a4a; backdrop-filter: blur(5px); }
 .dashboard-shell .modal-header { margin-bottom: 22px; }
@@ -305,9 +339,12 @@
   .dashboard-shell .project-file-table .project-file-name h3 { font-size: 13px; }
   .dashboard-shell .project-file-table .project-file-name p { font-size: 11px; line-height: 1.5; }
   .dashboard-shell .project-file-table .project-file-actions { display: flex; justify-content: flex-end; gap: 8px; }
-  .dashboard-shell .project-file-table .project-file-actions:empty { display: none; }
-  .dashboard-shell .project-file-table .file-open-button { min-height: 36px; padding: 8px 12px; }
-  .dashboard-shell .project-file-table .project-file-remove-button { width: 36px; height: 36px; border-radius: 8px; }
+  .dashboard-shell .project-file-table .file-open-button,
+  .dashboard-shell .project-file-table .file-reanalyze-button,
+  .dashboard-shell .project-file-table .project-file-remove-button { height: 36px; min-height: 36px; max-height: 36px; box-sizing: border-box; }
+  .dashboard-shell .project-file-table .file-open-button,
+  .dashboard-shell .project-file-table .file-reanalyze-button { padding: 8px 12px; }
+  .dashboard-shell .project-file-table .project-file-remove-button { width: 36px; border-radius: 8px; padding: 0; }
   .dashboard-shell .project-file-table .project-document-children { margin-left: 0; padding-left: 12px; }
   .dashboard-shell .project-file-table .project-no-documents { padding: 0 8px 12px; }
   .dashboard-shell .project-breadcrumb,.dashboard-shell.analysis-shell .project-breadcrumb { padding: 0 16px; font-size: 10px; }
