@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { emptyOnboarding, onboardingKey, parseOnboarding, projectTourStep, workspaceTour } from '@/lib/onboarding';
+import { documentTour, emptyOnboarding, onboardingKey, parseOnboarding, projectTourStep, workspaceTour } from '@/lib/onboarding';
 import type { OnboardingProgress } from '@/lib/onboarding';
 import type { Project, View } from '@/lib/types';
 
-export function useOnboarding(userId: string | null, ready: boolean, view: View, projectId: string, project?: Project) {
+export function useOnboarding(userId: string | null, ready: boolean, view: View, projectId: string, project?: Project, documentReady = false) {
   const key = userId ? onboardingKey(userId) : null;
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [progress, setProgress] = useState<OnboardingProgress>(emptyOnboarding);
@@ -39,50 +39,54 @@ export function useOnboarding(userId: string | null, ready: boolean, view: View,
     }
   }, [ready, key, loadedKey, progress.workspaceDone, progress.projectId, view]);
 
-  useEffect(() => {
-    if (ready && loadedKey === key && view === 'document' && progress.projectId === projectId) {
-      setProgress(previous => ({ ...previous, projectDone: true, projectId: null }));
-    }
-  }, [ready, key, loadedKey, view, projectId, progress.projectId]);
+  const workspaceActive = workspaceStep !== null;
+  const projectActive = ready && Boolean(key) && loadedKey === key && !workspaceActive
+    && !progress.projectDone && progress.projectId === projectId;
+  const documentActive = projectActive && view === 'document' && documentReady;
 
   const next = useCallback(() => {
-    if (workspaceStep === null) return;
-    if (workspaceStep + 1 < workspaceTour.length) setWorkspaceStep(workspaceStep + 1);
-    else {
-      setWorkspaceStep(null);
-      setProgress(previous => ({ ...previous, workspaceDone: true }));
+    if (workspaceStep !== null) {
+      if (workspaceStep + 1 < workspaceTour.length) setWorkspaceStep(workspaceStep + 1);
+      else {
+        setWorkspaceStep(null);
+        setProgress(previous => ({ ...previous, workspaceDone: true }));
+      }
+    } else if (documentActive) {
+      setProgress(previous => previous.documentStep === 'findings' ? { ...previous, documentStep: 'assistant' }
+        : { ...previous, projectDone: true, projectId: null, documentStep: 'findings' });
     }
-  }, [workspaceStep]);
+  }, [workspaceStep, documentActive]);
 
   const close = useCallback(() => {
     if (workspaceStep !== null) {
       setWorkspaceStep(null);
       setProgress(previous => ({ ...previous, workspaceDone: true }));
-    } else setProgress(previous => ({ ...previous, projectDone: true, projectId: null }));
+    } else setProgress(previous => ({ ...previous, projectDone: true, projectId: null, documentStep: 'findings' }));
   }, [workspaceStep]);
 
   const projectCreated = useCallback((id: string) => {
     setWorkspaceStep(null);
-    setProgress(previous => ({ ...previous, workspaceDone: true, projectId: previous.projectDone ? null : id }));
+    setProgress(previous => ({ ...previous, workspaceDone: true, projectId: previous.projectDone ? null : id, documentStep: 'findings' }));
   }, []);
 
   const projectDeleted = useCallback((id: string) => {
-    setProgress(previous => previous.projectId === id ? { ...previous, projectId: null } : previous);
+    setProgress(previous => previous.projectId === id ? { ...previous, projectId: null, documentStep: 'findings' } : previous);
   }, []);
 
   const restart = useCallback((id?: string) => {
     if (id) {
       setWorkspaceStep(null);
-      setProgress(previous => ({ ...previous, workspaceDone: true, projectDone: false, projectId: id }));
+      setProgress(previous => ({ ...previous, workspaceDone: true, projectDone: false, projectId: id, documentStep: 'findings' }));
     } else {
       setProgress(previous => ({ ...previous, workspaceDone: false }));
       setWorkspaceStep(0);
     }
   }, []);
 
-  const workspaceActive = workspaceStep !== null;
   const step = !ready || !key || loadedKey !== key ? null : workspaceActive ? workspaceTour[workspaceStep]
-    : !progress.projectDone && progress.projectId === projectId && view === 'project' && project ? projectTourStep(project) : null;
-  return { step, workspaceActive, workspaceStep, next, close, projectCreated, projectDeleted, restart,
-    previous: workspaceStep !== null && workspaceStep > 0 ? () => setWorkspaceStep(workspaceStep - 1) : undefined };
+    : projectActive && view === 'project' && project ? projectTourStep(project)
+    : documentActive ? documentTour[progress.documentStep] : null;
+  return { step, workspaceActive, workspaceStep, documentStep: documentActive ? progress.documentStep : undefined, next, close, projectCreated, projectDeleted, restart,
+    previous: workspaceStep !== null && workspaceStep > 0 ? () => setWorkspaceStep(workspaceStep - 1)
+      : documentActive && progress.documentStep === 'assistant' ? () => setProgress(previous => ({ ...previous, documentStep: 'findings' })) : undefined };
 }
