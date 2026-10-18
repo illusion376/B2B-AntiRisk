@@ -19,6 +19,8 @@ import {useWorkspacePreferences} from './use-workspace-preferences';
 import {useAnalysisNotifications} from './use-analysis-notifications';
 import {NotificationCenter} from './notification-center';
 import type {AnalysisNotice} from '@/lib/analysis-notifications';
+import {useOnboarding} from './use-onboarding';
+import {OnboardingTour} from './onboarding-tour';
 import './dashboard.css';
 import './integration.css';
 import './reference-theme.css';
@@ -60,6 +62,8 @@ export function Workspace() {
   const [modal,setModal]=useState<'rename'|'info'|'create-project'|'report'|null>(null);
   const [ruleDialog,setRuleDialog]=useState<{mode:'create'}|{mode:'edit'|'delete';rule:CheckRule}|null>(null);
   const [projectDialog,setProjectDialog]=useState<{mode:'rename'|'delete';project:Project}|null>(null);
+  const onboarding=useOnboarding(user?.id??null,!data.loading&&!data.error,view,projectId,activeProject);
+  const onboardingPaused=!!(modal||ruleDialog||projectDialog);
   const [draftName,setDraftName]=useState('');
   const [saving,setSaving]=useState(false);
   const [modalError,setModalError]=useState<string|null>(null);
@@ -76,6 +80,14 @@ export function Workspace() {
   const pending=useRef(new Set<string>());
   const headerRef=useRef<HTMLDivElement>(null);
   const searchRef=useRef<HTMLInputElement>(null);
+  const onboardingMenu=useRef(false);
+  useEffect(()=>{
+    if(!onboarding.workspaceActive){if(onboardingMenu.current){setSidebarOpen(false);onboardingMenu.current=false;}return;}
+    const media=window.matchMedia('(max-width: 760px)');
+    const reveal=()=>{if(media.matches&&!onboardingPaused){setSidebarOpen(true);onboardingMenu.current=true;}};
+    reveal();media.addEventListener('change',reveal);
+    return()=>media.removeEventListener('change',reveal);
+  },[onboarding.workspaceActive,onboarding.workspaceStep,onboardingPaused]);
   const categories=[...new Set(rules.map(rule=>rule.category))];
   const modeInfo=reportModes.find(mode=>mode.id===reportMode);
   const setView=(next:View)=>{navigate({view:next});setPopover(null);setSearchOpen(false);setActionError(null);};
@@ -115,7 +127,7 @@ export function Workspace() {
     catch(cause){setActionError(errorMessage(cause));throw cause;}
     finally{pending.current.delete(id);setPendingIds(new Set(pending.current));}
   }
-  async function createProject(draft:ProjectDraft){try{const project=await api.createProject(draft);data.refresh();openProject(project);setModal(null);setToast('Проект создан');}catch(cause){return errorMessage(cause);}}
+  async function createProject(draft:ProjectDraft){try{const project=await api.createProject(draft);data.refresh();openProject(project);onboarding.projectCreated(project.id);setModal(null);setToast('Проект создан');}catch(cause){return errorMessage(cause);}}
   async function confirmProjectAction(title:string){
     if(!projectDialog)return;
     const target=projectDialog.project;
@@ -125,6 +137,7 @@ export function Workspace() {
       setToast('Название проекта сохранено');
     }else{
       await api.deleteProject(target.id);
+      onboarding.projectDeleted(target.id);
       data.removeProject(target.id);
       if(projectId===target.id)navigate({view:'documents',projectId:'',documentId:null,findingId:null,page:1});
       setToast('Проект удалён');
@@ -148,7 +161,7 @@ export function Workspace() {
   useWorkspaceTools({documentId:view==='document'?documentId:null,page,activeFindings:visibleFindings,statuses,navigatePage,selectFinding,changeStatus});
   const shell=<div className={`app-shell dashboard-shell${view==='document'?' analysis-shell':''}`}>
     <a className="skip-link" href="#main-content" onClick={event=>{event.preventDefault();document.getElementById('main-content')?.focus();}}>К содержимому</a>
-    <DashboardSidebar view={view} user={user} projectCount={projects.length} ruleCount={rules.length} open={sidebarOpen} onClose={()=>setSidebarOpen(false)} onNavigate={setView} onCreate={()=>openModal('create-project')} onHelp={()=>openModal('info')}/>
+    <DashboardSidebar keepNavigationOpen={onboarding.workspaceActive} view={view} user={user} projectCount={projects.length} ruleCount={rules.length} open={sidebarOpen} onClose={()=>setSidebarOpen(false)} onNavigate={setView} onCreate={()=>openModal('create-project')} onHelp={()=>openModal('info')}/>
     <div ref={headerRef} className="dashboard-header"><header className="topbar">
       <button className="dashboard-menu-button" aria-label="Открыть меню" aria-controls="workspace-sidebar" aria-expanded={sidebarOpen} onClick={()=>setSidebarOpen(!sidebarOpen)}><Menu size={20}/></button>
       {view!=='document'?<label className="dashboard-search"><Search size={15}/><input ref={searchRef} aria-label="Поиск проектов и документов" placeholder="Поиск проектов и документов" value={dashboardQuery} onChange={event=>{setDashboardQuery(event.target.value);if(view!=='documents')setView('documents');}}/><kbd>⌘ K</kbd>{dashboardQuery&&<button aria-label="Очистить поиск" onClick={()=>setDashboardQuery('')}><X size={13}/></button>}</label>:<div className="global-search"><Search size={17}/><input ref={searchRef} maxLength={200} placeholder="Поиск по документу…" aria-label="Поиск по документу" value={search} onFocus={()=>setSearchOpen(true)} onChange={event=>{setSearch(event.target.value);setSearchOpen(true);}}/>{search?<button aria-label="Очистить поиск" onClick={()=>setSearch('')}><X size={15}/></button>:<kbd>⌘ K</kbd>}
@@ -177,7 +190,7 @@ export function Workspace() {
     {toast&&<div className={`toast notice-${toastKind}`} role="status"><span>{toastKind==='completed'?<Check size={16}/>:<AlertCircle size={16}/>}</span>{toast}<button aria-label="Скрыть уведомление" onClick={()=>setToast('')}><X size={16}/></button></div>}
     {modal==='rename'&&<Modal title="Переименовать документ" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={renameDocument}><label className="form-label" htmlFor="document-name">Название документа</label><div className="name-input"><input id="document-name" autoFocus required disabled={saving} maxLength={255} value={draftName} onChange={event=>setDraftName(event.target.value)}/></div>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!draftName.trim()}>{saving?'Сохраняем…':'Сохранить'}</button></div></form></Modal>}
     {modal==='report'&&<Modal title="Скачать отчёт" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={exportReport}><label className="form-label" htmlFor="report-mode">Содержание отчёта</label><select id="report-mode" className="form-select" disabled={saving} value={reportMode} onChange={event=>{const value=event.target.value as ReportModeId;setReportMode(value);setReportFormat((reportModes.find(item=>item.id===value)?.formats[0]||'docx') as ReportFormat);}}>{reportModes.map(mode=><option key={mode.id} value={mode.id}>{mode.title}</option>)}</select><p className="report-description">{modeInfo?.description}</p><label className="form-label" htmlFor="report-format">Формат</label><select id="report-format" className="form-select" disabled={saving} value={reportFormat} onChange={event=>setReportFormat(event.target.value as ReportFormat)}>{modeInfo?.formats.map(format=><option key={format} value={format}>{format.toUpperCase()}</option>)}</select><label className="report-option"><input type="checkbox" disabled={saving} checked={includeDismissed} onChange={event=>setIncludeDismissed(event.target.checked)}/>Включить отклонённые замечания</label>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!modeInfo}>{saving?'Формируем отчёт…':'Скачать'}</button></div></form></Modal>}
-    {modal==='info'&&<Modal title="О рабочем пространстве" onClose={()=>setModal(null)}><div className="info-content"><p>Создайте проект, загрузите документы, нажмите «Начать анализ» и дождитесь завершения проверки. Файлы и решения по замечаниям сохраняются на сервере.</p><p>Откройте документ, чтобы сопоставить замечания с исходным текстом, принять или отклонить их и скачать отчёт. Поиск работает по всем страницам.</p><p>Для документов из ZIP доступен отдельный просмотр. Повторная проверка использует текущие включённые правила.</p><p>Текущий профиль предоставляется API; вход и управление доступом в этой версии не реализованы.</p></div><div className="modal-actions"><button className="primary-button" onClick={()=>setModal(null)}>Понятно</button></div></Modal>}
+    {modal==='info'&&<Modal title="О рабочем пространстве" onClose={()=>setModal(null)}><div className="info-content"><p>Создайте проект, загрузите документы, нажмите «Начать анализ» и дождитесь завершения проверки. Файлы и решения по замечаниям сохраняются на сервере.</p><p>Откройте документ, чтобы сопоставить замечания с исходным текстом, принять или отклонить их и скачать отчёт. Поиск работает по всем страницам.</p><p>Для документов из ZIP доступен отдельный просмотр. Повторная проверка использует текущие включённые правила.</p><p>Текущий профиль предоставляется API; вход и управление доступом в этой версии не реализованы.</p></div><div className="modal-actions"><button className="secondary-button" onClick={()=>{setModal(null);onboarding.restart(view==='project'?activeProject?.id:undefined);}}>Показать подсказки</button><button className="primary-button" onClick={()=>setModal(null)}>Понятно</button></div></Modal>}
   </div>;
-  return <div className={`dashboard-canvas${view==='document'?' analysis-canvas':''}`}>{shell}</div>;
+  return <div className={`dashboard-canvas${view==='document'?' analysis-canvas':''}`}>{shell}{onboarding.step&&<OnboardingTour step={onboarding.step} paused={onboardingPaused} onClose={onboarding.close} onNext={onboarding.workspaceActive?onboarding.next:undefined} onPrevious={onboarding.previous}/>}</div>;
 }
