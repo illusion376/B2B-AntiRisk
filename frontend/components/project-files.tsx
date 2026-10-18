@@ -117,9 +117,9 @@ export function ProjectFilesView({
         {hasFiles && <h2>Документы <span>{project.files.length}</span></h2>}
         <FileDropzone compact={hasFiles} onUpload={onUpload} disabled={starting || removing || !!fileToRemove} onBusyChange={setUploading} />
         {hasFiles && <div className="project-files-heading-actions">
-          {pending > 0 && <span className="processing-count" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
+          {pending > 0 && <span className="processing-count" data-onboarding="analysis-progress" role="status"><LoaderCircle size={15} className="spin" />В обработке: {pending}</span>}
           {(waiting > 0 || (onRerun && project.files.some(file => file.documents.some(document => document.phase === 'ready' || document.phase === 'failed')))) && (
-            <button type="button" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={busy || !!fileToRemove || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
+            <button type="button" data-onboarding="start-analysis" className={waiting > 0 ? 'primary-button' : 'secondary-button'} disabled={busy || !!fileToRemove || (waiting === 0 && pending > 0) || !modeReady} onClick={() => void runAnalysis()}>
               {starting ? <LoaderCircle size={15} className="spin" /> : waiting > 0 ? <Play size={15} /> : <RotateCw size={14} />}
               {starting ? 'Запускаем анализ…' : waiting > 0 ? 'Начать анализ' : 'Проверить заново'}
             </button>
@@ -158,7 +158,7 @@ export function ProjectFilesView({
           </div>
         </div>
       {(normalizedQuery || statusFilter !== 'all') && <p className="project-search-result" role="status">Показано загрузок: {filtered.length} из {project.files.length}</p>}
-      <div className="project-file-table-scroll">
+      <div className="project-file-table-scroll" data-onboarding="project-files">
         <table className="project-file-table" aria-label="Документы проекта">
           <thead><tr><th scope="col">Название</th><th scope="col">Статус</th><th scope="col">Размер</th><th scope="col">Дата добавления</th><th scope="col"><span className="sr-only">Действия</span></th></tr></thead>
           <tbody>
@@ -191,7 +191,7 @@ export function ProjectFilesView({
                   <td className="project-file-date" data-label="Дата добавления"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
                   <td className="project-file-actions">
                   {canOpen && (
-                    <button className="secondary-button file-open-button" onClick={() => onOpenDocument(singleDocument)} aria-label={`Открыть документ «${singleDocument.name}»`}>
+                    <button className="secondary-button file-open-button" data-onboarding="open-document" onClick={() => onOpenDocument(singleDocument)} aria-label={`Открыть документ «${singleDocument.name}»`}>
                       Открыть <ArrowUpRight size={15} />
                     </button>
                   )}
@@ -221,7 +221,7 @@ export function ProjectFilesView({
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
                         </div>
                         {document.phase === 'ready' && document.hasPreview && (
-                          <button className="secondary-button file-open-button" onClick={() => onOpenDocument(document)} aria-label={`Открыть документ «${document.name}»`}>
+                          <button className="secondary-button file-open-button" data-onboarding="open-document" onClick={() => onOpenDocument(document)} aria-label={`Открыть документ «${document.name}»`}>
                             Открыть <ArrowUpRight size={15} />
                           </button>
                         )}
@@ -336,7 +336,7 @@ function FileDropzone({ compact, onUpload, disabled, onBusyChange }: FileDropzon
           ref={input} type="file" hidden multiple disabled={blocked} accept={UPLOAD_ACCEPT} aria-label="Выберите документы"
           onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; void accept(files); }}
         />
-        <button type="button" className={compact ? 'secondary-button' : 'primary-button'} disabled={blocked} aria-describedby={compact ? undefined : 'file-upload-help'} onClick={() => input.current?.click()}>
+        <button type="button" data-onboarding="upload-files" className={compact ? 'secondary-button' : 'primary-button'} disabled={blocked} aria-describedby={compact ? undefined : 'file-upload-help'} onClick={() => input.current?.click()}>
           {uploading ? <LoaderCircle size={17} className="spin" /> : <UploadCloud size={17} />}{uploading ? 'Загрузка…' : compact ? 'Добавить документы' : 'Выбрать файлы'}
         </button>
       </div>
