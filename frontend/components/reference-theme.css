@@ -49,8 +49,8 @@
 .dashboard-shell .primary-button:hover { background: #cf1020; border-color: #cf1020; }
 .dashboard-shell .secondary-button { min-height: 38px; gap: 8px; padding: 9px 13px; background: #ffffffd9; border: 1px solid #e1e6ee; border-radius: 9px; color: #465165; font-size: 12px; font-weight: 500; }
 .dashboard-shell .secondary-button:hover { background: #f2f4f8; border-color: #cbd2df; }
-.dashboard-shell .projects-view { padding-top: 28px; }
-.dashboard-shell .projects-hero { position: relative; display: flex; align-items: center; min-height: 240px; padding: 12px 0 36px; }
+.dashboard-shell .projects-view { padding-top: 12px; }
+.dashboard-shell .projects-hero { position: relative; display: flex; align-items: flex-start; min-height: 240px; padding: 8px 0 36px; }
 .dashboard-shell .projects-hero-copy { position: relative; z-index: 1; max-width: calc(100% - 300px); }
 .dashboard-shell .projects-hero h1 { color: #080c12; font-size: clamp(48px,5.7vw,85px); line-height: 1.08; font-weight: 800; letter-spacing: -4px; }
 .dashboard-shell .projects-hero p { margin: 12px 0 0 4px; color: #828b9d; font-size: 17px; line-height: 1.5; font-weight: 400; }
@@ -209,7 +209,7 @@
   .dashboard-shell .sidebar-navigation button { font-size: 13px; gap: 10px; }
   .dashboard-shell .projects-view .dashboard-filter-tabs { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .dashboard-shell .projects-hero { min-height: 200px; }
-  .dashboard-shell .projects-view { padding-top: 16px; }
+  .dashboard-shell .projects-view { padding-top: 12px; }
   .dashboard-shell .projects-hero-art { opacity: .8; width: 280px; }
   .dashboard-shell .projects-hero h1 { font-size: 60px; }
   .dashboard-shell .projects-hero p { font-size: 14px; }
