@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, FileText, FolderOpen, LoaderCircle, Plus } from 'lucide-react';
+import { AlertTriangle, ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, Clock3, FileText, FolderOpen, Layers3, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
 import type { Project, ProjectDraft } from '@/lib/types';
 import { formatProjectDate } from '@/lib/projects';
 import { Modal } from './ui';
@@ -20,6 +20,7 @@ interface ProjectsViewProps {
 
 type ProjectFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed' | 'empty';
 const PAGE_SIZE = 8;
+const filterIcons = { all: Layers3, uploaded: Clock3, processing: RefreshCw, ready: CircleCheck, failed: AlertTriangle, empty: FileText };
 
 function projectState(project: Project): Exclude<ProjectFilter, 'all'> {
   if (!project.files.length) return 'empty';
@@ -69,26 +70,19 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
 
   return (
     <section className="secondary-view projects-view">
-      <div className="view-title">
-        <h1>Документы</h1>
-        <button className="primary-button" onClick={onCreate}><Plus size={16} />Новый проект</button>
-      </div>
-      <div className="dashboard-list-toolbar">
-        <div className="dashboard-filter-tabs" role="group" aria-label="Фильтр проектов по статусу">
-          {filters.map(item => (
+      <header className="projects-hero">
+        <div className="projects-hero-copy"><h1>Проекты</h1><p>Здесь собраны все ваши проекты и загруженные документы</p></div>
+        <img className="projects-hero-art" src="/document-stack.svg" alt="" aria-hidden="true" />
+      </header>
+      <div className="dashboard-filter-tabs" role="group" aria-label="Фильтр проектов по статусу">
+        {filters.map(item => {
+          const Icon = filterIcons[item.id];
+          return (
             <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
-              {item.label}<span>{item.count}</span>
+              <Icon size={21} aria-hidden="true" /><span className="project-filter-label">{item.label}</span><span className="project-filter-count">{item.count}</span>
             </button>
-          ))}
-        </div>
-        <label className="dashboard-sort">
-          <ArrowDownWideNarrow size={14} />
-          <span className="sr-only">Сортировка проектов</span>
-          <select value={sort} onChange={event => setSort(event.target.value)}>
-            <option value="recent">Сначала новые</option>
-            <option value="name">По названию</option>
-          </select>
-        </label>
+          );
+        })}
       </div>
       {normalizedQuery && (
         <p className="dashboard-search-result" role="status">
@@ -96,6 +90,11 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
           <button onClick={() => onQueryChange('')}>Сбросить поиск</button>
         </p>
       )}
+      <div className="projects-table-card">
+        <div className="projects-table-actions">
+          <button className="primary-button" onClick={onCreate}><Plus size={19} />Новый проект</button>
+          <label className="dashboard-sort"><ArrowDownWideNarrow size={17} /><span className="sr-only">Сортировка проектов</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="recent">Сначала новые</option><option value="name">По названию</option></select></label>
+        </div>
       {filtered.length > 0 ? (
         <>
           <div className="dashboard-table-scroll">
@@ -120,14 +119,14 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
                           <span><strong>{project.title}</strong><small>{project.description || 'Документы проекта'}</small></span>
                         </button>
                       </td>
-                      <td><span className={`dashboard-state ${state}`}><i />{projectStateLabels[state]}</span></td>
-                      <td><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
-                      <td>
+                      <td data-label="Статус"><span className={`dashboard-state ${state}`}><i />{projectStateLabels[state]}</span></td>
+                      <td data-label="Файлы"><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
+                      <td data-label="Замечания">
                         <span className={riskCount ? 'dashboard-risk-value' : ''} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
                           {hasResults ? riskCount : '—'}
                         </span>
                       </td>
-                      <td><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td>
+                      <td data-label="Обновлён"><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td>
                       <td>
                         <div className="project-row-actions"><button className="dashboard-row-action" aria-label={`Открыть проект «${project.title}»`} title="Открыть проект" onClick={() => onOpen(project)}>
                           <ArrowUpRight size={16} />
@@ -159,6 +158,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
           ) : <button className="primary-button" onClick={onCreate}><Plus size={16} />Новый проект</button>}
         </div>
       )}
+      </div>
     </section>
   );
 }

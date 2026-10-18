@@ -15,8 +15,8 @@
 }
 
 @layer base {
-  *, *::before, *::after { font-family: var(--font-sans); font-weight: 700; }
-  :root { --font-sans: "Segoe UI", Arial, sans-serif; --bg: #efefed; --surface: #fdfcfb; --paper: #fff; --text: #252725; --muted: #797c78; --line: #e5e5e1; --red: #bc302a; --red-hover: #a62620; --red-light: #fae8e5; --green: #278452; --amber: #e9a80f; --shadow: 0 6px 28px #2729220c; }
+  *, *::before, *::after { font-family: var(--font-sans); }
+  :root { --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif; --bg: #f5f6f9; --surface: #fff; --paper: #fff; --text: #141820; --muted: #808895; --line: #e6e9ef; --red: #e21825; --red-hover: #c90c1a; --red-light: #fff0f1; --green: #1ba87c; --amber: #e9a80f; --shadow: 0 12px 44px #272f4b08; }
   html { font-size: 16px; }
   body { font-family: var(--font-sans); color: var(--text); background: var(--bg); font-size: .875rem; -webkit-font-smoothing: antialiased; }
   ::selection { background: #f7d5d1; }
