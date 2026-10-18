@@ -1,6 +1,6 @@
 .dashboard-shell .notification-center { position: relative; }
 .dashboard-shell .notification-trigger { position: relative; }
-.dashboard-shell .notification-badge { position: absolute; top: -5px; right: -5px; min-width: 14px; height: 14px; padding: 0 3px; display: grid; place-items: center; border-radius: 7px; background: #ae302b; color: #fff; font-size: 8px; line-height: 1; border: 1px solid #fff; }
+.dashboard-shell .notification-badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #ae302b; color: #fff; font-size: 9px; font-weight: 700; line-height: 1; text-align: center; border: 1.5px solid #fff; box-sizing: border-box; }
 .dashboard-shell .notification-popover { position: absolute; top: calc(100% + 10px); right: 0; z-index: 90; width: min(350px, calc(100vw - 32px)); border: 1px solid #e6e6e6; border-radius: 8px; box-shadow: 0 8px 28px #00000012; background: #fff; color: #242424; }
 .dashboard-shell .notification-heading { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border-bottom: 1px solid #eeeeee; }
 .dashboard-shell .notification-heading h2 { margin: 0; font-size: .8125rem; }

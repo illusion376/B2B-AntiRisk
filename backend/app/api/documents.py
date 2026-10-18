@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.analyses import enqueue_documents
 from app.api.deps import counts_by_document, current_user, document_out, finding_out, get_document_or_404
 from app.db import get_db
-from app.models import DocumentPage, RiskFinding, User, visible_findings
+from app.models import Analysis, DocumentPage, RiskFinding, User, visible_findings
 from app.schemas import (
     DocumentOut, DocumentUpdate, FindingGroup, FindingsResponse, OutlineSection, PageContent, RerunRequest, SearchResponse,
 )
@@ -216,23 +216,49 @@ def document_findings(
 
 
 @router.post("/{document_id}/reanalyze", response_model=DocumentOut, status_code=status.HTTP_202_ACCEPTED,
-             summary="Перепроверить документ правилами без повторного OCR")
+             summary="Запустить проверку или повторный анализ документа")
 def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
               body: RerunRequest | None = None):
     doc = get_document_or_404(db, document_id, user)
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
     db.refresh(doc, with_for_update=True)
-    if doc.status != "COMPLETED":
-        raise HTTPException(409, "Документ ещё не обработан")
-    doc.status, doc.progress = "ANALYZING", 70
+    if doc.status in ("QUEUED", "CONVERTING", "OCR", "VECTORIZING", "ANALYZING"):
+        raise HTTPException(409, "Документ уже обрабатывается")
+
+    is_initial = doc.status in ("UPLOADED", "FAILED")
+    if is_initial:
+        doc.status, doc.progress = "QUEUED", 0
+        action = "DOCUMENT_START"
+    else:
+        doc.status, doc.progress = "ANALYZING", 70
+        action = "DOCUMENT_REANALYZE"
+
     doc.analysis_mode = mode
     doc.analysis_sensitivity = body.analysis_sensitivity if body else "balanced"
     doc.error_message = None
-    log_action(db, user.id, "DOCUMENT_REANALYZE", "document", doc.id,
+
+    analysis = db.get(Analysis, doc.analysis_id)
+    if analysis and is_initial and analysis.analysis_status in ("UPLOADED", "FAILED"):
+        analysis.analysis_status = "QUEUED"
+        analysis.error_message = None
+
+    log_action(db, user.id, action, "document", doc.id,
                {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None,
                 "analysis_sensitivity": doc.analysis_sensitivity})
     db.flush()
     refresh_analysis(db, doc.analysis_id)
     db.commit()
-    enqueue_documents(db, [doc], body.rule_ids if body else None)
+    enqueue_documents(db, [doc], body.rule_ids if (body and not is_initial) else None)
     return document_out(doc, counts_by_document(db, [doc.id]).get(doc.id))
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Удалить документ и его результаты")
+def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    doc = get_document_or_404(db, document_id, user)
+    analysis_id = doc.analysis_id
+    log_action(db, user.id, "DOCUMENT_DELETED", "document", doc.id, {"file": doc.file_name})
+    db.delete(doc)
+    db.flush()
+    refresh_analysis(db, analysis_id)
+    db.commit()
+
