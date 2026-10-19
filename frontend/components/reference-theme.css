@@ -12,12 +12,11 @@
 
 /* The navigation floats above the background, including its compact footer. */
 .dashboard-shell .dashboard-sidebar {
-  position: relative; isolation: isolate; min-width: 0; align-self: stretch; margin: 14px 6px 44px 22px; padding: 18px 14px 8px;
+  position: relative; min-width: 0; align-self: stretch; margin: 14px 6px 44px 22px; padding: 18px 14px 8px;
   border: 1px solid #ffffffe6; border-radius: 22px;
-  background: rgba(248,252,251,.48);
-  box-shadow: 0 15px 45px #528e8c0c,inset 0 1px 0 #fff; backdrop-filter: blur(20px);
+  background: rgba(248,252,251,.2);
+  box-shadow: 0 15px 45px #528e8c0c,inset 0 1px 0 #fff; backdrop-filter: none;
 }
-.dashboard-shell .dashboard-sidebar::before { content: ''; position: absolute; z-index: -1; inset: 0; border-radius: inherit; pointer-events: none; background: url('/sidebar-mist.svg') center / 100% 100% no-repeat; opacity: .65; }
 .dashboard-shell .sidebar-brand-row { min-height: 42px; padding: 0 6px; margin-bottom: 30px; }
 .dashboard-shell .sidebar-brand { gap: 8px; }
 .dashboard-shell .sidebar-brand strong,.dashboard-shell.analysis-shell .sidebar-brand strong { color: #0b1119; font-size: 18px; letter-spacing: -.7px; font-weight: 750; }
@@ -94,6 +93,14 @@
 .dashboard-shell .dashboard-project-table th { height: 36px; padding: 9px 8px; border-color: #e9edf3; color: #7f8b9e; background: transparent; font-size: 10px; font-weight: 500; text-transform: uppercase; }
 .dashboard-shell .dashboard-project-table td { height: 74px; padding: 12px 8px; border-color: #e9edf3; font-size: 12px; font-weight: 400; }
 .dashboard-shell .dashboard-project-table tbody tr:hover { background: #f8fafd; }
+.dashboard-shell .projects-view .dashboard-project-row { position: relative; cursor: pointer; }
+.dashboard-shell .projects-view .project-row-link { position: static; text-decoration: none; }
+.dashboard-shell .projects-view .project-row-link::after { content: ''; position: absolute; inset: 0; z-index: 0; }
+.dashboard-shell .projects-view .project-row-link:focus-visible { outline: none; }
+.dashboard-shell .projects-view .project-row-link:focus-visible::after { outline: 2px solid #8397a5; outline-offset: -2px; border-radius: 8px; }
+.dashboard-shell .projects-view .project-row-actions button { position: relative; z-index: 1; }
+.dashboard-shell .projects-view .project-findings-cell { text-align: center; }
+.dashboard-shell .projects-view .project-findings-cell .dashboard-findings-count { display: inline-flex; align-items: center; justify-content: center; min-width: 2ch; }
 .dashboard-shell .projects-view .dashboard-project-table th:first-child { width: 32%; }
 .dashboard-shell .projects-view .dashboard-project-table th:nth-child(2) { width: 12%; }
 .dashboard-shell .projects-view .dashboard-project-table th:nth-child(3) { width: 9%; }
@@ -281,7 +288,7 @@
 @media (max-width: 760px) {
   .dashboard-canvas { min-height: 100dvh; }
   .dashboard-canvas .dashboard-shell.app-shell { grid-template-columns: minmax(0,1fr); }
-  .dashboard-shell .dashboard-sidebar { position: fixed; margin: 0; top: 0; left: 0; bottom: 0; width: min(294px,calc(100vw - 24px)); border-radius: 0 20px 20px 0; padding: 24px 18px 20px; }
+  .dashboard-shell .dashboard-sidebar { position: fixed; margin: 0; top: 0; left: 0; bottom: 0; width: min(294px,calc(100vw - 24px)); border-radius: 0 20px 20px 0; padding: 24px 18px 20px; backdrop-filter: blur(12px); }
   .dashboard-shell .sidebar-brand strong,.dashboard-shell.analysis-shell .sidebar-brand strong { font-size: 22px; }
   .dashboard-shell .sidebar-brand-mark { width: 66px; height: 53px; }
   .dashboard-shell .sidebar-navigation button { font-size: 15px; }

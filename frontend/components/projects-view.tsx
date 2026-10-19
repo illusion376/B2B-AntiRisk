@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, Clock3, FileText, FolderOpen, Layers3, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
 import type { Project, ProjectDraft } from '@/lib/types';
 import { formatProjectDate } from '@/lib/projects';
+import { defaultRoute, serializeRoute } from '@/lib/navigation';
 import { CustomSelect, Modal } from './ui';
 import { ProjectActions } from './project-actions';
 import './project-enhancements.css';
@@ -112,7 +113,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
               <thead>
                 <tr>
                   <th scope="col">Проект</th><th scope="col">Статус</th><th scope="col">Файлы</th>
-                  <th scope="col">Замечания</th><th scope="col">Обновлён</th>
+                  <th scope="col" className="project-findings-cell">Замечания</th><th scope="col">Обновлён</th>
                   <th scope="col"><span className="sr-only">Действия с проектом</span></th>
                 </tr>
               </thead>
@@ -122,16 +123,25 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
                   const riskCount = project.counts.critical + project.counts.warning + project.counts.low;
                   const hasResults = riskCount > 0 || project.counts.ok > 0 || project.counts.unknown > 0 || project.files.some(file => file.rulesChecked > 0);
                   return (
-                    <tr key={project.id}>
+                    <tr key={project.id} className="dashboard-project-row">
                       <td>
-                        <button className="dashboard-project-name" onClick={() => onOpen(project)}>
+                        <a
+                          className="dashboard-project-name project-row-link"
+                          href={serializeRoute({ ...defaultRoute, view: 'project', projectId: project.id })}
+                          aria-label={`Открыть проект «${project.title}»`}
+                          onClick={event => {
+                            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                            event.preventDefault();
+                            onOpen(project);
+                          }}
+                        >
                           <span className="dashboard-file-symbol"><FolderOpen size={17} /></span>
                           <span><strong>{project.title}</strong><small>{project.description || 'Документы проекта'}</small></span>
-                        </button>
+                        </a>
                       </td>
                       <td data-label="Статус"><span className={`dashboard-state ${state}`}><i />{projectStateLabels[state]}</span></td>
                       <td data-label="Файлы"><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
-                      <td data-label="Замечания">
+                      <td data-label="Замечания" className="project-findings-cell">
                         <span className={`dashboard-findings-count ${riskCount ? 'dashboard-risk-value' : ''}`} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
                           {hasResults ? riskCount : '—'}
                         </span>
