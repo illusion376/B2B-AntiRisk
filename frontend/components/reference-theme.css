@@ -7,7 +7,7 @@
     radial-gradient(ellipse 330px 290px at 104% 4%,#ffe6eb85,transparent 80%),
     linear-gradient(120deg,#f3f7fa,#fafbfd 65%,#f4f6fa);
 }
-.dashboard-canvas::after { content: ''; position: absolute; inset: auto 0 0; height: 240px; background: url('/workspace-waves.svg') center bottom / 100% 100% no-repeat; pointer-events: none; }
+.dashboard-canvas::after { content: ''; position: absolute; inset: auto 0 0; height: clamp(180px,33.333%,420px); background: url('/workspace-waves.svg') center bottom / 100% 100% no-repeat; pointer-events: none; }
 .dashboard-canvas .dashboard-shell.app-shell { --nav-width: 240px; --dash-line: #e8ecf2; --line: #e8ecf2; --surface: #fff; grid-template-columns: var(--nav-width) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) 40px; background: transparent; color: #171b23; }
 .dashboard-canvas .dashboard-shell.app-shell.analysis-shell { grid-template-columns: var(--nav-width) minmax(0,1fr); }
 
