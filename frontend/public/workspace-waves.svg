@@ -3,7 +3,7 @@
 <rect x="880" y="57" width="440" height="152" fill="url(#dots)" opacity=".55"/>
 <path d="M0 107C216 102 255 239 501 210C716 184 844 113 1037 193C1219 267 1299 170 1440 84V260H0V107Z" fill="url(#mist)"/>
 <path d="M423 260C608 164 730 128 919 201C1116 278 1267 229 1440 112V260H423Z" fill="url(#rose)"/>
-<path d="M0 165C284 265 345 111 616 125C857 138 935 302 1194 234C1307 205 1378 156 1440 136" stroke="#f29da6" stroke-opacity=".6"/>
+<path d="M0 205C160 214 370 108 630 108C830 108 914 213 1125 213C1258 213 1350 150 1440 103" stroke="#ff9db0" stroke-opacity=".7"/>
 <path d="M0 213C212 260 358 149 590 157C810 164 868 276 1085 259" stroke="white" stroke-opacity=".9"/>
 <path d="M186 260C340 205 393 182 523 191C689 203 770 264 876 260" stroke="white" stroke-opacity=".85"/>
 </svg>
