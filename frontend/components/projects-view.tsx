@@ -94,6 +94,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
         <div className="projects-table-actions">
           <button className="primary-button" onClick={onCreate}><Plus size={19} />Новый проект</button>
           <CustomSelect
+            className="projects-sort"
             ariaLabel="Сортировка проектов"
             value={sort}
             onChange={setSort}
