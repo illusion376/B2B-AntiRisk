@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, Clock3, FileText, FolderOpen, Layers3, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
 import type { Project, ProjectDraft } from '@/lib/types';
 import { formatProjectDate } from '@/lib/projects';
-import { Modal } from './ui';
+import { CustomSelect, Modal } from './ui';
 import { ProjectActions } from './project-actions';
 import './project-enhancements.css';
 
@@ -93,7 +93,16 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
       <div className="projects-table-card">
         <div className="projects-table-actions">
           <button className="primary-button" onClick={onCreate}><Plus size={19} />Новый проект</button>
-          <label className="dashboard-sort"><ArrowDownWideNarrow size={17} /><span className="sr-only">Сортировка проектов</span><select value={sort} onChange={event => setSort(event.target.value)}><option value="recent">Сначала новые</option><option value="name">По названию</option></select></label>
+          <CustomSelect
+            ariaLabel="Сортировка проектов"
+            value={sort}
+            onChange={setSort}
+            icon={<ArrowDownWideNarrow size={16} />}
+            options={[
+              { value: 'recent', label: 'Сначала новые' },
+              { value: 'name', label: 'По названию' },
+            ]}
+          />
         </div>
       {filtered.length > 0 ? (
         <>
@@ -122,7 +131,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
                       <td data-label="Статус"><span className={`dashboard-state ${state}`}><i />{projectStateLabels[state]}</span></td>
                       <td data-label="Файлы"><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
                       <td data-label="Замечания">
-                        <span className={riskCount ? 'dashboard-risk-value' : ''} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
+                        <span className={`dashboard-findings-count ${riskCount ? 'dashboard-risk-value' : ''}`} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
                           {hasResults ? riskCount : '—'}
                         </span>
                       </td>

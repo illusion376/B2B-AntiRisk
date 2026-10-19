@@ -1,7 +1,92 @@
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Check, ChevronDown, X } from 'lucide-react';
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+export function CustomSelect({
+  value,
+  onChange,
+  options,
+  className = '',
+  disabled = false,
+  ariaLabel,
+  icon,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  className?: string;
+  disabled?: boolean;
+  ariaLabel?: string;
+  icon?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const currentOption = options.find(o => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className={`custom-select-wrap ${className} ${open ? 'is-open' : ''}`}>
+      <button
+        type="button"
+        className="custom-select-trigger"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(prev => !prev)}
+      >
+        {icon && <span className="custom-select-icon">{icon}</span>}
+        <span className="custom-select-label">{currentOption?.label ?? value}</span>
+        <ChevronDown size={14} className={`custom-select-arrow ${open ? 'is-open' : ''}`} />
+      </button>
+      {open && (
+        <ul className="custom-select-menu" role="listbox" aria-label={ariaLabel}>
+          {options.map(option => {
+            const isSelected = option.value === value;
+            return (
+              <li
+                key={option.value}
+                role="option"
+                aria-selected={isSelected}
+                className={`custom-select-item opt-${option.value} ${isSelected ? 'is-selected' : ''}`}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+              >
+                <span>{option.label}</span>
+                {isSelected && <Check size={14} className="custom-select-check" />}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export function IconButton({ label, children, active, className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
   return <button type="button" aria-label={label} title={label} className={`icon-button ${active ? 'is-active' : ''} ${className}`} {...props}>{children}</button>;

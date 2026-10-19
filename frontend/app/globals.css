@@ -16,7 +16,7 @@
 
 @layer base {
   *, *::before, *::after { font-family: var(--font-sans); }
-  :root { --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif; --bg: #f5f6f9; --surface: #fff; --paper: #fff; --text: #141820; --muted: #808895; --line: #e6e9ef; --red: #e21825; --red-hover: #c90c1a; --red-light: #fff0f1; --green: #1ba87c; --amber: #e9a80f; --shadow: 0 12px 44px #272f4b08; }
+  :root { --font-sans: var(--font-inter), "Inter", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif; --bg: #f5f6f9; --surface: #fff; --paper: #fff; --text: #0f172a; --muted: #475569; --line: #e6e9ef; --red: #e21825; --red-hover: #c90c1a; --red-light: #fff0f1; --green: #1ba87c; --amber: #e9a80f; --shadow: 0 12px 44px #272f4b08; }
   html { font-size: 16px; }
   body { font-family: var(--font-sans); color: var(--text); background: var(--bg); font-size: .875rem; -webkit-font-smoothing: antialiased; }
   ::selection { background: #f7d5d1; }
