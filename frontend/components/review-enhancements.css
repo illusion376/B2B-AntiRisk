@@ -2,9 +2,7 @@
 .dashboard-shell.analysis-shell .main-content { display: flex; }
 
 @media (min-width: 961px) {
-  .dashboard-shell.app-shell.analysis-shell { grid-template-columns: 215px minmax(0,1fr); --line: #e8e8e8; --surface: #fff; }
-  .dashboard-shell.analysis-shell .dashboard-sidebar { padding-left: 13px; padding-right: 13px; }
-  .dashboard-shell.analysis-shell .sidebar-brand strong { font-size: .875rem; }
+  .dashboard-shell.app-shell.analysis-shell { --line: #e8e8e8; --surface: #fff; }
   .dashboard-shell.analysis-shell .topbar { height: 58px; padding: 0 24px; }
   .dashboard-shell.analysis-shell .global-search { width: min(390px,50%); height: 32px; border: 1px solid #e9e9e9; border-radius: 5px; background: #fbfbfb; color: #909090; gap: 8px; }
   .dashboard-shell.analysis-shell .global-search:focus-within { border-color: #bbb; background: #fff; }
