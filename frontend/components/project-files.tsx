@@ -4,7 +4,7 @@ import { Fragment, useRef, useState } from 'react';
 import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3, FileText, LoaderCircle, Play, RotateCw, Search, Trash2, UploadCloud, X } from 'lucide-react';
 import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
-import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
+import { ARCHIVE_FILE_TYPES, formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import { CustomSelect, Modal } from './ui';
 import './project-enhancements.css';
 
@@ -196,7 +196,7 @@ export function ProjectFilesView({
           <thead><tr><th scope="col">Название</th><th scope="col">Статус</th><th scope="col">Размер</th><th scope="col">Дата добавления</th><th scope="col"><span className="sr-only">Действия</span></th></tr></thead>
           <tbody>
           {filtered.map(file => {
-            const isArchive = file.type === 'zip';
+            const isArchive = ARCHIVE_FILE_TYPES.includes(file.type);
             const Icon = isArchive ? Archive : FileText;
             const singleDocument = !isArchive && file.documents.length === 1 ? file.documents[0] : null;
             const processingState = singleDocument ?? file;
@@ -206,7 +206,7 @@ export function ProjectFilesView({
               <Fragment key={file.id}>
                 <tr className="project-file-table-row">
                   <td><div className="project-file-title-cell">
-                  <span className={`file-type-icon ${file.type}`}><Icon size={24} /><small>{file.type.toUpperCase()}</small></span>
+                  <span className={`file-type-icon ${file.type}${isArchive ? ' archive' : ''}`}><Icon size={24} /><small>{file.type.toUpperCase()}</small></span>
                   <div className="project-file-name">
                     <h3>{canOpen ? <button type="button" onClick={() => onOpenDocument(singleDocument)}>{file.name}</button> : file.name}</h3>
                     <p>{isArchive ? `Документов в архиве: ${file.documents.length}` : 'Проверка и обработка документа'}</p>
@@ -294,7 +294,7 @@ export function ProjectFilesView({
         <form onSubmit={event => void removeFile(event)} aria-busy={removing}>
           <div className="project-delete-warning">
             <p>Файл «{fileToRemove.name}» будет удалён из проекта.</p>
-            {fileToRemove.type === 'zip' && <p>Все документы из этого ZIP-архива тоже будут удалены.</p>}
+            {ARCHIVE_FILE_TYPES.includes(fileToRemove.type) && <p>Все документы из этого архива тоже будут удалены.</p>}
           </div>
           {removeError && <p className="field-error" role="alert">{removeError}</p>}
           <div className="modal-actions">
@@ -392,7 +392,7 @@ function FileDropzone({ compact, onUpload, disabled, onBusyChange }: FileDropzon
         <div className="dropzone-copy">
           <h2>{uploading ? 'Загружаем файлы на сервер…' : dragging && !blocked ? 'Отпустите файлы для загрузки' : 'Загрузите документы'}</h2>
           <p>{uploading ? 'Сохраняем файлы. Анализ можно будет запустить кнопкой «Начать анализ».' : 'Перетащите файлы сюда или выберите на устройстве.'}</p>
-          <small id="file-upload-help">DOCX, PDF, ZIP · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
+          <small id="file-upload-help">DOCX, PDF, ZIP, RAR, 7Z · до {formatFileSize(MAX_FILE_BYTES)} на файл</small>
         </div></>}
         <input
           ref={input} type="file" hidden multiple disabled={blocked} accept={UPLOAD_ACCEPT} aria-label="Выберите документы"
