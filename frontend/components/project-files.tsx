@@ -5,7 +5,7 @@ import { AlertCircle, Archive, ArrowDownWideNarrow, ArrowUpRight, Check, Clock3,
 import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
-import { Modal } from './ui';
+import { CustomSelect, Modal } from './ui';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
@@ -21,6 +21,8 @@ interface ProjectFilesViewProps {
   selectedAnalysisMode: AnalysisMode | null;
   onOpenSettings: () => void;
   onRemoveFile: (file: ProjectFile) => Promise<void>;
+  onRemoveDocument?: (document: DocumentInfo) => Promise<void>;
+  onReanalyzeDocument?: (document: DocumentInfo) => Promise<void>;
 }
 
 type FileStatusFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed';
@@ -39,6 +41,7 @@ export function ProjectFilesView({
   project, onUpload, onOpenDocument, onStart, onRerun,
   analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
   selectedAnalysisMode, onOpenSettings, onRemoveFile,
+  onRemoveDocument, onReanalyzeDocument,
 }: ProjectFilesViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>('all');
@@ -49,9 +52,13 @@ export function ProjectFilesView({
   const [fileToRemove, setFileToRemove] = useState<ProjectFile | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
+  const [documentToRemove, setDocumentToRemove] = useState<DocumentInfo | null>(null);
+  const [removingDoc, setRemovingDoc] = useState(false);
+  const [removeDocError, setRemoveDocError] = useState('');
   const startLock = useRef(false);
   const removeLock = useRef(false);
-  const busy = uploading || starting || removing;
+  const removeDocLock = useRef(false);
+  const busy = uploading || starting || removing || removingDoc;
   const selectedModeInfo = analysisModes?.modes.find(mode => mode.id === selectedAnalysisMode);
   const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true;
   const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
@@ -111,6 +118,30 @@ export function ProjectFilesView({
     }
   }
 
+  const closeRemoveDocDialog = () => {
+    if (!removeDocLock.current) {
+      setDocumentToRemove(null);
+      setRemoveDocError('');
+    }
+  };
+
+  async function removeDoc(event: React.FormEvent) {
+    event.preventDefault();
+    if (!documentToRemove || removeDocLock.current || !onRemoveDocument) return;
+    removeDocLock.current = true;
+    setRemovingDoc(true);
+    setRemoveDocError('');
+    try {
+      await onRemoveDocument(documentToRemove);
+      setDocumentToRemove(null);
+    } catch (cause) {
+      setRemoveDocError(errorMessage(cause));
+    } finally {
+      removeDocLock.current = false;
+      setRemovingDoc(false);
+    }
+  }
+
   return (
     <section className={`secondary-view project-files-view${hasFiles ? ' has-files' : ''}`}>
       <div className={`project-upload-section${hasFiles ? ' has-files' : ''}`}>
@@ -146,15 +177,17 @@ export function ProjectFilesView({
             <input aria-label="Поиск документов в проекте" placeholder="Найти документ" value={query} onChange={event => setQuery(event.target.value)} />
             {query && <button type="button" className="search-clear" aria-label="Очистить поиск документов" onClick={() => setQuery('')}><X size={16} /></button>}
           </div>
-          <label className="project-file-sort">
-            <ArrowDownWideNarrow size={16} aria-hidden="true" />
-            <span className="sr-only">Сортировка документов</span>
-            <select value={sort} onChange={event => setSort(event.target.value)}>
-              <option value="recent">Сначала новые</option>
-              <option value="oldest">Сначала старые</option>
-              <option value="name">По названию</option>
-            </select>
-          </label>
+          <CustomSelect
+            ariaLabel="Сортировка документов"
+            value={sort}
+            onChange={setSort}
+            icon={<ArrowDownWideNarrow size={16} />}
+            options={[
+              { value: 'recent', label: 'Сначала новые' },
+              { value: 'oldest', label: 'Сначала старые' },
+              { value: 'name', label: 'По названию' },
+            ]}
+          />
           </div>
         </div>
       {(normalizedQuery || statusFilter !== 'all') && <p className="project-search-result" role="status">Показано загрузок: {filtered.length} из {project.files.length}</p>}
@@ -190,16 +223,23 @@ export function ProjectFilesView({
                   <td className="project-file-size" data-label="Размер">{formatFileSize(file.size)}</td>
                   <td className="project-file-date" data-label="Дата добавления"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
                   <td className="project-file-actions">
+                  <div className="file-actions-group">
+                  <button type="button" className="project-file-remove-button" disabled={busy}
+                    title="Удалить файл" aria-label={`Удалить файл «${file.name}»`}
+                    onClick={() => { if (!startLock.current && !removeLock.current && !uploading) { setRemoveError(''); setFileToRemove(file); } }}>
+                    <Trash2 size={16} />
+                  </button>
                   {canOpen && (
                     <button className="secondary-button file-open-button" data-onboarding="open-document" onClick={() => onOpenDocument(singleDocument)} aria-label={`Открыть документ «${singleDocument.name}»`}>
                       Открыть <ArrowUpRight size={15} />
                     </button>
                   )}
-                  {canRemove && <button type="button" className="project-file-remove-button" disabled={busy}
-                    title="Удалить файл до начала анализа" aria-label={`Удалить файл «${file.name}»`}
-                    onClick={() => { if (!startLock.current && !removeLock.current && !uploading) { setRemoveError(''); setFileToRemove(file); } }}>
-                    <Trash2 size={16} />
-                  </button>}
+                  {singleDocument && (
+                    <button type="button" className="secondary-button file-reanalyze-button" disabled={singleDocument.phase === 'processing' || singleDocument.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${singleDocument.name}»`} onClick={() => onReanalyzeDocument?.(singleDocument)}>
+                      <RotateCw size={13} /> Проверить
+                    </button>
+                  )}
+                  </div>
                   </td>
                 </tr>
                 {(isArchive || file.documents.length > 1) && file.documents.length > 0 && (
@@ -220,11 +260,19 @@ export function ProjectFilesView({
                           {document.phase === 'ready' && <small>{document.rulesChecked > 0 ? `Проверено правил: ${document.rulesChecked} · Замечаний: ${riskCount(document.counts)}` : 'Нет результатов проверки правил'}</small>}
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
                         </div>
+                        <div className="project-child-actions">
+                        <button type="button" className="project-file-remove-button" title="Удалить документ" aria-label={`Удалить документ «${document.name}»`} onClick={() => { setRemoveDocError(''); setDocumentToRemove(document); }}>
+                          <Trash2 size={15} />
+                        </button>
                         {document.phase === 'ready' && document.hasPreview && (
                           <button className="secondary-button file-open-button" data-onboarding="open-document" onClick={() => onOpenDocument(document)} aria-label={`Открыть документ «${document.name}»`}>
                             Открыть <ArrowUpRight size={15} />
                           </button>
                         )}
+                        <button type="button" className="secondary-button file-reanalyze-button" disabled={document.phase === 'processing' || document.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${document.name}»`} onClick={() => onReanalyzeDocument?.(document)}>
+                          <RotateCw size={13} /> Проверить
+                        </button>
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -253,6 +301,20 @@ export function ProjectFilesView({
             <button type="button" className="secondary-button" disabled={removing} onClick={closeRemoveDialog}>Отмена</button>
             <button className="primary-button project-delete-confirm" disabled={removing}>
               {removing && <LoaderCircle size={15} className="spin" />}{removing ? 'Удаляем…' : 'Удалить файл'}
+            </button>
+          </div>
+        </form>
+      </Modal>}
+      {documentToRemove && <Modal title="Удалить документ?" closeDisabled={removingDoc} onClose={closeRemoveDocDialog}>
+        <form onSubmit={event => void removeDoc(event)} aria-busy={removingDoc}>
+          <div className="project-delete-warning">
+            <p>Документ «{documentToRemove.name}» и результаты его проверки будут удалены.</p>
+          </div>
+          {removeDocError && <p className="field-error" role="alert">{removeDocError}</p>}
+          <div className="modal-actions">
+            <button type="button" className="secondary-button" disabled={removingDoc} onClick={closeRemoveDocDialog}>Отмена</button>
+            <button className="primary-button project-delete-confirm" disabled={removingDoc}>
+              {removingDoc && <LoaderCircle size={15} className="spin" />}{removingDoc ? 'Удаляем…' : 'Удалить документ'}
             </button>
           </div>
         </form>

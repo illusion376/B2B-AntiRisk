@@ -9,7 +9,7 @@ import { riskLabels } from '@/lib/rules';
 import { displaySeverities, matchesSeverity } from '@/lib/workspace-preferences';
 import type { DisplaySeverity } from '@/lib/workspace-preferences';
 import type { DocumentTourStage } from '@/lib/onboarding';
-import { HighlightedText, IconButton, Modal } from './ui';
+import { CustomSelect, HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
 import { DocumentAssistant } from './document-assistant';
 import './review-enhancements.css';
@@ -22,6 +22,7 @@ const reviewTabs = [
 ] as const;
 const severityOrder: Severity[] = ['critical', 'warning', 'low', 'ok'];
 const noPendingStatuses: ReadonlySet<string> = new Set();
+const statusOptions = Object.entries(statusLabels).map(([value, label]) => ({ value, label }));
 type ReviewTab = typeof reviewTabs[number]['id'];
 
 export type DocumentWorkspaceProps = {
@@ -332,33 +333,72 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} data-onboarding={item.id === 'rules' ? undefined : `document-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
-          <label><span className="sr-only">Категория</span><select aria-label="Категория" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(value => <option key={value}>{value}</option>)}</select><ChevronDown size={14} /></label>
-          <label><span className="sr-only">Статус проверки</span><select aria-label="Статус проверки" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={14} /></label>
-          <label><span className="sr-only">Уровень риска</span><select aria-label="Уровень риска" value={severity} onChange={event => setSeverity(event.target.value)}><option value="default">{defaultSeverities.length === displaySeverities.length ? 'Все уровни (по умолчанию)' : 'По настройкам'}</option><option value="all">Все уровни</option><option value="critical">Критические</option><option value="warning">Внимание</option><option value="low">Низкий риск</option><option value="ok">Без замечаний</option></select><ChevronDown size={14} /></label>
+          <CustomSelect
+            ariaLabel="Категория"
+            className="findings-filter-select"
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: 'all', label: 'Все категории' },
+              ...categories.map(value => ({ value, label: value })),
+            ]}
+          />
+          <CustomSelect
+            ariaLabel="Статус проверки"
+            className="findings-filter-select"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: 'all', label: 'Все статусы' },
+              ...Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+          <CustomSelect
+            ariaLabel="Уровень риска"
+            className="findings-filter-select"
+            value={severity}
+            onChange={setSeverity}
+            options={[
+              { value: 'default', label: defaultSeverities.length === displaySeverities.length ? 'Все уровни (по умолчанию)' : 'По настройкам' },
+              { value: 'all', label: 'Все уровни' },
+              { value: 'critical', label: 'Критические' },
+              { value: 'warning', label: 'Внимание' },
+              { value: 'low', label: 'Низкий риск' },
+              { value: 'ok', label: 'Без замечаний' },
+            ]}
+          />
           <button type="button" ref={searchToggleRef} className={`icon-button ${searchVisible ? 'is-active' : ''}`} aria-label={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} title={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} aria-expanded={searchVisible} aria-controls={searchVisible ? 'finding-search' : undefined} onClick={() => searchVisible ? closeSearch() : setSearchVisible(true)}><Search size={18} /></button>
         </div>
         {searchVisible && <div id="finding-search" className="finding-search field-search" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeSearch(); } }}><Search size={16} /><input autoFocus placeholder="Название, описание или цитата" aria-label="Поиск замечаний" value={filterText} onChange={event => setFilterText(event.target.value)} /><IconButton label="Очистить поиск замечаний" disabled={!filterText} onClick={() => setFilterText('')}><X size={15} /></IconButton></div>}
         <div className="filter-summary"><span role="status" aria-live="polite">Результаты: <strong>{filtered.length}</strong> из {findings.length}</span>{hasFilters ? <button onClick={resetFilters}><RotateCcw size={13} />Сбросить фильтры <span className="filter-count">{activeFilterCount}</span></button> : <span className="filter-summary-note">По уровню риска</span>}</div>
         <div className="findings-scroll">
           <table className="findings-table">
-            <colgroup><col className="col-number" /><col className="col-severity" /><col /><col className="col-clause" /><col className="col-page" /><col className="col-status" /><col className="col-more" /></colgroup>
-            <thead><tr><th aria-sort={order === 'asc' ? 'ascending' : 'descending'}><button aria-label={`Номера внутри групп: ${order === 'asc' ? 'по возрастанию' : 'по убыванию'}. Изменить порядок`} onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}>№ <span>{order === 'asc' ? '↑' : '↓'}</span></button></th><th className="severity-header">Риск</th><th>Замечание</th><th>Пункт</th><th>Стр.</th><th>Статус проверки</th><th aria-label="Действия" /></tr></thead>
+            <colgroup><col className="col-number" /><col /><col className="col-clause" /><col className="col-page" /><col className="col-status" /><col className="col-more" /></colgroup>
+            <thead><tr><th aria-sort={order === 'asc' ? 'ascending' : 'descending'}><button aria-label={`Номера внутри групп: ${order === 'asc' ? 'по возрастанию' : 'по убыванию'}. Изменить порядок`} onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}>№ <span>{order === 'asc' ? '↑' : '↓'}</span></button></th><th>Замечание</th><th>Пункт</th><th>Стр.</th><th>Статус проверки</th><th aria-label="Действия" /></tr></thead>
             {severityOrder.map(level => {
               const group = filtered.filter(finding => finding.severity === level);
               if (!group.length) return null;
               const isCollapsed = collapsed.includes(level);
               return <tbody key={level}>
-                <tr className="group-row"><th colSpan={7}><button onClick={() => setCollapsed(previous => previous.includes(level) ? previous.filter(item => item !== level) : [...previous, level])} aria-expanded={!isCollapsed}><span className={`group-bar ${level}`} /><span>{severityLabels[level]} <em>({group.length})</em></span><ChevronDown size={16} className={isCollapsed ? 'rotated' : ''} /></button></th></tr>
+                <tr className="group-row"><th colSpan={6}><button onClick={() => setCollapsed(previous => previous.includes(level) ? previous.filter(item => item !== level) : [...previous, level])} aria-expanded={!isCollapsed}><span className={`group-bar ${level}`} /><span>{severityLabels[level]} <em>({group.length})</em></span><ChevronDown size={16} className={isCollapsed ? 'rotated' : ''} /></button></th></tr>
                 {!isCollapsed && group.map(finding => <tr key={finding.id} data-selected={selected === finding.id} className={`finding-row ${selected === finding.id ? 'selected-row' : ''}`}>
                   <td className="number-cell">{finding.number ?? '—'}</td>
-                  <td className="severity-cell"><span className={`risk-dot ${finding.severity}`} title={severityLabels[finding.severity]} /><span className="sr-only">{severityLabels[finding.severity]}</span></td>
                   <td className="finding-cell"><button onClick={() => select(finding)} className="finding-link" aria-current={selected === finding.id ? 'true' : undefined}><strong><HighlightedText text={finding.title} query={filterText} /></strong><span><HighlightedText text={finding.description} query={filterText} /></span><FindingEvidenceBadges finding={finding} /><small className="finding-mobile-meta">{finding.clause ? `п. ${finding.clause} · ` : ''}{isLocated(finding) ? `стр. ${finding.page}` : 'Без привязки к странице'}</small></button></td>
                   <td className="clause-cell">{finding.clause ? <button onClick={() => select(finding)}>{finding.clause}</button> : '—'}</td>
                   <td className="page-cell">{isLocated(finding) ? <button onClick={() => select(finding)} aria-label={`Открыть страницу ${finding.page}`}>{finding.page}</button> : <span title="Страница не определена">—</span>}</td>
-                  <td className="status-cell"><div className={`review-status ${reviewStatus(finding)}`} aria-busy={pendingIds.has(finding.id)}>
-                    <span>{pendingIds.has(finding.id) ? <LoaderCircle className="live-loading-spinner" size={10} /> : reviewStatus(finding) === 'accepted' ? <Check size={10} /> : reviewStatus(finding) === 'dismissed' ? <X size={10} /> : null}</span>
-                    <select aria-label={`Статус: ${finding.title}`} disabled={pendingIds.has(finding.id)} value={reviewStatus(finding)} onChange={event => onStatus(finding.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={12} aria-hidden="true" />
-                  </div></td>
+                  <td className="status-cell">
+                    <div className={`review-status ${reviewStatus(finding)}`} aria-busy={pendingIds.has(finding.id)}>
+                      {pendingIds.has(finding.id) && <LoaderCircle className="spin live-loading-spinner" size={12} />}
+                      <CustomSelect
+                        className={`table-status-select status-${reviewStatus(finding)}`}
+                        disabled={pendingIds.has(finding.id)}
+                        ariaLabel={`Статус: ${finding.title}`}
+                        value={reviewStatus(finding)}
+                        onChange={val => onStatus(finding.id, val as ReviewStatus)}
+                        options={statusOptions}
+                      />
+                    </div>
+                  </td>
                   <td className="more-cell"><IconButton label={`Спросить ИИ: ${finding.title}`} onClick={() => askAssistant(finding)}><MessageSquare size={15} /></IconButton><IconButton label={`Подробнее: ${finding.title}`} onClick={() => setDetailId(finding.id)}><EllipsisVertical size={16} /></IconButton></td>
                 </tr>)}
               </tbody>;
@@ -398,8 +438,15 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
         {detail.comment && detail.comment !== detail.description && <><h4>Обоснование</h4><p>{detail.comment}</p></>}
         {detail.legalReference && <><h4>Ссылка на норму</h4><p>{detail.legalReference}</p></>}
         {detail.recommendation && <><h4>На что обратить внимание</h4><p>{detail.recommendation}</p></>}
-        <label className="form-label" htmlFor="detail-status">Статус проверки</label>
-        <select id="detail-status" className="form-select" disabled={pendingIds.has(detail.id)} aria-busy={pendingIds.has(detail.id)} value={reviewStatus(detail)} onChange={event => onStatus(detail.id, event.target.value as ReviewStatus)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        <label className="form-label">Статус проверки</label>
+        <CustomSelect
+          className="finding-detail-select"
+          disabled={pendingIds.has(detail.id)}
+          ariaLabel="Статус проверки"
+          value={reviewStatus(detail)}
+          onChange={val => onStatus(detail.id, val as ReviewStatus)}
+          options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
+        />
         {pendingIds.has(detail.id) && <small className="detail-saving-status" role="status">Сохранение статуса…</small>}
       </div>
       <div className="modal-actions"><button className="secondary-button" onClick={() => setDetailId(null)}>Закрыть</button><button className="secondary-button" onClick={() => askAssistant(detail)}><MessageSquare size={15} />Спросить ИИ</button>{isLocated(detail) && <button className="primary-button" onClick={() => { select(detail); setDetailId(null); }}>{detail.quoteVerified && isRiskSeverity(detail.severity) ? 'К фрагменту' : 'К странице'}</button>}</div>

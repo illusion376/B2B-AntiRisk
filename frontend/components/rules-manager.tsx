@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { AlertTriangle, BookOpenCheck, LoaderCircle, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import type { CheckRule, RuleDraft, RiskLevel } from '@/lib/types';
 import { compareRulesByRisk, riskLabels } from '@/lib/rules';
-import { IconButton, Modal } from './ui';
+import { CustomSelect, IconButton, Modal } from './ui';
 
 type RulesManagerProps = {
   rules: CheckRule[];
@@ -78,17 +78,16 @@ export function RulesManager({
             onChange={event => setQuery(event.target.value)}
           />
         </label>
-        <select
-          className="form-select rule-risk-filter"
-          aria-label="Фильтр правил по риску"
+        <CustomSelect
+          ariaLabel="Фильтр правил по риску"
+          className="rule-risk-filter"
           value={level}
-          onChange={event => setLevel(event.target.value)}
-        >
-          <option value="all">Все степени риска</option>
-          {Object.entries(riskLabels).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
+          onChange={setLevel}
+          options={[
+            { value: 'all', label: 'Все степени риска' },
+            ...Object.entries(riskLabels).map(([value, label]) => ({ value, label })),
+          ]}
+        />
         <span className="count-chip">
           <ShieldCheck size={16} />{rules.filter(rule => rule.enabled).length} из {rules.length} включено
         </span>
@@ -137,17 +136,22 @@ export function RulesManager({
                     </td>
                     <td>
                       <div className="dashboard-rule-actions">
-                        <IconButton
-                          label={`Редактировать правило «${rule.title}»`}
+                        <button
+                          type="button"
+                          className="dashboard-row-action"
+                          aria-label={`Редактировать правило «${rule.title}»`}
+                          title="Редактировать правило"
                           disabled={pending}
                           onClick={() => onEdit(rule)}
-                        ><Pencil size={15} /></IconButton>
-                        <IconButton
-                          className="delete-rule-button"
-                          label={`Удалить правило «${rule.title}»`}
+                        ><Pencil size={15} /></button>
+                        <button
+                          type="button"
+                          className="dashboard-row-action delete-rule-button"
+                          aria-label={`Удалить правило «${rule.title}»`}
+                          title="Удалить правило"
                           disabled={pending}
                           onClick={() => onDelete(rule)}
-                        ><Trash2 size={15} /></IconButton>
+                        ><Trash2 size={15} /></button>
                       </div>
                     </td>
                   </tr>
@@ -180,7 +184,19 @@ type RuleEditorProps = {
   onClose: () => void;
 };
 
+const defaultCategories = [
+  'Общие условия',
+  'Сроки и поставка',
+  'Финансовые риски',
+  'Штрафы и неустойки',
+  'Расторжение контракта (РНП)',
+  'Ответственность сторон',
+  'Приёмка товаров и услуг',
+  'Гарантийные обязательства',
+];
+
 export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProps) {
+  const availableCategories = Array.from(new Set([...categories, ...defaultCategories]));
   // Omit advanced settings from PATCH so the server preserves custom settings and
   // can update automatically generated prompts when the title or description changes.
   const [draft, setDraft] = useState<RuleDraft>(() => rule ? {
@@ -196,6 +212,9 @@ export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProp
     severity: 'warning',
     enabled: true,
   });
+  const [customMode, setCustomMode] = useState(
+    draft.category.trim() !== '' && !availableCategories.includes(draft.category)
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
@@ -254,19 +273,53 @@ export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProp
           onChange={event => setDraft({ ...draft, description: event.target.value })}
         />
         <label className="form-label" htmlFor="rule-category">Категория <span aria-hidden="true">*</span></label>
-        <input
-          className="form-input"
-          id="rule-category"
-          list="rule-categories"
-          required
-          disabled={saving}
-          maxLength={60}
-          value={draft.category}
-          onChange={event => setDraft({ ...draft, category: event.target.value })}
-        />
-        <datalist id="rule-categories">
-          {categories.map(category => <option key={category} value={category} />)}
-        </datalist>
+        {!customMode ? (
+          <div className="category-select-row">
+            <select
+              className="form-select category-select"
+              id="rule-category"
+              required
+              disabled={saving}
+              value={availableCategories.includes(draft.category) ? draft.category : availableCategories[0]}
+              onChange={event => {
+                if (event.target.value === '__custom__') {
+                  setCustomMode(true);
+                  setDraft({ ...draft, category: '' });
+                } else {
+                  setDraft({ ...draft, category: event.target.value });
+                }
+              }}
+            >
+              {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              <option value="__custom__">+ Другая категория…</option>
+            </select>
+          </div>
+        ) : (
+          <div className="custom-category-row">
+            <input
+              className="form-input"
+              id="rule-category"
+              autoFocus
+              required
+              disabled={saving}
+              maxLength={60}
+              placeholder="Введите название новой категории"
+              value={draft.category}
+              onChange={event => setDraft({ ...draft, category: event.target.value })}
+            />
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={saving}
+              onClick={() => {
+                setCustomMode(false);
+                setDraft({ ...draft, category: availableCategories[0] });
+              }}
+            >
+              Выбрать из списка
+            </button>
+          </div>
+        )}
         <fieldset className="risk-choices" disabled={saving}>
           <legend className="form-label">Степень риска</legend>
           {Object.entries(riskLabels).map(([value, label]) => (

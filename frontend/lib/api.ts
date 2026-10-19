@@ -294,6 +294,7 @@ export const api = {
     return value;
   }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
   reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+  deleteDocument: async (documentId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/documents/${segment(documentId)}`, { ...options, method: 'DELETE' }); },
   thumbnailUrl,
   documentFileUrl,
   documentOriginalUrl,
