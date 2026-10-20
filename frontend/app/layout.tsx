@@ -11,7 +11,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'AntiRisk',
   description: 'Рабочее пространство для просмотра документов и разбора замечаний.',
-  icons: { icon: { url: '/antirisk-logo.png?v=antirisk', type: 'image/png' } },
+  icons: { icon: { url: '/favicon.svg?v=antirisk-transparent', type: 'image/svg+xml', sizes: 'any' } },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
