@@ -4,6 +4,7 @@ CONVERTING -> OCR (извлечение текста / распознавани�
 Каждый этап коммитит статус и прогресс сразу, чтобы фронтенд видел их через API.
 """
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
@@ -155,16 +156,25 @@ def _save_pages(db: Session, document_id: uuid.UUID, pages: list[PageContent]) -
     ) for p in pages)
 
 
+def rule_embedding_key(rule: RiskRule) -> str:
+    """Ключ кэша эмбеддинга правила: модель + хэш текста запроса.
+
+    Хэш нужен для SQL-миграций, которые меняют semantic_query напрямую (005, 006, 007):
+    без него в уже развёрнутых базах поиск шёл бы по эмбеддингу старого текста.
+    """
+    digest = hashlib.sha256(rule.semantic_query.encode("utf-8")).hexdigest()[:12]
+    return f"{settings.embedding_model_id}#{digest}"
+
+
 def ensure_rule_embeddings(db: Session, rules: list[RiskRule]) -> None:
     """Эмбеддинг semantic_query кэшируется в risk_rules и пересчитывается при смене модели или текста."""
-    model_id = settings.embedding_model_id
-    stale = [r for r in rules if r.query_embedding is None or r.embedding_model != model_id]
+    stale = [r for r in rules if r.query_embedding is None or r.embedding_model != rule_embedding_key(r)]
     if not stale:
         return
     vectors = embed_texts([r.semantic_query for r in stale])
     for rule, vector in zip(stale, vectors):
         rule.query_embedding = vector
-        rule.embedding_model = model_id
+        rule.embedding_model = rule_embedding_key(rule)
     db.flush()
 
 
