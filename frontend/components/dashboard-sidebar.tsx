@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpenCheck, ChevronRight, CircleHelp, FileText, Plus, Settings2, X } from 'lucide-react';
+import { BookOpenCheck, ChevronRight, CircleHelp, Layers3, Plus, Settings2, X } from 'lucide-react';
 import type { User, View } from '@/lib/types';
 
 interface Props {
@@ -18,20 +18,20 @@ interface Props {
 
 export function DashboardSidebar({view,user,projectCount,ruleCount,open,onClose,onNavigate,onCreate,onHelp,keepNavigationOpen=false}: Props) {
   const items = [
-    {view:'documents' as const,label:'Проекты',Icon:FileText,count:projectCount},
+    {view:'documents' as const,label:'Проекты',Icon:Layers3,count:projectCount},
     {view:'rules' as const,label:'Правила проверки',Icon:BookOpenCheck,count:ruleCount},
     {view:'settings' as const,label:'Настройки',Icon:Settings2,count:null},
   ];
   return <>
     {open && <button className="dashboard-scrim" aria-label="Закрыть меню" onClick={onClose} />}
     <aside className={`dashboard-sidebar ${open?'is-open':''}`} id="workspace-sidebar" aria-label="Рабочее пространство">
-      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="AntiRisk — проекты"><span className="sidebar-brand-mark" aria-hidden="true"><svg viewBox="250 110 790 630"><image href="/antirisk-logo.png" width="1280" height="853" /></svg></span><strong>AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
-      <button className="sidebar-create" data-onboarding="new-project" onClick={()=>{onCreate();onClose();}}><Plus size={16}/><span>Новый проект</span><kbd>+</kbd></button>
+      <div className="sidebar-brand-row"><button className="sidebar-brand" onClick={()=>{onNavigate('documents');onClose();}} aria-label="AntiRisk — проекты"><span className="sidebar-brand-mark" aria-hidden="true"><img src="/antirisk-logo.svg" alt="" /></span><strong>AntiRisk</strong></button><button className="sidebar-close" onClick={onClose} aria-label="Закрыть меню"><X size={19}/></button></div>
+      <button className="sidebar-create" data-onboarding="new-project" onClick={()=>{onCreate();onClose();}}><span className="sidebar-create-icon" aria-hidden="true"><Plus size={18}/></span><span>Новый проект</span></button>
       <nav className="sidebar-navigation" aria-label="Основная навигация">{items.map(item=>{
         const active=view===item.view || ((view==='project' || view==='document') && item.view==='documents');
         return <button key={item.view} data-onboarding={`nav-${item.view}`} className={active?'active':''} aria-current={active?'page':undefined} onClick={()=>{onNavigate(item.view);if(!keepNavigationOpen)onClose();}}><item.Icon size={16} strokeWidth={1.5}/><span>{item.label}</span>{item.count!==null && <small>{item.count}</small>}</button>;
       })}</nav>
-      <div className="sidebar-bottom"><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={20}/><span>Помощь и информация</span><ChevronRight size={16}/></button><button type="button" className="sidebar-user" aria-label="Открыть настройки профиля" onClick={()=>{onNavigate('settings');onClose();}}><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong title={user?.fullName}>{user?.fullName || 'Загрузка профиля…'}</strong><small title={user?.email}>{user?.email || 'Подключение к серверу'}</small></span><ChevronRight size={16} aria-hidden="true" /></button></div>
+      <div className="sidebar-bottom"><button className="sidebar-help" onClick={()=>{onHelp();onClose();}}><CircleHelp size={17}/><span>Помощь и информация</span><ChevronRight size={14}/></button><button type="button" className="sidebar-user" aria-label="Открыть настройки профиля" onClick={()=>{onNavigate('settings');onClose();}}><span className="sidebar-avatar">{user?.initials || '…'}</span><span><strong title={user?.fullName}>{user?.fullName || 'Загрузка профиля…'}</strong></span><ChevronRight size={14} aria-hidden="true" /></button></div>
     </aside>
   </>;
 }

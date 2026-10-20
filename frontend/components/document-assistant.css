@@ -3,7 +3,9 @@
 .dashboard-shell.analysis-shell .document-review .col-more { width: 58px; }
 .document-review .more-cell { white-space: nowrap; }
 .document-review .more-cell .icon-button { display: inline-flex; width: 25px; }
-.document-review .review-tabs { overflow-x: auto; scrollbar-width: thin; }
+.document-review .review-tabs { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.document-review .review-tabs::-webkit-scrollbar { display: none; }
+.document-review .review-tabs button.active::after { bottom: 0; }
 .dashboard-shell.analysis-shell .document-review .review-tabs > button { flex-shrink: 0; padding: 0 9px; font-size: 11px; }
 .dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab { margin-left: auto; gap: 6px; color: #a54b55; background: #fff8f8; }
 .dashboard-shell.analysis-shell .document-review .review-tabs > .assistant-tab:hover { background: #fff0f1; }
