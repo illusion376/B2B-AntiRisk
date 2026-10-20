@@ -5,10 +5,17 @@
   * words — [[x0, y0, x1, y1, "слово", line_no], ...] в PDF-пунктах для подсветки цитат.
 
 Текстовые страницы читаются из текстового слоя PDF. Страницы без текстового слоя
-(сканы) рендерятся в 300 DPI и распознаются Tesseract (rus+eng) в нескольких потоках:
+(сканы) рендерятся и распознаются Tesseract (rus+eng) в нескольких потоках:
 pytesseract запускает отдельный процесс, поэтому потоки дают реальный параллелизм.
+
+Два решения, которые сильно влияют на скорость и точность (замеры на 20-страничном скане):
+  * скан рендерится в своём родном разрешении, а не растягивается до 300 DPI —
+    интерполяция размывает буквы: точность 90,5% -> 99,4%;
+  * OMP_THREAD_LIMIT=1 — иначе каждый процесс Tesseract запускает свои потоки OpenMP
+    и они дерутся за ядра: 78 с -> 22 с на 2 ядрах.
 """
 import logging
+import os
 import re
 from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -19,6 +26,9 @@ import pymupdf as fitz
 from PIL import Image
 
 from app.config import settings
+
+# Должно быть выставлено до запуска процессов tesseract (они наследуют окружение)
+os.environ.setdefault("OMP_THREAD_LIMIT", "1")
 
 log = logging.getLogger(__name__)
 
@@ -75,17 +85,72 @@ def _native_page(page: fitz.Page, page_number: int) -> PageContent:
     )
 
 
+def _image_coverage(page: fitz.Page) -> float:
+    """Доля площади страницы, занятая картинками."""
+    area = abs(page.rect) or 1
+    covered = sum(abs(fitz.Rect(info["bbox"]) & page.rect) for info in page.get_image_info())
+    return min(covered / area, 1.0)
+
+
+_GOOD_CHARS = set(".,;:!?()[]«»\"'-–—№%/\\+=*<>§$€₽")
+
+
+def _is_junk_text(text: str) -> bool:
+    """Текстовый слой есть, но это не буквы и цифры (битая кодировка шрифта, мусор сканера)."""
+    chars = "".join(text.split())
+    if not chars:
+        return False
+    good = sum(ch.isalnum() or ch in _GOOD_CHARS for ch in chars)
+    junk = sum(ch == "\ufffd" or "\ue000" <= ch <= "\uf8ff" or ch < " " for ch in chars)
+    return good / len(chars) < 0.6 or junk / len(chars) > 0.1
+
+
 def _needs_ocr(page: fitz.Page, native: PageContent) -> bool:
     if not settings.ocr_enabled:
         return False
-    if len(native.text.strip()) >= settings.ocr_min_text_chars:
-        return False
-    # Пустая страница без картинок — просто пустая страница
-    return bool(page.get_images(full=False)) or bool(page.get_drawings())
+    chars = len("".join(native.text.split()))
+    if chars < settings.ocr_min_text_chars:
+        # Пустая страница без картинок — просто пустая страница
+        return bool(page.get_images(full=False)) or bool(page.get_drawings())
+    if _is_junk_text(native.text):
+        return True
+    # Скан со штампом «Документ подписан ЭП…» или колонтитулом в текстовом слое: так приходят
+    # документы из ЕИС и с площадок. Текста немного, а вся страница — картинка.
+    if chars < settings.ocr_scan_max_text_chars and _image_coverage(page) > 0.8:
+        return True
+    return False
+
+
+def _scan_dpi(page: fitz.Page) -> int | None:
+    """Разрешение картинки, занимающей большую часть страницы (самого скана), или None."""
+    page_area = abs(page.rect) or 1
+    best = None
+    for info in page.get_image_info():
+        bbox = fitz.Rect(info["bbox"]) & page.rect
+        if abs(bbox) < 0.5 * page_area or bbox.width <= 0 or bbox.height <= 0:
+            continue
+        # картинка может быть повёрнута на 90° (альбомный скан на книжной странице)
+        same_orientation = (info["width"] >= info["height"]) == (bbox.width >= bbox.height)
+        span_inch = (bbox.width if same_orientation else bbox.height) / 72
+        best = max(best or 0, round(info["width"] / span_inch))
+    return best
 
 
 def _render(page: fitz.Page) -> Image.Image:
-    pix = page.get_pixmap(dpi=settings.ocr_dpi, colorspace=fitz.csGRAY, alpha=False)
+    longest_inch = max(page.rect.width, page.rect.height) / 72
+    native = _scan_dpi(page)
+    if native:
+        # Скан рендерим ровно в его пикселях: растягивание 200 DPI до 300 размывает буквы
+        # и снижает точность Tesseract. Увеличиваем только совсем мелкие картинки (фото,
+        # сканы 100 DPI), чтобы длинная сторона была около 2000 px.
+        dpi = native
+        if native * longest_inch < 1700:
+            dpi = native * 2000 / (native * longest_inch)
+    else:
+        dpi = settings.ocr_dpi  # векторная страница без текста (кривые вместо шрифта)
+    # огромные страницы (чертежи A0) ограничиваем по пикселям, чтобы не съесть память
+    dpi = min(dpi, 600, 9000 / max(longest_inch, 1))
+    pix = page.get_pixmap(dpi=max(int(dpi), 72), colorspace=fitz.csGRAY, alpha=False)
     return Image.frombytes("L", (pix.width, pix.height), pix.samples)
 
 

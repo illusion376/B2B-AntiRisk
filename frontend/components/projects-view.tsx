@@ -215,7 +215,7 @@ export function NewProjectDialog({ onCreate, onClose }: NewProjectDialogProps) {
           id="project-description" className="form-input" rows={3} maxLength={1000} disabled={saving}
           placeholder="О чём этот проект" value={description} onChange={event => setDescription(event.target.value)}
         />
-        <p className="form-hint">После создания можно добавить документы, изображения или ZIP-архив.</p>
+        <p className="form-hint">После создания можно добавить документы, изображения или архив ZIP, RAR, 7Z.</p>
         {error && <p className="field-error" id="project-error" role="alert">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Отмена</button>
