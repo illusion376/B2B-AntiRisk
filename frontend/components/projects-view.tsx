@@ -139,7 +139,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
                           <span><strong>{project.title}</strong><small>{project.description || 'Документы проекта'}</small></span>
                         </a>
                       </td>
-                      <td data-label="Статус"><span className={`dashboard-state ${state}`}><i />{projectStateLabels[state]}</span></td>
+                      <td data-label="Статус"><span className={`dashboard-state ${state}`}>{projectStateLabels[state]}</span></td>
                       <td data-label="Файлы"><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
                       <td data-label="Замечания" className="project-findings-cell">
                         <span className={`dashboard-findings-count ${riskCount ? 'dashboard-risk-value' : ''}`} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
