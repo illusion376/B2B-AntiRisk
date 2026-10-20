@@ -11,17 +11,12 @@ from app.config import settings
 from app.models import Analysis, Document, Project, User
 from app.services import storage
 from app.services.analysis_modes import resolve_analysis_mode
-from app.services.archive import ArchiveError, extract_archive
+from app.services.archive import ArchiveError, extract_zip
 from app.services.audit import log_action
 
 log = logging.getLogger(__name__)
 
-_MAGIC = {
-    ".pdf": b"%PDF", ".zip": b"PK", ".docx": b"PK", ".odt": b"PK",
-    ".doc": b"\xd0\xcf\x11\xe0", ".rtf": b"{\\rtf",
-    ".rar": b"Rar!\x1a\x07", ".7z": b"7z\xbc\xaf\x27\x1c",
-}
-FORMATS_HINT = "PDF, DOCX, DOC, RTF, ODT, TXT, изображения или архив ZIP, RAR, 7Z"
+_MAGIC = {".pdf": b"%PDF", ".zip": b"PK", ".docx": b"PK", ".odt": b"PK", ".doc": b"\xd0\xcf\x11\xe0", ".rtf": b"{\\rtf"}
 
 
 class UploadRejected(Exception):
@@ -68,7 +63,8 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     original_name = storage.safe_filename(upload.filename or "document")
     ext = storage.extension(original_name)
     if ext not in storage.SUPPORTED_DOCUMENTS | storage.ARCHIVES:
-        raise UploadRejected(415, f"Формат {ext or 'без расширения'} не поддерживается. Загрузите {FORMATS_HINT}")
+        raise UploadRejected(415, f"Формат {ext or 'без расширения'} не поддерживается. "
+                                  "Загрузите PDF, TXT, ZIP, DOCX, DOC, RTF, ODT или изображение")
 
     initial_status = "UPLOADED" if defer_processing else "QUEUED"
     analysis = Analysis(
@@ -90,7 +86,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
 
         documents: list[Document] = []
         if ext in storage.ARCHIVES:
-            extracted = extract_archive(
+            extracted = extract_zip(
                 upload_path, storage.subdir(analysis.id, "files"),
                 max_files=settings.max_archive_files,
                 max_unpacked_bytes=settings.max_archive_unpacked_mb * 1024 * 1024,
@@ -108,8 +104,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
                     file_size=item.size,
                     status=initial_status if item.supported else "UNSUPPORTED",
                     analysis_mode=mode if item.supported else None,
-                    error_message=None if item.supported else (
-                        item.error or "Формат не поддерживается — файл не проверялся"),
+                    error_message=None if item.supported else "Формат не поддерживается — файл не проверялся",
                 ))
         else:
             documents.append(Document(
@@ -130,7 +125,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     if not to_process:
         analysis.analysis_status = "FAILED"
         analysis.progress = 100
-        analysis.error_message = f"В архиве нет документов, которые можно проверить ({FORMATS_HINT})"
+        analysis.error_message = "В архиве нет документов поддерживаемых форматов (PDF, TXT, DOCX, DOC, RTF, изображения)"
 
     db.add(analysis)
     db.flush()
