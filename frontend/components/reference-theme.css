@@ -205,6 +205,11 @@
 .dashboard-shell .modal-header h2 { font-size: 21px; font-weight: 650; color: #202938; }
 .dashboard-shell .modal-actions { gap: 10px; margin-top: 24px; }
 .dashboard-shell .form-label { color: #334155; font-size: 12px; font-weight: 600; }
+.dashboard-shell .report-select { display: block; width: 100%; min-width: 0; }
+.dashboard-shell .report-select.is-open { z-index: 1; }
+.dashboard-shell .report-select .custom-select-trigger { width: 100%; min-height: 40px; padding: 10px 12px; text-align: left; }
+.dashboard-shell .report-select .custom-select-menu { width: 100%; max-height: min(260px,40dvh); }
+.dashboard-shell .report-select .custom-select-item { white-space: normal; }
 .dashboard-shell .popover,.dashboard-shell .notification-popover { border-color: #e1e6ef; border-radius: 13px; background: #fff; box-shadow: 0 15px 50px #42516f1c; }
 .dashboard-shell.analysis-shell .document-heading { height: auto; min-height: 82px; margin: 0; padding: 12px 26px; border: 0; background: transparent; }
 .dashboard-shell.analysis-shell .document-heading-text { flex: 1; }
