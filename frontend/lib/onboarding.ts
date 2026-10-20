@@ -64,7 +64,7 @@ export function projectTourStep(project: Project): TourStep {
   const stage = projectTourStage(project);
   const common = { id: `project-${stage}`, total: 5, fallback: '[data-onboarding="project-files"]' };
   switch (stage) {
-    case 'upload': return { ...common, number: 1, title: 'Выберите файлы', description: 'Добавьте документы в проект с устройства или перетащите их в область загрузки. Можно загрузить несколько файлов или архив ZIP, RAR, 7Z.', target: '[data-onboarding="upload-files"]', action: 'Выбрать файлы' };
+    case 'upload': return { ...common, number: 1, title: 'Выберите файлы', description: 'Добавьте документы в проект с устройства или перетащите их в область загрузки. Можно загрузить несколько файлов или ZIP-архив.', target: '[data-onboarding="upload-files"]', action: 'Выбрать файлы' };
     case 'start': return { ...common, number: 2, title: 'Начните анализ', description: 'Файлы загружены. Нажмите «Начать анализ», чтобы проверить их по включённым правилам. Если режим недоступен, его можно изменить в настройках.', target: '[data-onboarding="start-analysis"]', action: 'Начать анализ' };
     case 'waiting': return { ...common, number: 3, title: 'Дождитесь завершения анализа', description: 'Документы обрабатываются. Когда проверка завершится, здесь появится кнопка открытия результата. Подсказка обновится автоматически.', target: '[data-onboarding="analysis-progress"]', action: 'Идёт анализ…', waiting: true };
     case 'open': return { ...common, number: 3, title: 'Откройте проверенный документ', description: 'Результат готов. Откройте документ, чтобы увидеть замечания рядом с текстом, задать вопрос ИИ-помощнику и скачать отчёт.', target: '[data-onboarding="open-document"]', action: 'Открыть документ' };
