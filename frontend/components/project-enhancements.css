@@ -82,7 +82,6 @@
 
 /* Live project data and archive contents, using the current dashboard layout. */
 .dashboard-shell .dashboard-state.failed { color: #b04d40; }
-.dashboard-shell .dashboard-state.failed i { background: #c45648; }
 .dashboard-shell .project-files-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 .dashboard-shell .project-files-heading-actions .secondary-button { min-height: 32px; padding: 7px 10px; font-size: .6875rem; }
 .dashboard-shell .project-action-error { margin: 0 0 17px; }

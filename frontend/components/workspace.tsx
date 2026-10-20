@@ -4,7 +4,7 @@ import {AlertCircle,Check,ChevronDown,ChevronRight,CircleHelp,Download,EllipsisV
 import {api,errorMessage} from '@/lib/api';
 import type {AnalysisMode,CheckRule,DocumentInfo,Finding,Project,ProjectDraft,ProjectFile,ReportFormat,ReportModeId,ReviewStatus,RuleDraft,SearchResponse,View} from '@/lib/types';
 import {DocumentWorkspace} from './document-workspace';
-import {IconButton,Modal} from './ui';
+import {CustomSelect,IconButton,Modal} from './ui';
 import {useWorkspaceTools} from './workspace-tools';
 import {RulesManager,RuleEditor,DeleteRuleDialog} from './rules-manager';
 import {ProjectsView,NewProjectDialog} from './projects-view';
@@ -183,14 +183,42 @@ export function Workspace() {
       {view==='settings'&&<SettingsView user={user} onSaveProfile={data.saveUser} config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError||preferences.storageError} preferences={preferences.preferences} preferencesReady={preferences.ready} onPreferences={preferences.update} desktopPermission={notifications.permission} desktopRequesting={notifications.requesting} onDesktop={()=>void notifications.toggleDesktop()}/>}
       </>}
     </main>
-    <footer className="statusbar"><span><span className="local-indicator"/>{data.error?'Нет связи с API':'Обработка на сервере'}</span><span><ShieldCheck size={13}/>Решения сохраняются в базе данных</span><button onClick={()=>openModal('info')}><CircleHelp size={13}/>Помощь</button></footer>
+    <footer className="statusbar"><span><span className="local-indicator"/>{data.error?'Нет связи с API':'Обработка на сервере'}</span><span><ShieldCheck size={13}/>Решения сохраняются в базе данных</span></footer>
     {projectDialog&&<ProjectActionDialog key={`${projectDialog.mode}-${projectDialog.project.id}`} project={projectDialog.project} mode={projectDialog.mode} onConfirm={confirmProjectAction} onClose={()=>setProjectDialog(null)}/>}
     {modal==='create-project'&&<NewProjectDialog onCreate={createProject} onClose={()=>setModal(null)}/>}
     {ruleDialog&&ruleDialog.mode!=='delete'&&<RuleEditor rule={ruleDialog.mode==='edit'?ruleDialog.rule:null} categories={categories} onSave={saveRule} onClose={()=>setRuleDialog(null)}/>}
     {ruleDialog?.mode==='delete'&&<DeleteRuleDialog rule={ruleDialog.rule} onConfirm={deleteRule} onClose={()=>setRuleDialog(null)}/>}
     {toast&&<div className={`toast notice-${toastKind}`} role="status"><span>{toastKind==='completed'?<Check size={16}/>:<AlertCircle size={16}/>}</span>{toast}<button aria-label="Скрыть уведомление" onClick={()=>setToast('')}><X size={16}/></button></div>}
     {modal==='rename'&&<Modal title="Переименовать документ" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={renameDocument}><label className="form-label" htmlFor="document-name">Название документа</label><div className="name-input"><input id="document-name" autoFocus required disabled={saving} maxLength={255} value={draftName} onChange={event=>setDraftName(event.target.value)}/></div>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!draftName.trim()}>{saving?'Сохраняем…':'Сохранить'}</button></div></form></Modal>}
-    {modal==='report'&&<Modal title="Скачать отчёт" closeDisabled={saving} onClose={()=>setModal(null)}><form onSubmit={exportReport}><label className="form-label" htmlFor="report-mode">Содержание отчёта</label><select id="report-mode" className="form-select" disabled={saving} value={reportMode} onChange={event=>{const value=event.target.value as ReportModeId;setReportMode(value);setReportFormat((reportModes.find(item=>item.id===value)?.formats[0]||'docx') as ReportFormat);}}>{reportModes.map(mode=><option key={mode.id} value={mode.id}>{mode.title}</option>)}</select><p className="report-description">{modeInfo?.description}</p><label className="form-label" htmlFor="report-format">Формат</label><select id="report-format" className="form-select" disabled={saving} value={reportFormat} onChange={event=>setReportFormat(event.target.value as ReportFormat)}>{modeInfo?.formats.map(format=><option key={format} value={format}>{format.toUpperCase()}</option>)}</select><label className="report-option"><input type="checkbox" disabled={saving} checked={includeDismissed} onChange={event=>setIncludeDismissed(event.target.checked)}/>Включить отклонённые замечания</label>{modalError&&<ErrorNotice message={modalError}/>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!modeInfo}>{saving?'Формируем отчёт…':'Скачать'}</button></div></form></Modal>}
+    {modal==='report'&&<Modal title="Скачать отчёт" closeDisabled={saving} onClose={()=>setModal(null)}>
+      <form onSubmit={exportReport}>
+        <label className="form-label" htmlFor="report-mode">Содержание отчёта</label>
+        <CustomSelect
+          id="report-mode"
+          className="report-select"
+          ariaLabel="Содержание отчёта"
+          ariaDescribedBy="report-mode-description"
+          disabled={saving}
+          value={reportMode}
+          onChange={value=>{setReportMode(value as ReportModeId);setReportFormat((reportModes.find(item=>item.id===value)?.formats[0]||'docx') as ReportFormat);}}
+          options={reportModes.map(mode=>({value:mode.id,label:mode.title}))}
+        />
+        <p id="report-mode-description" className="report-description">{modeInfo?.description}</p>
+        <label className="form-label" htmlFor="report-format">Формат</label>
+        <CustomSelect
+          id="report-format"
+          className="report-select"
+          ariaLabel="Формат"
+          disabled={saving}
+          value={reportFormat}
+          onChange={value=>setReportFormat(value as ReportFormat)}
+          options={(modeInfo?.formats||[]).map(format=>({value:format,label:format.toUpperCase()}))}
+        />
+        <label className="report-option"><input type="checkbox" disabled={saving} checked={includeDismissed} onChange={event=>setIncludeDismissed(event.target.checked)}/>Включить отклонённые замечания</label>
+        {modalError&&<ErrorNotice message={modalError}/>}
+        <div className="modal-actions"><button type="button" className="secondary-button" disabled={saving} onClick={()=>setModal(null)}>Отмена</button><button className="primary-button" disabled={saving||!modeInfo}>{saving?'Формируем отчёт…':'Скачать'}</button></div>
+      </form>
+    </Modal>}
     {modal==='info'&&<Modal title="О рабочем пространстве" onClose={()=>setModal(null)}><div className="info-content"><p>Создайте проект, загрузите документы, нажмите «Начать анализ» и дождитесь завершения проверки. Файлы и решения по замечаниям сохраняются на сервере.</p><p>Откройте документ, чтобы сопоставить замечания с исходным текстом, принять или отклонить их и скачать отчёт. Поиск работает по всем страницам.</p><p>Для документов из ZIP доступен отдельный просмотр. Повторная проверка использует текущие включённые правила.</p><p>Текущий профиль предоставляется API; вход и управление доступом в этой версии не реализованы.</p></div><div className="modal-actions"><button className="secondary-button" onClick={()=>{setModal(null);onboarding.restart(view==='project'||view==='document'?projectId:undefined);}}>Показать подсказки</button><button className="primary-button" onClick={()=>setModal(null)}>Понятно</button></div></Modal>}
   </div>;
   return <div className={`dashboard-canvas${view==='document'?' analysis-canvas':''}`}>{shell}{onboarding.step&&<OnboardingTour intro={onboarding.workspaceActive} step={onboarding.step} paused={onboardingPaused} onClose={onboarding.close} onNext={onboarding.workspaceActive||onboarding.documentStep?onboarding.next:undefined} onPrevious={onboarding.previous}/>}</div>;
