@@ -5,11 +5,8 @@ from pathlib import Path
 
 from app.config import settings
 
-SUPPORTED_DOCUMENTS = {
-    ".pdf", ".docx", ".doc", ".rtf", ".odt", ".txt",
-    ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp",
-}
-ARCHIVES = {".zip", ".rar", ".7z"}
+SUPPORTED_DOCUMENTS = {".pdf", ".docx", ".doc", ".rtf", ".odt", ".txt", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+ARCHIVES = {".zip"}
 NEEDS_CONVERSION = {".docx", ".doc", ".rtf", ".odt", ".txt"}
 IMAGES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 
