@@ -28,7 +28,7 @@ VERDICT = {
     "GREEN": "Существенных рисков по проверенным правилам не выявлено.",
     "UNKNOWN": "Оценка рисков недоступна: не по всем правилам достаточно данных для вывода. Требуется проверка специалистом.",
 }
-DISCLAIMER = ("Отчёт сформирован автоматически ИИ-ассистентом «Светофор рисков» и не является юридическим "
+DISCLAIMER = ("Отчёт сформирован автоматически системой «Светофор рисков» и не является юридическим "
               "заключением. Замечания необходимо проверить специалисту.")
 
 
@@ -131,8 +131,12 @@ def _header(doc, data: ReportData, title: str) -> None:
     for label, value in rows:
         cells = meta.add_row().cells
         _cell_text(cells[0], label, bold=True)
-        _cell_text(cells[1], value)
-        cells[0].width, cells[1].width = Cm(5), Cm(12)
+        val_size = 9 if len(str(value)) > 35 else 10
+        _cell_text(cells[1], value, size=val_size)
+        cells[0].width, cells[1].width = Cm(4.2), Cm(12.8)
+    for row in meta.rows:
+        row.cells[0].width = Cm(4.2)
+        row.cells[1].width = Cm(12.8)
     doc.add_paragraph()
 
 
@@ -239,7 +243,8 @@ def build_detailed(data: ReportData, target: Path) -> Path:
             meta = [_location(f)]
             if f.category:
                 meta.append(f.category)
-            meta.append(f"статус: {REVIEW_LABEL.get(f.review_status, f.review_status)}")
+            if f.review_status and f.review_status not in ("NEW", "UNSEEN"):
+                meta.append(f"статус: {REVIEW_LABEL.get(f.review_status, f.review_status)}")
             doc.add_paragraph(" · ".join(meta)).runs[0].font.size = Pt(9)
 
             if f.exact_quote:
@@ -250,7 +255,7 @@ def build_detailed(data: ReportData, target: Path) -> Path:
                 _shade(cell, SEVERITY_FILL[f.severity])
                 if not f.quote_verified:
                     doc.add_paragraph("Цитата не найдена в тексте дословно — сверьте с документом.").runs[0].italic = True
-            _labeled(doc, "Почему нет оценки" if f.severity == "UNKNOWN" else "Почему это риск", f.comment)
+            _labeled_comment(doc, "Почему нет оценки" if f.severity == "UNKNOWN" else "Почему это риск", f.comment)
             if f.counter_proposal:
                 _labeled(doc, "Рекомендация", f.counter_proposal)
             if f.legal_reference:
@@ -285,6 +290,26 @@ def _labeled(doc, label: str, text: str) -> None:
     p = doc.add_paragraph()
     p.add_run(f"{label}: ").bold = True
     p.add_run(text)
+
+
+def _labeled_comment(doc, label: str, text: str) -> None:
+    parts = text.split("\n\n")
+    for i, part in enumerate(parts):
+        part = part.strip()
+        if not part:
+            continue
+        p = doc.add_paragraph()
+        if i == 0:
+            p.add_run(f"{label}: ").bold = True
+            p.add_run(part)
+        elif part.startswith("[Дополнительный риск:") or part.startswith("[Сопутствующий риск:"):
+            header, sep, body = part[1:].partition("] ")
+            title = header.replace("Дополнительный риск: ", "").replace("Сопутствующий риск: ", "")
+            run_lbl = p.add_run(f"Сопутствующий риск ({title}): ")
+            run_lbl.bold = True
+            p.add_run(body if sep else header)
+        else:
+            p.add_run(part)
 
 
 def build_protocol(data: ReportData, target: Path) -> Path:

@@ -338,7 +338,23 @@ def _is_empty_or_heading_quote(quote: str | None) -> bool:
     cleaned = quote.strip()
     if _TITLE_ONLY_RE.match(cleaned):
         return True
+    letters = [c for c in cleaned if c.isalpha()]
+    if letters and len(cleaned) < 90 and all(c.isupper() for c in letters):
+        return True
+    if re.match(r"^[\w\s]{1,30}:\s*(\d+(\.\d+)*\.?)?$", cleaned, re.IGNORECASE):
+        return True
+    if re.match(r"^[\d\.\s\(\)\-]+$", cleaned):
+        return True
     return False
+
+
+def _extract_recommendation(llm_prompt: str | None) -> str | None:
+    if not llm_prompt:
+        return None
+    match = re.search(r"Рекомендация:\s*([^\n]+)", llm_prompt, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return None
 
 
 def _has_self_contradiction(comment: str | None, summary: str | None) -> bool:
@@ -422,16 +438,129 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
 _WORD = re.compile(r"\w{4,}", re.UNICODE)
 _SENTENCE = re.compile(r"(?<=[.;!?])\s+")
 
+# Части шаблонов. Число в договоре часто продублировано прописью: «1 (одного) дня», «30 (тридцати) процентов»,
+# а между числом и «%» может стоять пробел: «10 % от цены».
+_NUM_WORDS = r"\s*(?:\([^)]*\)\s*)?"
+_DAYS = r"(?:рабоч\w*\s+|календарн\w*\s+)?(?:дн[еяйи]\w*|день)\b"
+_PERCENT = r"(?:[.,]\d+)?\s*(?:\([^)]*\)\s*)?(?:%|процент)"
+_SHORT_TERM = rf"(?:в\s+течение|по\s+истечении|через)\s+[1-5]{_NUM_WORDS}{_DAYS}"
+
+# Критические маркеры для правил уровня RED: если формулировка найдена в одном предложении,
+# эвристический режим фиксирует критический риск (RED), а не понижает до YELLOW.
+_CRITICAL_PATTERNS: dict[str, re.Pattern[str]] = {
+    "rnp_short_cure_period": re.compile(
+        rf"односторонн\w*\s+отказ[^.]{{0,250}}{_SHORT_TERM}"
+        rf"|{_SHORT_TERM}[^.]{{0,250}}односторонн\w*\s+отказ"
+        r"|односторонн\w*\s+отказ[^.]{0,250}вступа\w*\s+в\s+силу\s+(?:со\s+дня|с\s+момента|с\s+даты)\s+"
+        r"(?:его\s+)?(?:направлен|размещен|получен)",
+        re.IGNORECASE,
+    ),
+    "short_delivery_time": re.compile(
+        rf"(?:поставк\w*|передач\w*\s+товар)[^.]{{0,120}}(?:в\s+течение|составляет)\s+[1-5]{_NUM_WORDS}{_DAYS}"
+        rf"|(?:в\s+течение|составляет)\s+[1-5]{_NUM_WORDS}{_DAYS}[^.]{{0,120}}(?:поставк\w*|передач\w*\s+товар)",
+        re.IGNORECASE,
+    ),
+    "defect_fix_deadline": re.compile(
+        rf"\b24{_NUM_WORDS}час|\b[1-3]{_NUM_WORDS}{_DAYS}|\bсут(?:ок|ки)\b|незамедлительн\w*\s+(?:устран|замен)",
+        re.IGNORECASE,
+    ),
+    "unconditional_bg_claim": re.compile(
+        r"безакцепт\w*|бесспорн\w*"
+        r"|(?:100\s*%|ста\s+процентов|вс\w+\s+сумм\w*|полн\w*\s+сумм\w*)[^.]{0,80}(?:гаранти|обеспечени)"
+        r"|(?:гаранти|обеспечени)\w*[^.]{0,80}(?:100\s*%|ста\s+процентов|вс\w+\s+сумм\w*|полн\w*\s+сумм\w*)",
+        re.IGNORECASE,
+    ),
+    "uncapped_liability": re.compile(
+        r"не\s+ограничива\w*\s+(?:ценой|суммой|размером)|сверх\s+(?:суммы\s+)?неустойк"
+        r"|без\s+ограничени\w*\s+(?:размер|сумм|ответственност)|в\s+полном\s+объ[её]ме\s+сверх",
+        re.IGNORECASE,
+    ),
+    "brand_without_equivalent": re.compile(
+        r"эквивалент\w*\s+не\s+допуска|не\s+допуска\w*\s+(?:поставк\w*\s+)?эквивалент|без\s+(?:права\s+)?(?:замены|эквивалент)"
+        r"|\b(?:hewlett|hp|cisco|oracle|dell|lenovo)\b|гарантийн\w*\s+письм\w*\s+производител|авторизацион\w*\s+письм",
+        re.IGNORECASE,
+    ),
+    "experience_restricted_44_223": re.compile(
+        r"исключительно\s+[^.]{0,160}(?:44-фз|223-фз|государственн|реестр\w*\s+контракт)",
+        re.IGNORECASE,
+    ),
+    "unreasonable_penalty": re.compile(
+        rf"(?:фиксированн\w*\s+размер\w*|штраф\w*\s+в\s+размере)\s+(?:[5-9]|[1-9]\d{{1,2}})(?!\d){_PERCENT}",
+        re.IGNORECASE,
+    ),
+}
+
+# Формулировки, снимающие критический маркер в том же предложении:
+# «Lenovo ThinkPad E16 или эквивалент» — товарный знак с допуском эквивалента, это не нарушение.
+_MARKER_EXCEPTIONS: dict[str, re.Pattern[str]] = {
+    "brand_without_equivalent": re.compile(r"или\s+эквивалент|эквивалент\w*\s+допуска", re.IGNORECASE),
+}
+
+# Тематические фильтры: отсекают ложные срабатывания, если фрагмент вообще
+# не относится к предметной области правила (преамбулы, общие положения).
+_DOMAIN_GUARDS: dict[str, re.Pattern[str]] = {
+    "ip_rights_transfer": re.compile(
+        r"(?:исключительн\w*\s+прав|интеллектуальн\w*|авторск\w*\s+прав|патент\w*|ноу-хау)",
+        re.IGNORECASE,
+    ),
+    "subcontracting_terms": re.compile(
+        r"(?:субподряд\w*|соисполнител\w*|привлечен\w*\s+третьих|смп|сонко)",
+        re.IGNORECASE,
+    ),
+    "national_regime": re.compile(
+        r"(?:национальн\w*\s+режим|\b(?:616|617|878|1875)\b|реестр\w*\s+российск|евразийск|происхожден\w*\s+товар)",
+        re.IGNORECASE,
+    ),
+    "bid_security_excessive": re.compile(
+        r"(?:обеспечени\w*\s+(?:заявк|подач\w*\s+заяв)|размер\w*\s+обеспечения\s+заявк)",
+        re.IGNORECASE,
+    ),
+    "contract_security_excessive": re.compile(
+        rf"обеспечени\w*[^.]{{0,80}}?\b(?:1[5-9]|[2-9]\d)(?!\d){_PERCENT}|превышает\s+30\s*%",
+        re.IGNORECASE,
+    ),
+    "trademark_no_equivalent": re.compile(
+        r"(?:товарн\w*\s+знак|знак\w*\s+обслуживан|фирменн\w*\s+наименован|модел\w*|производител)",
+        re.IGNORECASE,
+    ),
+}
+
 
 def _stems(text: str) -> set[str]:
     return {w[:6] for w in _WORD.findall(text.lower().replace("ё", "е"))}
 
 
-def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivity: str = "balanced") -> list[FindingDraft]:
-    """Без LLM: показываем самый релевантный фрагмент как «требует внимания».
+def _is_noise(sentence: str) -> bool:
+    """Обрывки OCR и строки таблиц («322 486 |МАОУ СОШ № 34 г.»): букв меньше половины символов."""
+    chars = [c for c in sentence if not c.isspace()]
+    return not chars or sum(c.isalpha() for c in chars) / len(chars) < 0.55
 
-    Режим нужен, чтобы система работала «из коробки» без ключей API; замечания помечаются
-    source=HEURISTIC и низкой уверенностью.
+
+def _quote_candidates(chunk: RetrievedChunk) -> list[str]:
+    sentences = [s for s in _SENTENCE.split(chunk.content.replace("\n", " ")) if len(s.strip()) > 20] or [chunk.content]
+    substantive = [s for s in sentences if not _is_empty_or_heading_quote(s) and not _is_noise(s)]
+    return substantive or sentences
+
+
+def _marked_sentence(chunks: list[RetrievedChunk], marker: re.Pattern[str],
+                     exception: re.Pattern[str] | None) -> tuple[RetrievedChunk, str] | None:
+    """Первое предложение с критическим маркером (самые релевантные фрагменты — первыми).
+
+    Маркер ищется в предложении, а не во всём фрагменте: иначе «Критично» ставится на соседний пункт.
+    """
+    for chunk in sorted(chunks, key=lambda c: c.score, reverse=True):
+        for sentence in _quote_candidates(chunk):
+            if marker.search(sentence) and not (exception and exception.search(sentence)):
+                return chunk, sentence
+    return None
+
+
+def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivity: str = "balanced") -> list[FindingDraft]:
+    """Без LLM: показываем релевантные условия договора.
+
+    При наличии явных маркеров критических рисков (сжатые сроки, 100% списание гарантии,
+    отсутствие эквивалента и др.) сохраняется уровень RED. Остальные релевантные условия
+    помечаются как YELLOW для ручной проверки.
     """
     if sensitivity not in SENSITIVITY_INSTRUCTIONS:
         raise ValueError("Неизвестная чувствительность анализа")
@@ -444,23 +573,51 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             relevant = [c for c in relevant if len(_stems(c.content) & query_stems) >= min(2, len(query_stems))]
         if not relevant:
             continue
-        best = max(relevant, key=lambda c: c.score)
-        sentences = [s for s in _SENTENCE.split(best.content.replace("\n", " ")) if len(s) > 20] or [best.content]
-        sentence = max(sentences, key=lambda s: len(_stems(s) & query_stems))
+
+        # Отсекаем ложные срабатывания по специфическим предметным областям
+        guard = _DOMAIN_GUARDS.get(rule.id)
+        if guard:
+            guarded = [c for c in relevant if guard.search(c.content)]
+            if not guarded and sensitivity != "sensitive":
+                continue
+            if guarded:
+                relevant = guarded
+
+        # Если для правила задан критический маркер — цитатой становится предложение с маркером
+        marker = _CRITICAL_PATTERNS.get(rule.id)
+        marked = _marked_sentence(relevant, marker, _MARKER_EXCEPTIONS.get(rule.id)) if marker else None
+        if marked:
+            best, sentence = marked
+        else:
+            best = max(relevant, key=lambda c: c.score)
+            sentence = max(_quote_candidates(best), key=lambda s: len(_stems(s) & query_stems))
+
+        is_red = bool(marked and rule.severity == "RED")
+        severity = "RED" if is_red else weaker(rule.severity, "YELLOW")
+
         match = locate_quote(pages, sentence[:400], _page_hint(best))
+        counter_proposal = _extract_recommendation(rule.llm_prompt)
+
+        short_desc = f"Критический риск: {rule.title}" if is_red else f"Требует внимания: {rule.title}"
+        comment = (
+            f"{rule.description}. Обнаружен критический маркер условия; рекомендуется сформировать протокол разногласий."
+            if is_red else
+            f"{rule.description}. Найдено по ключевым словам; требуется проверка фрагмента документа специалистом."
+        )
+
         drafts.append(FindingDraft(
             rule=rule,
-            severity=weaker(rule.severity, "YELLOW"),
+            severity=severity,
             title=rule.title,
-            short_description="Найдено релевантное условие — проверьте вручную",
-            comment=f"{rule.description}. Автоматическая оценка без LLM: проверьте фрагмент на соответствие правилу. "
-                    f"{rule.llm_prompt}",
+            short_description=short_desc,
+            comment=comment,
+            counter_proposal=counter_proposal,
             page_number=match.page_number or best.page_number,
             clause=_clause_label(match.clause, best),
             exact_quote=match.text if match.verified else sentence[:400],
             highlights=match.highlights,
             quote_verified=match.verified,
-            confidence=0.3,
+            confidence=0.7 if is_red else 0.35,  # совпадение по шаблону, а не вывод модели
             source="HEURISTIC",
         ))
     return _verify_and_deduplicate_drafts(drafts)
@@ -563,14 +720,14 @@ def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[Finding
 
             severity = rule.severity if ent_score >= 0.75 else weaker(rule.severity, "YELLOW")
 
+            counter_proposal = _extract_recommendation(rule.llm_prompt) or rule.legal_reference
             rule_drafts.append(FindingDraft(
                 rule=rule,
                 severity=severity,
                 title=rule.title,
                 short_description=_short(f"{rule.title}: обнаружен риск") or rule.description,
-                comment=f"{rule.description}. Семантический NLI-анализ подтвердил риск (уверенность {round(ent_score * 100)}%). "
-                        f"{rule.llm_prompt}",
-                counter_proposal=rule.legal_reference,
+                comment=f"{rule.description}. Семантический NLI-анализ подтвердил риск (уверенность {round(ent_score * 100)}%).",
+                counter_proposal=counter_proposal,
                 page_number=match.page_number or chunk.page_number,
                 clause=_clause_label(match.clause, chunk),
                 exact_quote=match.text if match.verified else sentence[:400],
