@@ -63,6 +63,38 @@ def test_docx_modes(contract_pdf, tmp_path, mode):
         assert "Новая редакция" in cells and "штраф в размере 0,1%" in cells
     if mode == "detailed":
         assert "Срок оплаты 7 рабочих дней" in text  # пройденные проверки
+    assert "Светофор рисков" not in text + cells
+    assert text.rstrip().endswith("проверить специалисту.")
+
+
+@pytest.mark.parametrize("mode", ["brief", "detailed"])
+def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode):
+    data = _data(contract_pdf)
+    docx = DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}.docx"))
+    summary = docx.tables[1].rows[0].cells
+    assert [c.text for c in summary] == ["Критичных: 1", "Требуют внимания: 1, низкий риск: 1"]
+    text = "\n".join(p.text for p in docx.paragraphs)
+    cells = "\n".join(c.text for t in docx.tables for r in t.rows for c in r.cells)
+    assert "Светофор" not in text + cells and "Индекс риска" not in text + cells
+    assert text.rstrip().endswith("проверить специалисту.")
+    assert "без LLM" not in text  # все замечания найдены LLM
+
+
+@pytest.mark.parametrize("mode", ["brief", "detailed"])
+def test_heuristic_note_is_written_once_at_the_top(contract_pdf, tmp_path, mode):
+    data = _data(contract_pdf)
+    for f in data.documents[0].findings:
+        f.source = "HEURISTIC"
+    paragraphs = [p.text for p in DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}.docx")).paragraphs]
+    assert "\n".join(paragraphs).count("без LLM") == 1
+    note = next(i for i, p in enumerate(paragraphs) if "без LLM" in p)
+    first_issue = paragraphs.index("Замечания") if mode == "brief" else next(
+        i for i, p in enumerate(paragraphs) if p.startswith("№1."))
+    assert note < first_issue
+
+    data.documents[0].findings[0].source = "LLM"
+    text = "\n".join(p.text for p in DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}-mixed.docx")).paragraphs)
+    assert "Замечания №2, №3 найдены без LLM" in text
 
 
 def test_json_and_annotated(contract_pdf):
@@ -146,8 +178,6 @@ def test_unassessed_docx_never_claims_no_risks_or_no_disagreements(tmp_path, mod
     assert "Замечаний нет." not in all_text
     assert "Разногласий по проверенным правилам не выявлено." not in all_text
     assert "None из 100" not in all_text
-    if mode != "protocol":
-        assert "Индекс риска: не определён" in all_text
 
 
 def test_unknown_assessment_is_preserved_in_json():
