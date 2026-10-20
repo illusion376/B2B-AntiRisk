@@ -116,7 +116,9 @@ def test_json_and_annotated(contract_pdf):
         page = pdf[0]
         types = [a.type[1] for a in page.annots()]
         # Всплывающих заметок нет: Chrome показывает их без кириллицы. Комментарии напечатаны на поле справа.
-        assert "Highlight" in types and "Text" not in types
+        assert "Highlight" in types and "Text" not in types and "Popup" not in types
+        # и у подсветки нет текста заметки — Chrome показывал бы его при наведении
+        assert all(not a.info["content"] and not a.info["title"] for a in page.annots())
         assert page.rect.width > width
         margin = page.get_text("text", clip=pymupdf.Rect(width, 0, page.rect.width, page.rect.height))
         assert "Неограниченная ответственность" in margin and "Критично" in margin

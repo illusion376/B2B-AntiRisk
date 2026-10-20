@@ -50,11 +50,6 @@ def _hex(color: tuple[float, float, float]) -> str:
     return "#" + "".join(f"{round(c * 255):02x}" for c in color)
 
 
-def _note_text(f: dict) -> str:
-    return (f"№{f['number']} {_SEVERITY_LABEL.get(f['severity'], '')}: {f['title']}\n\n{f['comment']}"
-            + (f"\n\nРекомендация: {f['counter_proposal']}" if f.get("counter_proposal") else ""))
-
-
 def _note_html(f: dict, with_location: bool = False) -> str:
     color = _hex(_COLORS.get(f["severity"], _COLORS["YELLOW"]))
     parts = [f"<b style='color: {color}'>№{f['number']} · {_SEVERITY_LABEL.get(f['severity'], '')}</b>"
@@ -189,9 +184,9 @@ def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author:
                 rects = [fitz.Rect(r) for r in block["rects"]]
                 if not rects:
                     continue
+                # Без текста заметки: Chrome показывает его при наведении во всплывающем окне без кириллицы
                 annot = page.add_highlight_annot(quads=[r.quad for r in rects])
                 annot.set_colors(stroke=color)
-                annot.set_info(title=f"Замечание №{f['number']}", content=_note_text(f))
                 annot.update(opacity=0.45)
                 if note.page_index is None:
                     note.page_index, note.rect = block["page"] - 1, rects[0]
