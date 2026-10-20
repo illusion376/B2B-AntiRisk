@@ -98,7 +98,9 @@ def merge_two_drafts(d1: FindingDraft, d2: FindingDraft) -> FindingDraft:
     # Объединение рекомендаций
     merged_counter = primary.counter_proposal or secondary.counter_proposal
     if primary.counter_proposal and secondary.counter_proposal and secondary.counter_proposal not in primary.counter_proposal:
-        merged_counter = f"{primary.counter_proposal}; {secondary.counter_proposal}"
+        p_clean = primary.counter_proposal.strip().rstrip(".;")
+        s_clean = secondary.counter_proposal.strip().rstrip(".;")
+        merged_counter = f"{p_clean}; {s_clean}."
 
     # Подсветки: объединяем уникальные координаты
     merged_highlights = list(primary.highlights)

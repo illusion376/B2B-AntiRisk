@@ -187,10 +187,12 @@ def _assessment_note(rd: ReportDocument) -> str:
 
 
 def _footer(doc) -> None:
-    doc.add_paragraph()
     p = doc.add_paragraph(DISCLAIMER)
-    p.runs[0].italic = True
-    p.runs[0].font.size = Pt(9)
+    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_after = Pt(0)
+    run = p.runs[0]
+    run.italic = True
+    run.font.size = Pt(8.5)
 
 
 # ---------- режимы ----------
@@ -267,9 +269,14 @@ def build_detailed(data: ReportData, target: Path) -> Path:
         if rd.assessed and not rd.issues:
             doc.add_paragraph("Замечаний нет.")
 
-        if rd.green:
+        issue_titles = {f.title for f in rd.issues if f.title}
+        clean_green = [
+            f for f in rd.green
+            if f.title not in issue_titles
+        ]
+        if clean_green:
             doc.add_heading("Проверено, нарушений не выявлено", level=3)
-            for f in rd.green:
+            for f in clean_green:
                 p = doc.add_paragraph(style="List Bullet")
                 p.add_run(f"{f.title}. ").bold = True
                 p.add_run(f.comment)
@@ -280,7 +287,7 @@ def build_detailed(data: ReportData, target: Path) -> Path:
         table = _table(doc, ["Правило", "Категория", "Уровень", "Норма"], widths)
         for rule in data.rules:
             _add_row(table, [rule.title, rule.category, SEVERITY_LABEL.get(rule.severity, rule.severity),
-                             rule.legal_reference or "—"], widths, size=9)
+                             rule.legal_reference or "—"], widths, size=8.5)
     _footer(doc)
     doc.save(target)
     return target
