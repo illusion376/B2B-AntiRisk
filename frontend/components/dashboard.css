@@ -11,7 +11,7 @@
 .dashboard-shell .sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 28px; }
 .dashboard-shell .sidebar-brand { display: flex; align-items: center; gap: 8px; padding: 0; }
 .dashboard-shell .sidebar-brand strong { font-size: .9375rem; letter-spacing: -.5px; white-space: nowrap; }
-.dashboard-shell .sidebar-brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 66px; height: 53px; background: transparent; border-radius: 0; mix-blend-mode: multiply; }
+.dashboard-shell .sidebar-brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 66px; height: 53px; background: transparent; border-radius: 0; }
 .dashboard-shell .sidebar-create { display: flex; gap: 9px; align-items: center; padding: 10px; border: 1px solid transparent; font-size: .75rem; text-align: left; margin-bottom: 6px; }
 .dashboard-shell .sidebar-create:hover { background: #efefef; }
 .dashboard-shell .sidebar-create kbd { margin-left: auto; font: 700 11px var(--font-sans); color: #a4a4a4; }
