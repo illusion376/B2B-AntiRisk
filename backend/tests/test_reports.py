@@ -110,13 +110,42 @@ def test_json_and_annotated(contract_pdf):
     assert not any("Срок оплаты" in r for r in rows)  # краткий режим — без пройденных проверок
 
     annotated = reports.generate(data, "annotated", "pdf")
+    with pymupdf.open(contract_pdf) as source:
+        width, pages = source[0].rect.width, source.page_count
     with pymupdf.open(annotated.path) as pdf:
         page = pdf[0]
         types = [a.type[1] for a in page.annots()]
-        assert "Highlight" in types and "Text" in types
+        # Всплывающих заметок нет: Chrome показывает их без кириллицы. Комментарии напечатаны на поле справа.
+        assert "Highlight" in types and "Text" not in types
+        assert page.rect.width > width
+        margin = page.get_text("text", clip=pymupdf.Rect(width, 0, page.rect.width, page.rect.height))
+        assert "Неограниченная ответственность" in margin and "Критично" in margin
+        assert "Подготовил: Кирилл Иванов" in margin
+        quote = next(w for w in page.get_text("words") if w[4] == "штраф")
+        assert quote[2] < width  # содержимое страницы не сдвинулось
+        # замечание без точной цитаты — на поле своей страницы; всё уместилось, лишних страниц нет
+        assert "Срок поставки" in pdf[1].get_text() and pdf.page_count == pages
 
     with pytest.raises(reports.ReportError):
         reports.generate(data, "annotated", "docx")
+
+
+def test_annotated_pdf_moves_notes_without_place_to_appendix(contract_pdf, tmp_path):
+    from app.services.pdf_tools import annotated_pdf
+
+    long_comment = "Очень длинное обоснование замечания. " * 60
+    findings = [dict(number=n, severity="YELLOW", title=f"Замечание {n}", comment=long_comment, counter_proposal=None,
+                     quote_verified=False, highlights=[], page_number=1, clause="1") for n in range(1, 4)]
+    findings.append(dict(number=4, severity="RED", title="Без страницы", comment="Обоснование", counter_proposal=None,
+                         quote_verified=False, highlights=[], page_number=None, clause=None))
+    with pymupdf.open(contract_pdf) as source:
+        pages = source.page_count
+    with pymupdf.open(annotated_pdf(contract_pdf, findings, tmp_path / "a.pdf")) as pdf:
+        appendix = "\n".join(pdf[i].get_text() for i in range(pages, pdf.page_count))
+        assert pdf.page_count > pages and "Замечания к документу" in appendix
+        assert "Без страницы" in appendix and "стр. 1" in appendix  # у не уместившихся на поле — место в тексте
+        everywhere = "\n".join(p.get_text() for p in pdf)
+        assert all(f"Замечание {n}" in everywhere for n in range(1, 4))
 
 
 def test_csv_formula_injection_is_neutralized():
