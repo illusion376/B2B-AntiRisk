@@ -14,6 +14,7 @@ from app.models import Analysis, Document, Project, User
 from app.schemas import ProjectCreate, ProjectOut, ProjectUpdate, RerunRequest, StartRequest, UploadError, UploadResult
 from app.services import uploads
 from app.services.analysis_modes import analysis_mode_or_422
+from app.services.analysis_models import analysis_model_or_422
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/projects", tags=["Проекты"])
@@ -162,6 +163,7 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
                   body: StartRequest | None = None):
     project = get_project_or_404(db, project_id, user)
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
+    model = analysis_model_or_422(body.llm_model if body else None, mode)
     sensitivity = body.analysis_sensitivity if body else "balanced"
     # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
     # или одновременном запуске из нескольких вкладок.
@@ -176,12 +178,13 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
     for doc in docs:
         doc.status, doc.progress, doc.error_message = "QUEUED", 0, None
         doc.analysis_mode = mode
+        doc.llm_model = model
         doc.analysis_sensitivity = sensitivity
     for analysis in analyses:
         analysis.analysis_status, analysis.progress, analysis.error_message = "QUEUED", 0, None
         log_action(db, user.id, "ANALYSIS_STARTED", "analysis", analysis.id,
                    {"file": analysis.original_filename, "project": project.title, "analysis_mode": mode,
-                    "analysis_sensitivity": sensitivity})
+                    "analysis_sensitivity": sensitivity, "llm_model": model})
     project.updated_at = func.now()
     db.commit()
     enqueue_documents(db, docs)
@@ -194,5 +197,6 @@ def rerun_project(project_id: uuid.UUID, body: RerunRequest | None = None, db: S
                   user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
     documents = rerun(db, user, list(project.analyses), body.rule_ids if body else None,
-                      body.analysis_mode if body else None, body.analysis_sensitivity if body else "balanced")
+                      body.analysis_mode if body else None, body.analysis_sensitivity if body else "balanced",
+                      body.llm_model if body else None)
     return {"documents": documents}

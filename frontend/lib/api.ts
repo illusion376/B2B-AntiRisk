@@ -1,15 +1,15 @@
 import type {
-  AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
+  AnalysisModelsDto, AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
   ProjectFileDto, RuleDto, UploadDto, UserDto,
 } from './api-types';
 import type {
-  AnalysisMode, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
+  AnalysisMode, AnalysisModels, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
   ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 
 export interface RequestOptions { signal?: AbortSignal }
-export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity }
+export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity; llmModel?: string }
 export interface ReportOptions extends RequestOptions { mode?: string; format?: string; includeDismissed?: boolean }
 export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
 export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
@@ -123,12 +123,29 @@ export function mapAnalysisModes(value: AnalysisModesDto): AnalysisModes {
   return { defaultMode: value.default_mode, modes: value.modes, configuredModel: value.configured_model ?? null };
 }
 
+export function mapAnalysisModels(value: AnalysisModelsDto): AnalysisModels {
+  if (!Array.isArray(value.models) || !['provider', 'fallback'].includes(value.source)
+    || (value.default_model != null && typeof value.default_model !== 'string')
+    || (value.warning != null && typeof value.warning !== 'string')) throw new Error('Invalid model catalogue');
+  const ids = new Set<string>();
+  const models = value.models.map(model => {
+    if (!model || ['id', 'label', 'provider', 'provider_id', 'description'].some(key => typeof model[key as keyof typeof model] !== 'string')
+      || !model.id.trim() || !model.label.trim() || ids.has(model.id)
+      || typeof model.available !== 'boolean' || typeof model.recommended !== 'boolean') throw new Error('Invalid model');
+    ids.add(model.id);
+    return { id: model.id, label: model.label, provider: model.provider, providerId: model.provider_id,
+      description: model.description, available: model.available, recommended: model.recommended };
+  });
+  return { defaultModel: value.default_model ?? null, models, source: value.source, warning: value.warning ?? null };
+}
+
 export function mapDocument(value: DocumentDto): DocumentInfo {
   if (value.analysis_mode != null && !isAnalysisMode(value.analysis_mode)) throw new Error('Invalid document analysis mode');
   return {
     id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
     analysisMode: value.analysis_mode ?? null,
     analysisSensitivity: value.analysis_sensitivity ?? null,
+    llmModel: value.llm_model ?? null,
     chatRevision: value.chat_revision ?? null,
     relativePath: value.relative_path, type: value.file_type, size: value.file_size,
     status: value.status, phase: value.phase, label: value.label, progress: value.progress,
@@ -238,6 +255,7 @@ export const api = {
     saveDownload(await response.blob(), reportFilename(response.headers.get('Content-Disposition'), 'Черновик_ИИ.docx'));
   },
   getAnalysisModes: (options: RequestOptions = {}): Promise<AnalysisModes> => request('/analysis-modes', mapAnalysisModes, options),
+  getAnalysisModels: (options: RequestOptions = {}): Promise<AnalysisModels> => request('/analysis-models', mapAnalysisModels, options),
   getProjects: (options: RequestOptions = {}): Promise<Project[]> => request<ProjectDto[], Project[]>('/projects', values => values.map(mapProject), options),
   getProject: (projectId: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, options),
   createProject: (draft: ProjectDraft, options: RequestOptions = {}): Promise<Project> => request('/projects', mapProject, { ...options, method: 'POST', ...json(draft) }),
@@ -288,12 +306,12 @@ export const api = {
   startProjectAnalysis: (projectId: string, options: AnalysisRequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
     return value;
-  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
   rerunProject: (projectId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
     return value;
-  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
-  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity }) }),
+  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
+  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
   deleteDocument: async (documentId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/documents/${segment(documentId)}`, { ...options, method: 'DELETE' }); },
   thumbnailUrl,
   documentFileUrl,

@@ -20,6 +20,22 @@ export interface AnalysisModes {
   configuredModel: string | null;
 }
 
+export interface AnalysisModel {
+  id: string;
+  label: string;
+  provider: string;
+  providerId: string;
+  description: string;
+  available: boolean;
+  recommended: boolean;
+}
+export interface AnalysisModels {
+  defaultModel: string | null;
+  models: AnalysisModel[];
+  source: 'provider' | 'fallback';
+  warning: string | null;
+}
+
 export interface SeverityCounts { critical: number; warning: number; low: number; ok: number; unknown: number; unseen: number }
 export interface CheckRule {
   id: string;
@@ -50,6 +66,7 @@ export interface DocumentInfo extends ProcessingState {
   analysisId: string;
   analysisMode: AnalysisMode | null;
   analysisSensitivity: AnalysisSensitivity | null;
+  llmModel?: string | null;
   chatRevision?: string | null;
   name: string;
   relativePath: string | null;

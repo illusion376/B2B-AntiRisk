@@ -197,6 +197,9 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         # Для поставленных API задач всегда используем сохранённый выбор пользователя.
         mode = resolve_analysis_mode(doc.analysis_mode)
         doc.analysis_mode = mode
+        if mode == "llm" and not doc.llm_model:
+            doc.llm_model = settings.llm_model.strip()
+        llm_model = doc.llm_model
         sensitivity = doc.analysis_sensitivity or "balanced"
         rules = applicable_rules(db, doc.law_type, rule_ids)
         ensure_rule_embeddings(db, rules)
@@ -215,7 +218,8 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         document_name, law_type, analysis_id = doc.file_name, doc.law_type, doc.analysis_id
 
     if mode == "llm":
-        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type, sensitivity=sensitivity))
+        drafts = asyncio.run(evaluate_with_llm(contexts, pages, document_name, law_type, sensitivity=sensitivity,
+                                               model=llm_model))
     elif mode == "nli":
         drafts = evaluate_nli(contexts, pages)
     else:
@@ -298,6 +302,8 @@ def process_document(document_id: uuid.UUID) -> None:
         with session_scope() as db:
             doc = db.get(Document, document_id)
             doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)
+            if doc.analysis_mode == "llm" and not doc.llm_model:
+                doc.llm_model = settings.llm_model.strip()
         set_document(document_id, status="CONVERTING", progress=5, error_message=None)
         preview_target = storage.subdir(analysis_id, "preview") / f"{document_id}.pdf"
         try:

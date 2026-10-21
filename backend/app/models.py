@@ -83,6 +83,7 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String(50), default="QUEUED")
     # Последний выбранный режим; source отдельного замечания описывает его фактический источник.
     analysis_mode: Mapped[str | None] = mapped_column(String(20))
+    llm_model: Mapped[str | None] = mapped_column(String(200))
     analysis_sensitivity: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")
     chat_revision: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), default=uuid.uuid4)
     progress: Mapped[int] = mapped_column(Integer, default=0)

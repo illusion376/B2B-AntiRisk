@@ -64,6 +64,7 @@ class DocumentOut(ORM):
         "Последний выбранный режим. При частичной или неудачной повторной проверке могут сохраняться "
         "предыдущие результаты; источник каждого замечания указан в source. NULL — старый запуск без записи режима."
     ))
+    llm_model: str | None = Field(default=None, description="Модель, выбранная при последнем запуске проверки")
     phase: Phase = "queued"
     analysis_sensitivity: AnalysisSensitivity | None = None
     chat_revision: uuid.UUID | None = None
@@ -338,6 +339,7 @@ class RuleTestResult(BaseModel):
 
 class StartRequest(BaseModel):
     analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")
+    llm_model: str | None = Field(default=None, min_length=1, max_length=200, description="Идентификатор модели ProxyAPI")
     analysis_sensitivity: AnalysisSensitivity = Field(default="balanced", description="Чувствительность к потенциальным рискам")
 
 
@@ -356,6 +358,23 @@ class AnalysisModesOut(BaseModel):
     default_mode: AnalysisMode
     modes: list[AnalysisModeOut]
     configured_model: str | None = None
+
+
+class AnalysisModelOut(BaseModel):
+    id: str
+    label: str
+    provider: str
+    provider_id: str
+    description: str
+    available: bool
+    recommended: bool = False
+
+
+class AnalysisModelsOut(BaseModel):
+    default_model: str | None
+    models: list[AnalysisModelOut]
+    source: Literal["provider", "fallback"]
+    warning: str | None = None
 
 
 # ---------- Отчёты и история ----------

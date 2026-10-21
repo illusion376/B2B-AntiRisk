@@ -14,6 +14,7 @@ import {DashboardSidebar} from './dashboard-sidebar';
 import {useWorkspaceNavigation} from './use-workspace-navigation';
 import {useLiveDocument,useWorkspaceData} from './use-workspace-data';
 import {useAnalysisModes} from './use-analysis-modes';
+import {useAnalysisModels} from './use-analysis-models';
 import {SettingsView} from './settings-view';
 import {useWorkspacePreferences} from './use-workspace-preferences';
 import {useAnalysisNotifications} from './use-analysis-notifications';
@@ -42,6 +43,7 @@ export function Workspace() {
   const {view,page,projectId,documentId,findingId,navigate}=useWorkspaceNavigation();
   const data=useWorkspaceData();
   const analysisModes=useAnalysisModes();
+  const analysisModels=useAnalysisModels();
   const preferences=useWorkspacePreferences();
   const notifications=useAnalysisNotifications(data.projects,!data.loading&&preferences.ready,preferences.preferences,preferences.update);
   const selectedAnalysisMode=analysisModes.selectedMode;
@@ -152,9 +154,15 @@ export function Workspace() {
     }catch(cause){data.refresh();throw cause;}
   }
   async function removeDocument(doc:DocumentInfo){try{await api.deleteDocument(doc.id);data.refresh();setToast('Документ удалён');}catch(cause){data.refresh();throw cause;}}
-  async function reanalyzeDocument(doc:DocumentInfo){try{await api.reanalyzeDocument(doc.id,{analysisMode:selectedAnalysisMode??undefined,sensitivity:preferences.preferences.sensitivity});setToast('Проверка запущена');}catch(cause){setActionError(errorMessage(cause));}finally{refreshAll();}}
-  async function startAnalysis(mode:AnalysisMode){try{await api.startProjectAnalysis(projectId,{analysisMode:mode,sensitivity:preferences.preferences.sensitivity});setToast('Анализ запущен');}finally{refreshAll();}}
-  async function rerunProject(mode:AnalysisMode){try{await api.rerunProject(projectId,{analysisMode:mode,sensitivity:preferences.preferences.sensitivity});setToast('Повторная проверка запущена');}finally{refreshAll();}}
+  function analysisOptions(mode:AnalysisMode|null) {
+    if(!mode)throw new Error('Выберите режим проверки в настройках.');
+    if(mode==='llm'&&!analysisModels.ready)throw new Error('Выберите доступную модель ИИ в настройках.');
+    return {analysisMode:mode,sensitivity:preferences.preferences.sensitivity,
+      llmModel:mode==='llm'?analysisModels.selectedModel??undefined:undefined};
+  }
+  async function reanalyzeDocument(doc:DocumentInfo){try{await api.reanalyzeDocument(doc.id,analysisOptions(selectedAnalysisMode));setToast('Проверка запущена');}catch(cause){setActionError(errorMessage(cause));}finally{refreshAll();}}
+  async function startAnalysis(mode:AnalysisMode){try{await api.startProjectAnalysis(projectId,analysisOptions(mode));setToast('Анализ запущен');}finally{refreshAll();}}
+  async function rerunProject(mode:AnalysisMode){try{await api.rerunProject(projectId,analysisOptions(mode));setToast('Повторная проверка запущена');}finally{refreshAll();}}
   async function toggleRule(rule:CheckRule){await api.updateRule(rule.id,{enabled:!rule.enabled});refreshAll();}
   async function saveRule(draft:RuleDraft){try{if(ruleDialog?.mode==='edit')await api.updateRule(ruleDialog.rule.id,draft);else await api.createRule(draft);refreshAll();setRuleDialog(null);setToast('Правило сохранено');}catch(cause){return errorMessage(cause);}}
   async function deleteRule(){if(ruleDialog?.mode!=='delete')return;try{await api.deleteRule(ruleDialog.rule.id);refreshAll();setRuleDialog(null);setToast('Правило удалено');}catch(cause){return errorMessage(cause);}}
@@ -177,10 +185,10 @@ export function Workspace() {
       {data.error&&<ErrorNotice message={data.error} onRetry={data.refresh}/>}{actionError&&<ErrorNotice message={actionError}/>}
       {data.loading&&view!=='settings'?<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем рабочее пространство…</div>:<>
       {view==='documents'&&(!data.error||projects.length>0)&&<ProjectsView projects={projects} onOpen={openProject} onRename={project=>setProjectDialog({mode:'rename',project})} onDelete={project=>setProjectDialog({mode:'delete',project})} onCreate={()=>openModal('create-project')} query={dashboardQuery} onQueryChange={setDashboardQuery}/>}
-      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onRemoveFile={removeFile} onRemoveDocument={removeDocument} onReanalyzeDocument={reanalyzeDocument} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
+      {view==='project'&&(activeProject?<ProjectFilesView key={activeProject.id} project={activeProject} onUpload={uploadFiles} onRemoveFile={removeFile} onRemoveDocument={removeDocument} onReanalyzeDocument={reanalyzeDocument} onOpenDocument={openDocument} onStart={startAnalysis} onRerun={rerunProject} analysisModels={analysisModels} analysisModes={analysisModes.config} analysisModesLoading={analysisModes.loading} analysisModesError={analysisModes.error} onRetryAnalysisModes={analysisModes.refresh} selectedAnalysisMode={selectedAnalysisMode} onOpenSettings={()=>setView('settings')}/>:!data.error&&<div className="api-state"><p>Проект не найден или ещё загружается.</p><button className="secondary-button" onClick={data.refresh}>Обновить</button><button onClick={()=>setView('documents')}>К проектам</button></div>)}
       {view==='document'&&<>{live.error&&<ErrorNotice message={live.error} onRetry={live.refresh}/>} {activeDocument?.phase==='ready'&&activeDocument.errorMessage&&<ErrorNotice key={`${activeDocument.id}:${activeDocument.chatRevision??'initial'}:${activeDocument.errorMessage}`} message={activeDocument.errorMessage} autoDismiss/>} {!activeDocument&&!live.error&&<div className="api-state" role="status"><LoaderCircle className="spin"/>Загружаем документ…</div>}{activeDocument&&(activeDocument.phase==='ready'?<DocumentWorkspace onboardingPane={onboarding.documentStep} document={activeDocument} pageContent={live.pageContent} outline={live.outline} pageLoading={live.pageLoading} pageError={live.pageError} onRetryPage={live.retryPage} page={page} selected={findingId} search={search} findings={visibleFindings} defaultSeverities={preferences.preferences.defaultSeverities} statuses={statuses} pendingIds={pendingIds} onPage={navigatePage} onSelect={selectFinding} onStatus={(id,status)=>{void changeStatus(id,status).catch(()=>{});}} rules={rules} onManageRules={()=>setView('rules')} onEditRule={rule=>setRuleDialog({mode:'edit',rule})}/>:<div className="api-state" role="status">{(activeDocument.phase==='processing'||activeDocument.phase==='queued')&&<LoaderCircle className="spin"/>}<h2>{activeDocument.label}</h2><p>{activeDocument.errorMessage||'Результаты появятся после завершения обработки.'}</p><progress value={activeDocument.progress} max={100}/><button className="secondary-button" onClick={live.refresh}>Обновить статус</button></div>)}</>}
       {view==='rules'&&<RulesManager rules={rules} onAdd={()=>setRuleDialog({mode:'create'})} onEdit={rule=>setRuleDialog({mode:'edit',rule})} onDelete={rule=>setRuleDialog({mode:'delete',rule})} onToggle={toggleRule}/>}
-      {view==='settings'&&<SettingsView user={user} onSaveProfile={data.saveUser} config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError||preferences.storageError} preferences={preferences.preferences} preferencesReady={preferences.ready} onPreferences={preferences.update} desktopPermission={notifications.permission} desktopRequesting={notifications.requesting} onDesktop={()=>void notifications.toggleDesktop()}/>}
+      {view==='settings'&&<SettingsView analysisModels={analysisModels} user={user} onSaveProfile={data.saveUser} config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError||analysisModels.storageError||preferences.storageError} preferences={preferences.preferences} preferencesReady={preferences.ready} onPreferences={preferences.update} desktopPermission={notifications.permission} desktopRequesting={notifications.requesting} onDesktop={()=>void notifications.toggleDesktop()}/>}
       </>}
     </main>
     <footer className="statusbar"><span><span className="local-indicator"/>{data.error?'Нет связи с API':'Обработка на сервере'}</span><span><ShieldCheck size={13}/>Решения сохраняются в базе данных</span></footer>
