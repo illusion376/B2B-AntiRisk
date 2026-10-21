@@ -7,7 +7,8 @@ from app.api.deps import current_user
 from app.config import settings
 from app.db import get_db
 from app.models import User
-from app.schemas import AnalysisModesOut, UserOut, UserProfileUpdate
+from app.schemas import AnalysisModelsOut, AnalysisModesOut, UserOut, UserProfileUpdate
+from app.services.analysis_models import model_catalog
 from app.services.analysis_modes import capabilities, default_analysis_mode
 
 router = APIRouter(tags=["Система"])
@@ -17,6 +18,12 @@ router = APIRouter(tags=["Система"])
             summary="Доступные режимы анализа и режим по умолчанию")
 def analysis_modes():
     return capabilities()
+
+
+@router.get("/api/analysis-models", response_model=AnalysisModelsOut, response_model_exclude_none=True,
+            summary="Текстовые модели для анализа документов")
+def analysis_models():
+    return model_catalog()
 
 
 @router.get("/api/health", summary="Проверка работоспособности")

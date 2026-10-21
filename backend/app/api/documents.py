@@ -17,6 +17,7 @@ from app.schemas import (
 )
 from app.services import pdf_tools
 from app.services.analysis_modes import analysis_mode_or_422
+from app.services.analysis_models import analysis_model_or_422
 from app.services.audit import log_action
 from app.services.search import search_pages
 from app.services.pipeline import refresh_analysis
@@ -221,6 +222,7 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
               body: RerunRequest | None = None):
     doc = get_document_or_404(db, document_id, user)
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
+    model = analysis_model_or_422(body.llm_model if body else None, mode)
     db.refresh(doc, with_for_update=True)
     if doc.status in ("QUEUED", "CONVERTING", "OCR", "VECTORIZING", "ANALYZING"):
         raise HTTPException(409, "Документ уже обрабатывается")
@@ -234,6 +236,7 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
         action = "DOCUMENT_REANALYZE"
 
     doc.analysis_mode = mode
+    doc.llm_model = model
     doc.analysis_sensitivity = body.analysis_sensitivity if body else "balanced"
     doc.error_message = None
 
@@ -244,7 +247,7 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
 
     log_action(db, user.id, action, "document", doc.id,
                {"file": doc.file_name, "analysis_mode": mode, "rule_ids": body.rule_ids if body else None,
-                "analysis_sensitivity": doc.analysis_sensitivity})
+                "analysis_sensitivity": doc.analysis_sensitivity, "llm_model": model})
     db.flush()
     refresh_analysis(db, doc.analysis_id)
     db.commit()

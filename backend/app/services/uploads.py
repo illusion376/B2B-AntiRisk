@@ -52,7 +52,8 @@ def _check_magic(path: Path, ext: str) -> None:
 
 def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str = "AUTO",
                     project: Project | None = None, title: str | None = None,
-                    *, defer_processing: bool = False, analysis_mode: str | None = None) -> tuple[Analysis, list[uuid.UUID]]:
+                    *, defer_processing: bool = False, analysis_mode: str | None = None,
+                    llm_model: str | None = None) -> tuple[Analysis, list[uuid.UUID]]:
     """Сохраняет файл и создаёт анализ с документами (без коммита).
 
     Возвращает анализ и id поддерживаемых документов. При defer_processing они
@@ -60,6 +61,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     """
     # Отложенная загрузка не требует настройки движка: пользователь выберет его при запуске.
     mode = resolve_analysis_mode(analysis_mode) if not defer_processing or analysis_mode is not None else None
+    model = (llm_model or settings.llm_model.strip()) if mode == "llm" else None
     original_name = storage.safe_filename(upload.filename or "document")
     ext = storage.extension(original_name)
     if ext not in storage.SUPPORTED_DOCUMENTS | storage.ARCHIVES:
@@ -104,6 +106,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
                     file_size=item.size,
                     status=initial_status if item.supported else "UNSUPPORTED",
                     analysis_mode=mode if item.supported else None,
+                    llm_model=model if item.supported else None,
                     error_message=None if item.supported else "Формат не поддерживается — файл не проверялся",
                 ))
         else:
@@ -113,6 +116,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
                 file_path=str(upload_path), file_type=ext.lstrip("."),
                 file_size=analysis.file_size, status=initial_status,
                 analysis_mode=mode,
+                llm_model=model,
             ))
     except ArchiveError as exc:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -133,7 +137,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     log_action(db, user.id, "ANALYSIS_CREATED", "analysis", analysis.id, {
         "file": original_name, "size": analysis.file_size, "documents": len(documents),
         "project": project.title if project else None, "project_id": str(project.id) if project else None,
-        "analysis_mode": mode,
+        "analysis_mode": mode, "llm_model": model,
     })
     return analysis, to_process
 

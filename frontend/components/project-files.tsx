@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import { CustomSelect, Modal } from './ui';
+import type { AnalysisModelsState } from './use-analysis-models';
 import './project-enhancements.css';
 
 interface ProjectFilesViewProps {
@@ -15,6 +16,7 @@ interface ProjectFilesViewProps {
   onStart: (mode: AnalysisMode) => Promise<void>;
   onRerun?: (mode: AnalysisMode) => Promise<void>;
   analysisModes: AnalysisModes | null;
+  analysisModels: AnalysisModelsState;
   analysisModesLoading: boolean;
   analysisModesError: string | null;
   onRetryAnalysisModes: () => void;
@@ -39,7 +41,7 @@ function fileState(file: ProjectFile): Exclude<FileStatusFilter, 'all'> {
 
 export function ProjectFilesView({
   project, onUpload, onOpenDocument, onStart, onRerun,
-  analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
+  analysisModels, analysisModes, analysisModesLoading, analysisModesError, onRetryAnalysisModes,
   selectedAnalysisMode, onOpenSettings, onRemoveFile,
   onRemoveDocument, onReanalyzeDocument,
 }: ProjectFilesViewProps) {
@@ -60,7 +62,7 @@ export function ProjectFilesView({
   const removeDocLock = useRef(false);
   const busy = uploading || starting || removing || removingDoc;
   const selectedModeInfo = analysisModes?.modes.find(mode => mode.id === selectedAnalysisMode);
-  const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true;
+  const modeReady = !analysisModesLoading && !analysisModesError && selectedModeInfo?.available === true && (selectedAnalysisMode !== 'llm' || analysisModels.ready);
   const waiting = project.files.filter(file => fileState(file) === 'uploaded').length;
   const pending = project.files.filter(file => fileState(file) === 'processing').length;
   const hasFiles = project.files.length > 0;
@@ -157,10 +159,14 @@ export function ProjectFilesView({
           )}
         </div>}
       </div>
-      {hasFiles && !modeReady && <div className="project-analysis-summary">
-        <span role="status">{analysisModesLoading ? 'Загружаем настройки…' : analysisModesError ? 'Не удалось загрузить настройки.' : 'Выбранный режим недоступен. Выберите другой в настройках.'}</span>
-        {analysisModesError && <button onClick={onRetryAnalysisModes}>Повторить</button>}
-        {!analysisModesLoading && <button onClick={onOpenSettings}>Открыть настройки</button>}
+      {hasFiles && <div className="project-analysis-summary">
+        <span role="status">{analysisModesLoading || (selectedAnalysisMode === 'llm' && analysisModels.loading) ? 'Загружаем настройки…'
+          : analysisModesError || (selectedAnalysisMode === 'llm' && analysisModels.error) ? 'Не удалось загрузить настройки.'
+          : !modeReady ? 'Выбранный режим или модель недоступны. Выберите другие в настройках.'
+          : selectedAnalysisMode === 'llm' ? <>ИИ-анализ · <strong>{analysisModels.catalog?.models.find(model => model.id === analysisModels.selectedModel)?.label}</strong></>
+          : selectedModeInfo?.label}</span>
+        {(analysisModesError || (selectedAnalysisMode === 'llm' && analysisModels.error)) && <button onClick={() => { onRetryAnalysisModes(); analysisModels.refresh(); }}>Повторить</button>}
+        {!analysisModesLoading && <button onClick={onOpenSettings}>Настройки проверки</button>}
       </div>}
       {startError && <p className="field-error project-action-error" role="alert">{startError}</p>}
       <div className="project-files-toolbar">
@@ -235,7 +241,7 @@ export function ProjectFilesView({
                     </button>
                   )}
                   {singleDocument && (
-                    <button type="button" className="secondary-button file-reanalyze-button" disabled={singleDocument.phase === 'processing' || singleDocument.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${singleDocument.name}»`} onClick={() => onReanalyzeDocument?.(singleDocument)}>
+                    <button type="button" className="secondary-button file-reanalyze-button" disabled={!modeReady || singleDocument.phase === 'processing' || singleDocument.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${singleDocument.name}»`} onClick={() => onReanalyzeDocument?.(singleDocument)}>
                       <RotateCw size={13} /> Проверить
                     </button>
                   )}
@@ -269,7 +275,7 @@ export function ProjectFilesView({
                             Открыть <ArrowUpRight size={15} />
                           </button>
                         )}
-                        <button type="button" className="secondary-button file-reanalyze-button" disabled={document.phase === 'processing' || document.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${document.name}»`} onClick={() => onReanalyzeDocument?.(document)}>
+                        <button type="button" className="secondary-button file-reanalyze-button" disabled={!modeReady || document.phase === 'processing' || document.phase === 'queued'} title="Проверить этот файл" aria-label={`Проверить документ «${document.name}»`} onClick={() => onReanalyzeDocument?.(document)}>
                           <RotateCw size={13} /> Проверить
                         </button>
                         </div>

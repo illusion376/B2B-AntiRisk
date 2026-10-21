@@ -407,7 +407,7 @@ def _verify_and_deduplicate_drafts(drafts: list[FindingDraft]) -> list[FindingDr
 
 
 async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], document_name: str,
-                            law_type: str | None, sensitivity: str = "balanced") -> list[FindingDraft]:
+                            law_type: str | None, sensitivity: str = "balanced", *, model: str | None = None) -> list[FindingDraft]:
     if sensitivity not in SENSITIVITY_INSTRUCTIONS:
         raise ValueError("Неизвестная чувствительность анализа")
     contexts = [ctx for ctx in contexts if ctx.chunks]
@@ -415,7 +415,7 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
         return []
     semaphore = asyncio.Semaphore(settings.llm_concurrency)
     try:
-        async with LLMClient(response_schema=LLMResult.model_json_schema()) as client:
+        async with LLMClient(response_schema=LLMResult.model_json_schema(), model=model) as client:
             results = await asyncio.gather(
                 *(_evaluate_rule(client, semaphore, ctx, pages, document_name, law_type, sensitivity) for ctx in contexts),
                 return_exceptions=True,
