@@ -1,0 +1,53 @@
+.dashboard-shell .analysis-model-picker { margin-top: 20px; padding-top: 18px; border-top: 1px solid #e5e9e7; min-width: 0; }
+.dashboard-shell .model-picker-label { display: block; margin-bottom: 10px; color: #182d25; font-size: .8125rem; font-weight: 650; }
+.dashboard-shell .model-picker-trigger { display: flex; align-items: center; width: 100%; gap: 12px; min-height: 54px; padding: 10px 13px; border: 1px solid #d8e1dc; border-radius: 10px; background: #fff; color: #182d25; text-align: left; transition: border-color .15s, box-shadow .15s; }
+.dashboard-shell .model-picker-trigger:hover:not(:disabled), .dashboard-shell .model-picker-trigger.is-open { border-color: #7ba591; box-shadow: 0 0 0 3px #3f816b0a; }
+.dashboard-shell .model-picker-trigger:disabled { cursor: not-allowed; opacity: .65; }
+.dashboard-shell .model-provider-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; color: #6f7f77; }
+.dashboard-shell .model-provider-icon img { display: block; width: 28px; height: 28px; object-fit: contain; }
+.dashboard-shell .model-provider-icon[data-provider="openai"] { position: relative; }
+.dashboard-shell .model-provider-icon[data-provider="openai"] img { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; max-width: none; transform: translate(-50%, -50%); }
+.dashboard-shell .model-picker-value { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 3px; min-width: 0; overflow-wrap: anywhere; font-size: .8125rem; font-weight: 600; }
+.dashboard-shell .model-picker-value small { color: #72837b; font-size: .6875rem; font-weight: 400; }
+.dashboard-shell .model-picker-chevron { flex-shrink: 0; margin-left: auto; color: #74867d; transition: transform .15s; }
+.dashboard-shell .model-picker-trigger.is-open .model-picker-chevron { transform: rotate(180deg); }
+.dashboard-shell .model-picker-panel { margin-top: 8px; padding: 12px; border: 1px solid #dfe7e2; border-radius: 12px; background: #fbfdfc; box-shadow: 0 8px 24px #193d2c06; }
+.dashboard-shell .model-picker-search { display: flex; align-items: center; gap: 9px; height: 40px; padding: 0 11px; border: 1px solid #e0e7e3; border-radius: 8px; background: #fff; color: #7c8c83; }
+.dashboard-shell .model-picker-search:focus-within { border-color: #729c88; box-shadow: 0 0 0 2px #3f816b0d; }
+.dashboard-shell .model-picker-search input { width: 100%; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: #1d3027; font: inherit; font-size: .75rem; }
+.dashboard-shell .model-picker-search input::placeholder { color: #8b9891; }
+.dashboard-shell .model-picker-search > svg { flex-shrink: 0; }
+.dashboard-shell .model-picker-search button { display: grid; place-items: center; color: #718278; }
+.dashboard-shell .model-picker-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.dashboard-shell .model-picker-filters button { min-height: 29px; padding: 5px 11px; border: 1px solid #e2e8e4; border-radius: 999px; background: #fff; color: #687c70; font-size: .6875rem; white-space: nowrap; }
+.dashboard-shell .model-picker-filters button[aria-pressed="true"] { border-color: #c5dcd0; background: #e9f2ed; color: #286449; }
+.dashboard-shell .model-picker-filters button:hover { border-color: #a8c6b6; }
+.dashboard-shell .model-picker-options { display: grid; gap: 6px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #cfddd4 transparent; }
+.dashboard-shell .model-picker-option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 12px; border: 1px solid #e7ece9; border-radius: 9px; background: #fff; color: #1e3027; text-align: left; }
+.dashboard-shell .model-picker-option:hover, .dashboard-shell .model-picker-option.is-active { border-color: #adc7b8; background: #f5f9f6; }
+.dashboard-shell .model-picker-option.is-selected { border-color: #9dbeac; background: #edf5f0; }
+.dashboard-shell .model-picker-option[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.dashboard-shell .model-option-copy { flex: 1; min-width: 0; }
+.dashboard-shell .model-option-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; }
+.dashboard-shell .model-option-title strong { font-size: .8125rem; font-weight: 600; overflow-wrap: anywhere; }
+.dashboard-shell .model-option-title small { color: #809087; font-size: .625rem; }
+.dashboard-shell .model-option-copy > span:last-child { display: block; margin-top: 4px; color: #788b7f; font-size: .6875rem; line-height: 1.5; }
+.dashboard-shell .model-option-state { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: #3b7d5e; }
+.dashboard-shell .model-option-state > svg { flex-shrink: 0; }
+.dashboard-shell .model-option-state > small { font-size: .625rem; }
+.dashboard-shell .model-recommended { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; background: #d9eee2; color: #317854; font-size: .625rem; white-space: nowrap; }
+.dashboard-shell .model-option-radio { width: 15px; height: 15px; border: 1.5px solid #cad5ce; border-radius: 50%; }
+.dashboard-shell .model-picker-note, .dashboard-shell .model-picker-feedback, .dashboard-shell .model-picker-empty { margin: 10px 0 0; color: #78867d; font-size: .6875rem; line-height: 1.6; }
+.dashboard-shell .model-picker-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.dashboard-shell .model-picker-feedback p { margin: 0; }
+.dashboard-shell .model-picker-feedback.is-error { color: #a84e4e; }
+.dashboard-shell .model-picker-feedback button { display: inline-flex; align-items: center; gap: 5px; text-decoration: underline; text-underline-offset: 3px; }
+.dashboard-shell .model-picker-empty { padding: 12px 4px; text-align: center; }
+.dashboard-shell .model-picker-trigger:focus-visible, .dashboard-shell .model-picker-filters button:focus-visible, .dashboard-shell .model-picker-feedback button:focus-visible, .dashboard-shell .model-picker-search button:focus-visible { outline: 2px solid #477b61; outline-offset: 3px; }
+@media (max-width: 1100px) and (min-width: 761px), (max-width: 440px) {
+  .dashboard-shell .model-picker-option { gap: 8px; padding: 10px 8px; flex-wrap: wrap; }
+  .dashboard-shell .model-option-copy { flex-basis: calc(100% - 45px); }
+  .dashboard-shell .model-option-state { width: 100%; min-height: 16px; padding-left: 40px; }
+  .dashboard-shell .model-option-state > svg, .dashboard-shell .model-option-radio { margin-left: auto; }
+  .dashboard-shell .model-picker-panel { padding: 9px; }
+}

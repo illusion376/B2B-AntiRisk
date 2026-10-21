@@ -74,11 +74,11 @@ def _reject_nonfinite(value: str) -> None:
 def _is_reasoning_model(model: str) -> bool:
     # Accept direct OpenAI names and provider-prefixed IDs (ProxyAPI/OpenRouter).
     name = model.rsplit("/", 1)[-1].lower()
-    return re.match(r"^(?:gpt-5|o[134])(?:[.\-:]|$)", name) is not None
+    return re.match(r"^(?:gpt-(?:[5-9]|\d{2,})|o[134])(?:[.\-:]|$)", name) is not None
 
 
 class LLMClient:
-    def __init__(self, *, response_schema: dict | None = None) -> None:
+    def __init__(self, *, response_schema: dict | None = None, model: str | None = None) -> None:
         if not settings.llm_enabled:
             raise LLMError("Для LLM-режима настройте LLM_BASE_URL, LLM_MODEL и LLM_API_KEY от ProxyAPI")
         headers = {"Authorization": f"Bearer {settings.llm_api_key.strip()}"}
@@ -89,6 +89,7 @@ class LLMClient:
         )
         self._json_mode = settings.llm_json_mode
         self._response_schema = response_schema
+        self._model = model.strip() if model else settings.llm_model.strip()
 
     async def __aenter__(self) -> "LLMClient":
         return self
@@ -114,7 +115,7 @@ class LLMClient:
         raise LLMError("unreachable")
 
     async def _chat(self, system: str, user: str) -> str:
-        model = settings.llm_model.strip()
+        model = self._model
         payload: dict = {
             "model": model,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

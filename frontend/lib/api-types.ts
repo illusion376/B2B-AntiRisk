@@ -7,9 +7,17 @@ export interface AnalysisModesDto {
   configured_model?: string | null;
 }
 
+export interface AnalysisModelsDto {
+  default_model: string | null;
+  models: { id: string; label: string; provider: string; provider_id: string; description: string; available: boolean; recommended: boolean }[];
+  source: 'provider' | 'fallback';
+  warning?: string | null;
+}
+
 export interface DocumentDto {
   id: string; analysis_id: string; file_name: string; relative_path: string | null;
   analysis_mode: AnalysisMode | null;
+  llm_model?: string | null;
   analysis_sensitivity?: AnalysisSensitivity | null;
   chat_revision?: string | null;
   file_type: string | null; file_size: number | null; status: string; phase: ProcessingPhase;
