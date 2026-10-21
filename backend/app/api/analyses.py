@@ -21,6 +21,7 @@ from app.models import Analysis, Document, RiskFinding, User, visible_findings
 from app.schemas import AnalysisDetail, AnalysisPage, FindingOut, RerunRequest
 from app.services import uploads
 from app.services.analysis_modes import analysis_mode_or_422
+from app.services.analysis_models import analysis_model_or_422
 from app.services.audit import log_action
 from app.services.pipeline import TERMINAL, refresh_analysis
 from app.vocab import SEVERITY_FROM_API, parse_filter
@@ -57,12 +58,15 @@ def create_analysis(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
     analysis_mode: str | None = Form(None),
+    llm_model: str | None = Form(None, min_length=1, max_length=200),
 ):
     check_content_length(request)
     mode = analysis_mode_or_422(analysis_mode)
+    model = analysis_model_or_422(llm_model, mode)
     project = get_project_or_404(db, project_id, user) if project_id else None
     try:
-        analysis, to_process = uploads.create_analysis(db, user, file, law_type, project, title, analysis_mode=mode)
+        analysis, to_process = uploads.create_analysis(db, user, file, law_type, project, title,
+                                                       analysis_mode=mode, llm_model=model)
     except uploads.UploadRejected as exc:
         raise HTTPException(exc.status_code, exc.detail) from exc
     db.commit()
@@ -201,13 +205,14 @@ def rerun_analysis(
 ):
     analysis = get_analysis_or_404(db, analysis_id, user)
     rerun(db, user, [analysis], body.rule_ids if body else None, body.analysis_mode if body else None,
-          body.analysis_sensitivity if body else "balanced")
+          body.analysis_sensitivity if body else "balanced", body.llm_model if body else None)
     return analysis_detail(db, analysis)
 
 
 def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str] | None,
-          analysis_mode: str | None = None, analysis_sensitivity: str = "balanced") -> int:
+          analysis_mode: str | None = None, analysis_sensitivity: str = "balanced", llm_model: str | None = None) -> int:
     mode = analysis_mode_or_422(analysis_mode)
+    model = analysis_model_or_422(llm_model, mode)
     if any(a.analysis_status not in TERMINAL for a in analyses):
         raise HTTPException(409, "Проверка ещё выполняется")
     docs = list(db.scalars(select(Document).where(
@@ -218,13 +223,14 @@ def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str]
     for doc in docs:
         doc.status, doc.progress = ("ANALYZING", 70) if doc.status == "COMPLETED" else ("QUEUED", 0)
         doc.analysis_mode = mode
+        doc.llm_model = model
         doc.analysis_sensitivity = analysis_sensitivity
         doc.error_message = None
     for analysis in analyses:
         if any(d.analysis_id == analysis.id for d in docs):
             log_action(db, user.id, "ANALYSIS_RERUN", "analysis", analysis.id,
                        {"file": analysis.original_filename, "rule_ids": rule_ids, "analysis_mode": mode,
-                        "analysis_sensitivity": analysis_sensitivity})
+                        "analysis_sensitivity": analysis_sensitivity, "llm_model": model})
             analysis.error_message = None
     db.flush()
     for analysis in analyses:

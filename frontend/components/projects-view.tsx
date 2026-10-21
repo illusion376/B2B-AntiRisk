@@ -92,7 +92,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
         </p>
       )}
       <div className="projects-table-card">
-        <div className="projects-table-actions">
+        {projects.length > 0 && <div className="projects-table-actions">
           <button className="primary-button" onClick={onCreate}><Plus size={19} />Новый проект</button>
           <CustomSelect
             className="projects-sort"
@@ -105,7 +105,7 @@ export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, q
               { value: 'name', label: 'По названию' },
             ]}
           />
-        </div>
+        </div>}
       {filtered.length > 0 ? (
         <>
           <div className="dashboard-table-scroll">

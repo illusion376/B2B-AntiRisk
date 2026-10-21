@@ -5,6 +5,8 @@ import type { AnalysisMode, AnalysisModes, User, UserProfileDraft } from '@/lib/
 import { displaySeverities, sensitivityOptions } from '@/lib/workspace-preferences';
 import type { NoticeKind, WorkspacePreferences } from '@/lib/workspace-preferences';
 import { ReportProfileSettings } from './report-profile-settings';
+import { AnalysisModelSelector } from './analysis-model-selector';
+import type { AnalysisModelsState } from './use-analysis-models';
 import './settings.css';
 
 interface Props {
@@ -23,6 +25,7 @@ interface Props {
   onDesktop: () => void;
   user: User | null;
   onSaveProfile: (draft: UserProfileDraft) => Promise<User>;
+  analysisModels: AnalysisModelsState;
 }
 
 const riskLabels = { critical: 'Критические', warning: 'Требуют внимания', low: 'Низкий риск', ok: 'Без замечаний' };
@@ -33,7 +36,7 @@ const notices: { id: NoticeKind; title: string; description: string }[] = [
 ];
 
 export function SettingsView({ config, loading, error, selectedMode, onChange, onRetry, storageError,
-  preferences, preferencesReady, onPreferences, desktopPermission, desktopRequesting, onDesktop, user, onSaveProfile }: Props) {
+  preferences, preferencesReady, onPreferences, desktopPermission, desktopRequesting, onDesktop, user, onSaveProfile, analysisModels }: Props) {
   const selected = config?.modes.find(mode => mode.id === selectedMode);
   const desktopEnabled = preferences.notifications.desktop && desktopPermission === 'granted';
   return <section className="secondary-view settings-view">
@@ -57,7 +60,7 @@ export function SettingsView({ config, loading, error, selectedMode, onChange, o
         </fieldset>
         {error && <div className="settings-error" role="alert"><p>Не удалось загрузить режимы.</p><button className="secondary-button" onClick={onRetry}><RefreshCw size={14} />Повторить</button></div>}
         {!loading && !error && selectedMode && !selected?.available && <p className="settings-warning" role="alert">Выберите доступный режим, чтобы запустить анализ.</p>}
-        {config?.configuredModel && !error && <p className="settings-model">Модель: {config.configuredModel}</p>}
+        {selectedMode === 'llm' && !error && <AnalysisModelSelector state={analysisModels} disabled={loading || !selected?.available} />}
       </section>
       <section className="settings-card" aria-labelledby="risk-card-title">
         <div className="settings-card-heading"><span className="settings-card-icon"><SlidersHorizontal size={17} /></span><h2 id="risk-card-title">Уровни риска</h2><small>02</small></div>
