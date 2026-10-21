@@ -18,7 +18,7 @@ from app.vocab import REVIEW_LABELS, SEVERITY_GROUP_LABELS
 
 MODES: list[ReportMode] = [
     ReportMode(id="brief", title="Краткий",
-               description="Светофор, индекс риска и таблица замечаний: уровень, суть, пункт, страница",
+               description="Количество замечаний по уровням и таблица замечаний: уровень, суть, пункт, страница",
                formats=["docx", "pdf", "csv", "json"]),
     ReportMode(id="detailed", title="Подробный",
                description="Каждое замечание с цитатой, обоснованием, рекомендацией и нормой права; "

@@ -63,6 +63,38 @@ def test_docx_modes(contract_pdf, tmp_path, mode):
         assert "Новая редакция" in cells and "штраф в размере 0,1%" in cells
     if mode == "detailed":
         assert "Срок оплаты 7 рабочих дней" in text  # пройденные проверки
+    assert "Светофор рисков" not in text + cells
+    assert text.rstrip().endswith("проверить специалисту.")
+
+
+@pytest.mark.parametrize("mode", ["brief", "detailed"])
+def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode):
+    data = _data(contract_pdf)
+    docx = DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}.docx"))
+    summary = docx.tables[1].rows[0].cells
+    assert [c.text for c in summary] == ["Критичных: 1", "Требуют внимания: 1, низкий риск: 1"]
+    text = "\n".join(p.text for p in docx.paragraphs)
+    cells = "\n".join(c.text for t in docx.tables for r in t.rows for c in r.cells)
+    assert "Светофор" not in text + cells and "Индекс риска" not in text + cells
+    assert text.rstrip().endswith("проверить специалисту.")
+    assert "без LLM" not in text  # все замечания найдены LLM
+
+
+@pytest.mark.parametrize("mode", ["brief", "detailed"])
+def test_heuristic_note_is_written_once_at_the_top(contract_pdf, tmp_path, mode):
+    data = _data(contract_pdf)
+    for f in data.documents[0].findings:
+        f.source = "HEURISTIC"
+    paragraphs = [p.text for p in DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}.docx")).paragraphs]
+    assert "\n".join(paragraphs).count("без LLM") == 1
+    note = next(i for i, p in enumerate(paragraphs) if "без LLM" in p)
+    first_issue = paragraphs.index("Замечания") if mode == "brief" else next(
+        i for i, p in enumerate(paragraphs) if p.startswith("№1."))
+    assert note < first_issue
+
+    data.documents[0].findings[0].source = "LLM"
+    text = "\n".join(p.text for p in DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}-mixed.docx")).paragraphs)
+    assert "Замечания №2, №3 найдены без LLM" in text
 
 
 def test_json_and_annotated(contract_pdf):
@@ -78,13 +110,44 @@ def test_json_and_annotated(contract_pdf):
     assert not any("Срок оплаты" in r for r in rows)  # краткий режим — без пройденных проверок
 
     annotated = reports.generate(data, "annotated", "pdf")
+    with pymupdf.open(contract_pdf) as source:
+        width, pages = source[0].rect.width, source.page_count
     with pymupdf.open(annotated.path) as pdf:
         page = pdf[0]
         types = [a.type[1] for a in page.annots()]
-        assert "Highlight" in types and "Text" in types
+        # Всплывающих заметок нет: Chrome показывает их без кириллицы. Комментарии напечатаны на поле справа.
+        assert "Highlight" in types and "Text" not in types and "Popup" not in types
+        # и у подсветки нет текста заметки — Chrome показывал бы его при наведении
+        assert all(not a.info["content"] and not a.info["title"] for a in page.annots())
+        assert page.rect.width > width
+        margin = page.get_text("text", clip=pymupdf.Rect(width, 0, page.rect.width, page.rect.height))
+        assert "Неограниченная ответственность" in margin and "Критично" in margin
+        assert "Подготовил: Кирилл Иванов" in margin
+        quote = next(w for w in page.get_text("words") if w[4] == "штраф")
+        assert quote[2] < width  # содержимое страницы не сдвинулось
+        # замечание без точной цитаты — на поле своей страницы; всё уместилось, лишних страниц нет
+        assert "Срок поставки" in pdf[1].get_text() and pdf.page_count == pages
 
     with pytest.raises(reports.ReportError):
         reports.generate(data, "annotated", "docx")
+
+
+def test_annotated_pdf_moves_notes_without_place_to_appendix(contract_pdf, tmp_path):
+    from app.services.pdf_tools import annotated_pdf
+
+    long_comment = "Очень длинное обоснование замечания. " * 60
+    findings = [dict(number=n, severity="YELLOW", title=f"Замечание {n}", comment=long_comment, counter_proposal=None,
+                     quote_verified=False, highlights=[], page_number=1, clause="1") for n in range(1, 4)]
+    findings.append(dict(number=4, severity="RED", title="Без страницы", comment="Обоснование", counter_proposal=None,
+                         quote_verified=False, highlights=[], page_number=None, clause=None))
+    with pymupdf.open(contract_pdf) as source:
+        pages = source.page_count
+    with pymupdf.open(annotated_pdf(contract_pdf, findings, tmp_path / "a.pdf")) as pdf:
+        appendix = "\n".join(pdf[i].get_text() for i in range(pages, pdf.page_count))
+        assert pdf.page_count > pages and "Замечания к документу" in appendix
+        assert "Без страницы" in appendix and "стр. 1" in appendix  # у не уместившихся на поле — место в тексте
+        everywhere = "\n".join(p.get_text() for p in pdf)
+        assert all(f"Замечание {n}" in everywhere for n in range(1, 4))
 
 
 def test_csv_formula_injection_is_neutralized():
@@ -146,8 +209,6 @@ def test_unassessed_docx_never_claims_no_risks_or_no_disagreements(tmp_path, mod
     assert "Замечаний нет." not in all_text
     assert "Разногласий по проверенным правилам не выявлено." not in all_text
     assert "None из 100" not in all_text
-    if mode != "protocol":
-        assert "Индекс риска: не определён" in all_text
 
 
 def test_unknown_assessment_is_preserved_in_json():

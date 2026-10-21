@@ -12,8 +12,6 @@ from docx.shared import Cm, Pt, RGBColor
 from app.services.reports.data import ReportData, ReportDocument, ReportFinding
 from app.vocab import REVIEW_LABELS, SEVERITY_SHORT_LABELS
 
-LIGHT_LABEL = {"RED": "Красный — критичные риски", "YELLOW": "Жёлтый — требует внимания",
-               "GREEN": "Зелёный — без рисков", "UNKNOWN": "Недостаточно данных"}
 SEVERITY_LABEL = SEVERITY_SHORT_LABELS
 SEVERITY_FILL = {"RED": "F8D7D5", "YELLOW": "FDEFC8", "LOW": "E8F5E9", "GREEN": "DDF0DE", "UNKNOWN": "EDEDED"}
 SEVERITY_TEXT = {"RED": RGBColor(0xB7, 0x1C, 0x1C), "YELLOW": RGBColor(0x9A, 0x67, 0x00),
@@ -28,8 +26,8 @@ VERDICT = {
     "GREEN": "Существенных рисков по проверенным правилам не выявлено.",
     "UNKNOWN": "Оценка рисков недоступна: не по всем правилам достаточно данных для вывода. Требуется проверка специалистом.",
 }
-DISCLAIMER = ("Отчёт сформирован автоматически системой «Светофор рисков» и не является юридическим "
-              "заключением. Замечания необходимо проверить специалисту.")
+DISCLAIMER = ("Отчёт сформирован автоматически и не является юридическим заключением. "
+              "Замечания необходимо проверить специалисту.")
 
 
 # ---------- примитивы ----------
@@ -140,28 +138,41 @@ def _header(doc, data: ReportData, title: str) -> None:
     doc.add_paragraph()
 
 
+def _heuristic_note(issues: list[ReportFinding]) -> str | None:
+    """Одно примечание на весь отчёт вместо пометки у каждого замечания, найденного без LLM."""
+    heuristic = [f for f in issues if f.source == "HEURISTIC"]
+    if not heuristic:
+        return None
+    if len(heuristic) == len(issues):
+        return "Замечания найдены без LLM (по ключевым словам) — требуется ручная проверка каждого замечания."
+    numbers = ", ".join(f"№{f.number}" for f in heuristic if f.number)
+    return f"Замечания {numbers} найдены без LLM (по ключевым словам) — требуется их ручная проверка."
+
+
 def _summary(doc, data: ReportData) -> None:
+    """Итог проверки: количество замечаний по уровням, без светофора и индекса риска."""
     doc.add_heading("Итог проверки", level=2)
     findings = [f for f in data.all_findings if f.review_status != "DISMISSED"]
-    table = doc.add_table(rows=1, cols=4)
-    table.style = "Table Grid"
-    light = data.light
     values = [
-        (f"Светофор: {LIGHT_LABEL[light]}", SEVERITY_FILL[light]),
         (f"Критичных: {sum(f.severity == 'RED' for f in findings)}", SEVERITY_FILL["RED"]),
         (f"Требуют внимания: {sum(f.severity == 'YELLOW' for f in findings)}"
          + (f", низкий риск: {low}" if (low := sum(f.severity == 'LOW' for f in findings)) else ""),
          SEVERITY_FILL["YELLOW"]),
-        (f"Индекс риска: {data.risk_score} из 100" if data.risk_score is not None
-         else "Индекс риска: не определён", "EDEDED"),
     ]
+    table = doc.add_table(rows=1, cols=len(values))
+    table.style = "Table Grid"
     for cell, (text, fill) in zip(table.rows[0].cells, values):
         _cell_text(cell, text, bold=True)
         _shade(cell, fill)
-    doc.add_paragraph(VERDICT[light])
+    doc.add_paragraph(VERDICT[data.light])
     unknown = sum(f.severity == "UNKNOWN" for f in findings)
     if unknown:
         doc.add_paragraph(f"Недостаточно данных по проверкам: {unknown}. Эти результаты не означают отсутствие риска.")
+    note = _heuristic_note([f for rd in data.documents for f in rd.issues])
+    if note:
+        p = doc.add_paragraph()
+        p.add_run("Примечание: ").bold = True
+        p.add_run(note)
 
 
 def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
@@ -264,8 +275,6 @@ def build_detailed(data: ReportData, target: Path) -> Path:
                 _labeled(doc, "Норма", f.legal_reference)
             if f.reviewer_comment:
                 _labeled(doc, "Комментарий проверяющего", f.reviewer_comment)
-            if f.source == "HEURISTIC":
-                _labeled(doc, "Примечание", "Найдено без LLM (по ключевым словам) — требуется ручная проверка")
         if rd.assessed and not rd.issues:
             doc.add_paragraph("Замечаний нет.")
 
