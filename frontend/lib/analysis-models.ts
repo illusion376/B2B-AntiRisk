@@ -14,5 +14,5 @@ export function filterAnalysisModels(models: AnalysisModel[], query: string, pro
 
 export const modelProviderIcons: Record<string, string> = {
   openai: '/model-providers/openai.svg', deepseek: '/model-providers/deepseek.svg',
-  qwen: '/model-providers/qwen.svg', anthropic: '/model-providers/anthropic.svg', google: '/model-providers/google.svg',
+  anthropic: '/model-providers/anthropic.svg',
 };

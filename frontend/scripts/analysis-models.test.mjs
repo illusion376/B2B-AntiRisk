@@ -7,8 +7,8 @@ const { filterAnalysisModels, savedAnalysisModel } = await loadLib('analysis-mod
 const dto = {
   default_model: 'openai/gpt-4.1-mini', source: 'provider', models: [
     { id: 'openai/gpt-4.1-mini', label: 'GPT-4.1 mini', provider: 'OpenAI', provider_id: 'openai', description: 'Проверка', available: true, recommended: true },
-    { id: 'deepseek/deepseek-chat', label: 'DeepSeek V3', provider: 'DeepSeek', provider_id: 'deepseek', description: 'Проверка', available: true, recommended: false },
-    { id: 'qwen/qwen-plus', label: 'Qwen Plus', provider: 'Qwen', provider_id: 'qwen', description: 'Проверка', available: false, recommended: false },
+    { id: 'anthropic/claude-sonnet-4-5', label: 'Claude Sonnet 4.5', provider: 'Anthropic', provider_id: 'anthropic', description: 'Проверка', available: true, recommended: false },
+    { id: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash', provider: 'DeepSeek', provider_id: 'deepseek', description: 'Проверка', available: false, recommended: false },
   ],
 };
 const response = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
@@ -22,7 +22,7 @@ test('catalogue preserves provider IDs, the configured default and unavailable c
   });
   const result = await api.getAnalysisModels({ signal: controller.signal });
   assert.equal(result.defaultModel, 'openai/gpt-4.1-mini');
-  assert.equal(result.models[1].providerId, 'deepseek');
+  assert.equal(result.models[1].providerId, 'anthropic');
   assert.equal(result.models[2].available, false);
   assert.equal(result.source, 'provider');
   assert.throws(() => mapAnalysisModels({ ...dto, models: [dto.models[0], dto.models[0]] }));
@@ -33,8 +33,8 @@ test('catalogue preserves provider IDs, the configured default and unavailable c
 test('model search combines provider filters, names, API identifiers and multiple words', () => {
   const { models } = mapAnalysisModels(dto);
   assert.deepEqual(filterAnalysisModels(models, '  gPt MINI  ', 'all').map(model => model.id), ['openai/gpt-4.1-mini']);
-  assert.deepEqual(filterAnalysisModels(models, 'deepseek-chat', 'deepseek').map(model => model.id), ['deepseek/deepseek-chat']);
-  assert.equal(filterAnalysisModels(models, 'GPT', 'qwen').length, 0);
+  assert.deepEqual(filterAnalysisModels(models, 'deepseek-v4-flash', 'deepseek').map(model => model.id), ['deepseek/deepseek-v4-flash']);
+  assert.equal(filterAnalysisModels(models, 'GPT', 'anthropic').length, 0);
   assert.equal(filterAnalysisModels(models, 'missing', 'all').length, 0);
   assert.equal(filterAnalysisModels(models, '', 'all').length, 3);
 });
@@ -54,13 +54,13 @@ test('every launch sends the selected model and keyword mode omits it', async t 
     // Document response is deliberately invalid; payload validation runs after sending.
     return response({ documents: 1 });
   });
-  await api.startProjectAnalysis('project', { analysisMode: 'llm', llmModel: 'qwen/qwen-plus' });
-  await api.rerunProject('project', { analysisMode: 'llm', llmModel: 'deepseek/deepseek-chat', ruleIds: ['rule'] });
+  await api.startProjectAnalysis('project', { analysisMode: 'llm', llmModel: 'anthropic/claude-sonnet-4-5' });
+  await api.rerunProject('project', { analysisMode: 'llm', llmModel: 'deepseek/deepseek-v4-flash', ruleIds: ['rule'] });
   await assert.rejects(api.reanalyzeDocument('doc', { analysisMode: 'llm', llmModel: 'openai/gpt-4.1-mini' }));
-  await api.startProjectAnalysis('project', { analysisMode: 'keyword', llmModel: 'qwen/qwen-plus' });
+  await api.startProjectAnalysis('project', { analysisMode: 'keyword', llmModel: 'anthropic/claude-sonnet-4-5' });
   assert.deepEqual(calls, [
-    { url: '/api/projects/project/start', body: { analysis_mode: 'llm', llm_model: 'qwen/qwen-plus' } },
-    { url: '/api/projects/project/rerun', body: { rule_ids: ['rule'], analysis_mode: 'llm', llm_model: 'deepseek/deepseek-chat' } },
+    { url: '/api/projects/project/start', body: { analysis_mode: 'llm', llm_model: 'anthropic/claude-sonnet-4-5' } },
+    { url: '/api/projects/project/rerun', body: { rule_ids: ['rule'], analysis_mode: 'llm', llm_model: 'deepseek/deepseek-v4-flash' } },
     { url: '/api/documents/doc/reanalyze', body: { analysis_mode: 'llm', llm_model: 'openai/gpt-4.1-mini' } },
     { url: '/api/projects/project/start', body: { analysis_mode: 'keyword' } },
   ]);
