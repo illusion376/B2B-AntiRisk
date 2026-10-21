@@ -1,4 +1,3 @@
-# Фиксированное имя проекта: контейнеры и тома не зависят от названия папки
 name: b2b-antirisk
 
 x-backend-env: &backend-env
@@ -7,7 +6,6 @@ x-backend-env: &backend-env
   STORAGE_DIR: /data/storage
   CORS_ORIGINS: ${CORS_ORIGINS:-*}
   ANALYSIS_ENGINE: ${ANALYSIS_ENGINE:-auto}
-  # Все языковые модели — через ProxyAPI. Без ключа доступен поиск по словам.
   LLM_BASE_URL: ${LLM_BASE_URL-https://api.proxyapi.ru/v1}
   LLM_API_KEY: ${LLM_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL-openai/gpt-4.1-mini}
@@ -94,7 +92,6 @@ services:
       backend:
         condition: service_healthy
 
-  # Интерфейс: статическая сборка Next.js за nginx; /api/* проксируется в backend
   frontend:
     build: ./frontend
     container_name: b2b_frontend
