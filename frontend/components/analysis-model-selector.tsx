@@ -85,7 +85,7 @@ export function AnalysisModelSelector({ state, disabled = false }: { state: Anal
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); show(); }
       }}>
       {loading ? <LoaderCircle size={22} className="spin" /> : <ModelProviderIcon provider={selected?.providerId ?? 'other'} />}
-      <span className="model-picker-value" id={`${id}-value`}>{loading ? 'Загружаем модели…' : selected?.label ?? selectedModel ?? 'Выберите модель'}{selected && <small>{selected.provider}</small>}</span>
+      <span className="model-picker-value" id={`${id}-value`}>{loading ? 'Загружаем модели…' : selected?.label ?? 'Выберите модель'}{selected && <small>{selected.provider}</small>}</span>
       <ChevronDown size={18} className="model-picker-chevron" />
     </button>
     {error && <div className="model-picker-feedback is-error" role="alert"><p>{error}</p><button type="button" onClick={refresh} disabled={disabled}><RefreshCw size={14} />Повторить</button></div>}

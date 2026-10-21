@@ -39,19 +39,19 @@ def mock_catalog(monkeypatch, payload, status=200):
     return requests
 
 
-def test_catalog_uses_one_server_key_filters_modalities_and_caches(monkeypatch, model_settings):
+def test_catalog_only_exposes_three_requested_models_and_caches_availability(monkeypatch, model_settings):
     requests = mock_catalog(monkeypatch, {"data": [{"id": value} for value in [
-        "openai/gpt-4.1-mini", "deepseek/deepseek-chat", "qwen/qwen-plus", "qwen/qwen-plus",
-        "anthropic/claude-sonnet-4-5", "google/gemini-3.5-flash", "openai/text-embedding-3-small",
+        "openai/gpt-4.1-mini", "anthropic/claude-sonnet-4-5", "deepseek/deepseek-v4-flash",
+        "deepseek/deepseek-v4-flash", "deepseek/deepseek-chat", "qwen/qwen-plus", "openai/gpt-5-mini", "google/gemini-3.5-flash", "openai/text-embedding-3-small",
         "openai/gpt-image-1", "openai/gpt-4o-audio-preview", "google/gemini-3-pro-image",
         "google/gemini-nano-banana-2.1", "qwen/qwen3-tts", "deepseek/deepseek-ocr",
     ]]})
     body = TestClient(app).get("/api/analysis-models")
     assert body.status_code == 200
     assert [item["id"] for item in body.json()["models"]] == [
-        "openai/gpt-4.1-mini", "deepseek/deepseek-chat", "qwen/qwen-plus",
-        "anthropic/claude-sonnet-4-5", "google/gemini-3.5-flash",
+        "openai/gpt-4.1-mini", "anthropic/claude-sonnet-4-5", "deepseek/deepseek-v4-flash",
     ]
+    assert all(item["available"] for item in body.json()["models"])
     assert body.json()["source"] == "provider"
     assert body.json()["models"][0]["recommended"]
     analysis_models.model_catalog()
@@ -61,15 +61,17 @@ def test_catalog_uses_one_server_key_filters_modalities_and_caches(monkeypatch, 
     assert "private-catalog-key" not in body.text and "https://api.proxyapi.ru" not in body.text
 
 
-@pytest.mark.parametrize("payload,status", [({"detail": "private-provider-error"}, 403), ({}, 200), ({"data": []}, 200)])
-def test_catalog_failure_keeps_baseline_and_custom_default(monkeypatch, model_settings, payload, status):
+@pytest.mark.parametrize("payload,status", [({"detail": "private-provider-error"}, 403), ({}, 200), ({"data": None}, 200)])
+def test_catalog_failure_keeps_exactly_three_choices_and_an_allowed_default(monkeypatch, model_settings, payload, status):
     model_settings.llm_model = "custom/text-model"
     mock_catalog(monkeypatch, payload, status)
     catalog = analysis_models.model_catalog()
     assert catalog.source == "fallback" and catalog.warning
     assert "private-provider-error" not in catalog.model_dump_json()
-    assert {"openai/gpt-4.1-mini", "deepseek/deepseek-chat", "qwen/qwen-plus", "custom/text-model"} <= {
+    assert {"openai/gpt-4.1-mini", "anthropic/claude-sonnet-4-5", "deepseek/deepseek-v4-flash"} == {
         model.id for model in catalog.models if model.available}
+    assert catalog.default_model == "openai/gpt-4.1-mini"
+    assert analysis_models.analysis_model_or_422(None, "llm") == catalog.default_model
 
 
 def test_missing_key_never_calls_provider_and_does_not_enable_models(monkeypatch, model_settings):
@@ -81,7 +83,7 @@ def test_missing_key_never_calls_provider_and_does_not_enable_models(monkeypatch
 
 
 def test_removed_default_requires_a_new_choice(monkeypatch, model_settings):
-    mock_catalog(monkeypatch, {"data": [{"id": "qwen/qwen-plus"}]})
+    mock_catalog(monkeypatch, {"data": [{"id": "deepseek/deepseek-v4-flash"}]})
     catalog = analysis_models.model_catalog()
     assert not next(model for model in catalog.models if model.id == model_settings.llm_model).available
     with pytest.raises(HTTPException) as error:
@@ -89,9 +91,10 @@ def test_removed_default_requires_a_new_choice(monkeypatch, model_settings):
     assert error.value.detail["code"] == "analysis_model_unavailable"
 
 
-@pytest.mark.parametrize("model", ["https://evil.example/model", "unknown/missing", "../qwen/qwen-plus", " "])
+@pytest.mark.parametrize("model", ["https://evil.example/model", "unknown/missing", "../qwen/qwen-plus", " ",
+                                     "qwen/qwen-plus", "deepseek/deepseek-chat", "openai/gpt-5-mini", "google/gemini-3.5-flash"])
 def test_unknown_models_fail_before_queueing(monkeypatch, model_settings, model):
-    mock_catalog(monkeypatch, {"data": [{"id": "qwen/qwen-plus"}]})
+    mock_catalog(monkeypatch, {"data": [{"id": "deepseek/deepseek-v4-flash"}]})
     with pytest.raises(HTTPException) as error:
         analysis_models.analysis_model_or_422(model, "llm")
     assert error.value.status_code == 422
@@ -100,7 +103,7 @@ def test_unknown_models_fail_before_queueing(monkeypatch, model_settings, model)
 @pytest.mark.parametrize("endpoint,initial", [("start", "UPLOADED"), ("rerun", "COMPLETED"),
                                                ("document", "COMPLETED"), ("analysis", "COMPLETED")])
 def test_every_launch_persists_model_before_enqueueing(monkeypatch, model_settings, endpoint, initial):
-    mock_catalog(monkeypatch, {"data": [{"id": "qwen/qwen-plus"}, {"id": model_settings.llm_model}]})
+    mock_catalog(monkeypatch, {"data": [{"id": "anthropic/claude-sonnet-4-5"}, {"id": model_settings.llm_model}]})
     db = MagicMock()
     user = User(id=uuid.uuid4())
     analysis = Analysis(id=uuid.uuid4(), original_filename="contract.txt", analysis_status=initial)
@@ -125,7 +128,7 @@ def test_every_launch_persists_model_before_enqueueing(monkeypatch, model_settin
     for module in (projects, documents, analyses):
         monkeypatch.setattr(module, "enqueue_documents", enqueue)
     from app.schemas import StartRequest, RerunRequest
-    body = RerunRequest(analysis_mode="llm", llm_model="qwen/qwen-plus")
+    body = RerunRequest(analysis_mode="llm", llm_model="anthropic/claude-sonnet-4-5")
     if endpoint == "start":
         projects.start_project(project.id, db=db, user=user, body=StartRequest(**body.model_dump(exclude={"rule_ids"})))
     elif endpoint == "rerun":
@@ -134,14 +137,15 @@ def test_every_launch_persists_model_before_enqueueing(monkeypatch, model_settin
         documents.reanalyze(doc.id, db=db, user=user, body=body)
     else:
         analyses.rerun_analysis(analysis.id, body=body, db=db, user=user)
-    assert queued == [("llm", "qwen/qwen-plus")]
+    assert queued == [("llm", "anthropic/claude-sonnet-4-5")]
     assert model_settings.llm_model == "openai/gpt-4.1-mini"
 
 
-def test_worker_uses_saved_model_even_after_default_changes(monkeypatch, model_settings):
+@pytest.mark.parametrize("saved", ["deepseek/deepseek-v4-flash", "qwen/qwen-plus"])
+def test_worker_uses_saved_model_even_after_default_changes(monkeypatch, model_settings, saved):
     doc = Document(id=uuid.uuid4(), analysis_id=uuid.uuid4(), file_name="contract.txt", analysis_mode="llm",
-                   analysis_sensitivity="balanced", llm_model="deepseek/deepseek-chat")
-    model_settings.llm_model = "qwen/qwen-plus"
+                   analysis_sensitivity="balanced", llm_model=saved)
+    model_settings.llm_model = "anthropic/claude-sonnet-4-5"
     db = MagicMock()
     db.get.return_value = doc
 
@@ -156,7 +160,7 @@ def test_worker_uses_saved_model_even_after_default_changes(monkeypatch, model_s
     evaluate = AsyncMock(return_value=[])
     monkeypatch.setattr(pipeline, "evaluate_with_llm", evaluate)
     pipeline.analyze_document(doc.id)
-    assert evaluate.call_args.kwargs["model"] == "deepseek/deepseek-chat"
+    assert evaluate.call_args.kwargs["model"] == saved
 
 
 def test_parallel_llm_clients_keep_their_own_model_and_parameters(monkeypatch, model_settings):
@@ -171,10 +175,18 @@ def test_parallel_llm_clients_keep_their_own_model_and_parameters(monkeypatch, m
     monkeypatch.setattr(llm.httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(handle)))
 
     async def run():
-        async with llm.LLMClient(model="qwen/qwen-plus") as first, llm.LLMClient(model="openai/gpt-5-mini") as second:
+        async with llm.LLMClient(model="deepseek/deepseek-v4-flash") as first, llm.LLMClient(model="openai/gpt-5-mini") as second:
             model_settings.llm_model = "changed-global-model"
             await asyncio.gather(first.complete_json("JSON", "first"), second.complete_json("JSON", "second"))
 
     asyncio.run(run())
-    assert payloads[0]["model"] == "qwen/qwen-plus" and "max_tokens" in payloads[0]
+    assert payloads[0]["model"] == "deepseek/deepseek-v4-flash" and "max_tokens" in payloads[0]
     assert payloads[1]["model"] == "openai/gpt-5-mini" and "max_completion_tokens" in payloads[1]
+
+
+def test_empty_provider_catalog_disables_all_three_choices(monkeypatch, model_settings):
+    mock_catalog(monkeypatch, {"data": []})
+    catalog = analysis_models.model_catalog()
+    assert catalog.source == "provider"
+    assert len(catalog.models) == 3
+    assert not any(model.available for model in catalog.models)
