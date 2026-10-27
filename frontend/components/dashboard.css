@@ -5,7 +5,7 @@
   overflow: hidden;
 }
 .dashboard-shell.app-shell { --dash-line:#e9e9e9; --dash-muted:#797d7b; position: relative; z-index: 1; display: grid; grid-template-columns: var(--nav-width,264px) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) 29px; height: 100%; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: #fff; box-shadow: none; color: #242625; }
-.dashboard-shell button { transition: background .14s,color .14s,border-color .14s; }
+.dashboard-shell button { transition: background-color .14s,color .14s,border-color .14s; }
 .dashboard-shell :focus-visible { outline-color: #353a36; }
 .dashboard-shell .dashboard-sidebar { grid-column: 1; grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 0; padding: 26px 16px 16px; border-right: 1px solid var(--dash-line); background: #fafafa; }
 .dashboard-shell .sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 28px; }
@@ -54,7 +54,7 @@
 .dashboard-shell .view-title .eyebrow { display: block; font: 700 10px var(--font-sans); color: #979797; letter-spacing: 1px; margin-bottom: 10px; }
 .dashboard-shell .view-title p { font-size: .75rem; line-height: 1.7; color: #909090; margin-top: 9px; }
 .dashboard-shell .primary-button { min-height: 33px; border: 1px solid #242424; background: #242424; color: #fff; border-radius: 5px; box-shadow: 0 2px 3px #0000000b; font-size: .75rem; padding: 8px 12px; gap: 7px; white-space: nowrap; }
-.dashboard-shell .primary-button:hover { background: #434343; border-color: #434343; }
+.dashboard-shell .primary-button:hover { background-color: #434343; border-color: #434343; }
 .dashboard-shell .secondary-button { min-height: 31px; border: 1px solid #e4e4e4; background: #fff; color: #5c5c5c; border-radius: 4px; padding: 7px 11px; font-size: .75rem; gap: 6px; }
 .dashboard-shell .secondary-button:hover { background: #f2f2f2; }
 .dashboard-shell .count-chip { color: #818181; background: #f4f4f4; border: 1px solid #e8e8e8; border-radius: 4px; font: 700 10px var(--font-sans); padding: 8px 10px; }
