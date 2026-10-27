@@ -62,8 +62,9 @@
 .dashboard-shell .view-title h1 { color: #11151d; font-size: clamp(30px,3.2vw,46px); font-weight: 750; letter-spacing: -1.6px; line-height: 1.15; }
 .dashboard-shell .view-title p { color: #64748b; font-size: 14px; font-weight: 400; line-height: 1.6; }
 .dashboard-shell .view-title .eyebrow { color: #64748b; letter-spacing: 1.6px; font-size: 10px; font-weight: 600; }
-.dashboard-shell .primary-button { min-height: 40px; gap: 8px; padding: 10px 16px; background: linear-gradient(145deg,#ff173c,#ed0030); border: 1px solid #f20c34; border-radius: 10px; box-shadow: 0 5px 13px #f3153917; font-size: 12px; font-weight: 500; }
-.dashboard-shell .primary-button:hover { background: #de0c31; border-color: #de0c31; }
+/* Keep the gradient in place while its opaque base color transitions on hover. */
+.dashboard-shell .primary-button { min-height: 40px; gap: 8px; padding: 10px 16px; background: #ed0030 linear-gradient(145deg,#ff173c,#ff173c00); border: 1px solid #f20c34; border-radius: 10px; box-shadow: 0 5px 13px #f3153917; font-size: 12px; font-weight: 500; }
+.dashboard-shell .primary-button:hover { background-color: #de0c31; border-color: #de0c31; }
 .dashboard-shell .secondary-button { min-height: 38px; gap: 8px; padding: 9px 13px; background: #ffffffd9; border: 1px solid #dce3ec; border-radius: 9px; color: #334155; font-size: 12px; font-weight: 500; }
 .dashboard-shell .secondary-button:hover { background: #f2f4f8; border-color: #cbd2df; }
 
