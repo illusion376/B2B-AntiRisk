@@ -14,6 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_analyses_user_id ON analyses(user_id, created_at 
 -- ============ documents ============
 -- Статус обработки каждого документа отдельно: в архиве их может быть много,
 -- и пользователь открывает любой из них, не дожидаясь остальных.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_name VARCHAR(255) NOT NULL DEFAULT '';
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS relative_path TEXT; -- путь внутри архива (для дерева файлов)
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_type VARCHAR(20);
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size BIGINT;
