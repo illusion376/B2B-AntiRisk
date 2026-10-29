@@ -225,11 +225,6 @@
   .pages-hidden { grid-template-columns: minmax(0,1.3fr) minmax(500px,1fr); }
   .reader-expanded.pages-hidden { grid-template-columns: minmax(0,1fr); }
   .mobile-pane-tabs { display: none; }
-  .statusbar { height: 29px; flex-shrink: 0; display: flex; align-items: center; gap: 20px; color: #999c93; padding: 0 4px; font-size: .75rem; }
-  .statusbar > span { display: flex; align-items: center; gap: 6px; }
-  .statusbar > span:nth-child(2) { margin-left: auto; }
-  .statusbar > button { display: flex; align-items: center; gap: 5px; font-size: inherit; padding: 0; }
-  .local-indicator { height: 5px; width: 5px; border-radius: 50%; border: 1px solid #aab09e; }
   .popover-anchor { position: relative; }
   .popover { z-index: 30; position: absolute; top: calc(100% + 10px); right: 0; border: 1px solid var(--line); background: #fff; box-shadow: 0 8px 35px #33382720; border-radius: 7px; min-width: 210px; padding: 6px; }
   .popover-heading { padding: 11px 10px; font-size: .8125rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
@@ -461,9 +456,6 @@
     .contract-paragraph { gap: 7px; }
     .annotation-marker { width: 19px; height: 19px; font-size: 12px; left: -26px; }
     .annotation-marker::after { left: 19px; width: 6px; }
-    .statusbar { height: 24px; font-size: .75rem; gap: 10px; }
-    .statusbar > span:nth-child(2) { display: none; }
-    .statusbar > button { margin-left: auto; }
     .review-tabs { height: 44px; }
     .review-tabs button { font-size: .75rem; flex: 1; padding: 0 9px; justify-content: center; }
     .review-tabs button > span { display: none; }
@@ -669,7 +661,7 @@
 @layer components {
   /* Shared readable secondary text and visible keyboard focus. */
   .view-title p, .rule-card p, .rule-card small, .timeline p,
-  .timeline time, .timeline-label, .eyebrow, .statusbar,
+  .timeline time, .timeline-label, .eyebrow,
   .info-content p, .info-tip, .detail-disclaimer, .finding-detail > p,
   .empty-state p { color: #626b5d; }
   .field-search:focus-within { border-color: var(--red); box-shadow: 0 0 0 3px #bc302a14; }

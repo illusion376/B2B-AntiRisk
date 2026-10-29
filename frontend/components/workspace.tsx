@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {AlertCircle,Check,ChevronDown,ChevronRight,CircleHelp,Download,EllipsisVertical,FileText,Files,LoaderCircle,Menu,Pencil,RefreshCw,Search,ShieldCheck,X} from 'lucide-react';
+import {AlertCircle,Check,ChevronDown,ChevronRight,CircleHelp,Download,EllipsisVertical,FileText,Files,LoaderCircle,Menu,Pencil,RefreshCw,Search,X} from 'lucide-react';
 import {api,errorMessage} from '@/lib/api';
 import type {AnalysisMode,CheckRule,DocumentInfo,Finding,Project,ProjectDraft,ProjectFile,ReportFormat,ReportModeId,ReviewStatus,RuleDraft,SearchResponse,View} from '@/lib/types';
 import {DocumentWorkspace} from './document-workspace';
@@ -191,7 +191,6 @@ export function Workspace() {
       {view==='settings'&&<SettingsView analysisModels={analysisModels} user={user} onSaveProfile={data.saveUser} config={analysisModes.config} loading={analysisModes.loading} error={analysisModes.error} selectedMode={selectedAnalysisMode} onChange={analysisModes.selectMode} onRetry={analysisModes.refresh} storageError={analysisModes.storageError||analysisModels.storageError||preferences.storageError} preferences={preferences.preferences} preferencesReady={preferences.ready} onPreferences={preferences.update} desktopPermission={notifications.permission} desktopRequesting={notifications.requesting} onDesktop={()=>void notifications.toggleDesktop()}/>}
       </>}
     </main>
-    <footer className="statusbar"><span><span className="local-indicator"/>{data.error?'Нет связи с API':'Обработка на сервере'}</span><span><ShieldCheck size={13}/>Решения сохраняются в базе данных</span></footer>
     {projectDialog&&<ProjectActionDialog key={`${projectDialog.mode}-${projectDialog.project.id}`} project={projectDialog.project} mode={projectDialog.mode} onConfirm={confirmProjectAction} onClose={()=>setProjectDialog(null)}/>}
     {modal==='create-project'&&<NewProjectDialog onCreate={createProject} onClose={()=>setModal(null)}/>}
     {ruleDialog&&ruleDialog.mode!=='delete'&&<RuleEditor rule={ruleDialog.mode==='edit'?ruleDialog.rule:null} categories={categories} onSave={saveRule} onClose={()=>setRuleDialog(null)}/>}
