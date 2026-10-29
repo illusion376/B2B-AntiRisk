@@ -77,7 +77,7 @@ def _is_reasoning_model(model: str) -> bool:
 class LLMClient:
     def __init__(self, *, response_schema: dict | None = None, model: str | None = None) -> None:
         if not settings.llm_enabled:
-            raise LLMError("Для LLM-режима настройте LLM_BASE_URL, LLM_MODEL и LLM_API_KEY от ProxyAPI")
+            raise LLMError("Для LLM-режима настройте LLM_BASE_URL и LLM_API_KEY от ProxyAPI")
         headers = {"Authorization": f"Bearer {settings.llm_api_key.strip()}"}
         self._client = httpx.AsyncClient(
             base_url=settings.llm_base_url.strip().rstrip("/") + "/",
