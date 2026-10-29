@@ -5,12 +5,17 @@ import { loadLib } from './load-lib.mjs';
 const { defaultPreferences, normalizePreferences, parsePreferences, matchesSeverity } = await loadLib('workspace-preferences');
 const { analysisSnapshot, analysisEvents } = await loadLib('analysis-notifications');
 
-test('defaults show every supported level and corrupt storage cannot hide all results', () => {
-  assert.deepEqual(defaultPreferences().defaultSeverities, ['critical', 'warning', 'low', 'ok']);
+test('defaults show every risk level and corrupt storage cannot hide all findings', () => {
+  assert.deepEqual(defaultPreferences().defaultSeverities, ['critical', 'warning', 'low']);
   assert.equal(defaultPreferences().sensitivity, 'balanced');
   for (const raw of [null, '{broken', 'null', '[]', '{"defaultSeverities":[]}', '{"defaultSeverities":["unknown"]}']) {
     assert.deepEqual(parsePreferences(raw).defaultSeverities, defaultPreferences().defaultSeverities);
   }
+});
+
+test('legacy successful-check preferences are removed while selected risk levels are preserved', () => {
+  assert.deepEqual(parsePreferences('{"defaultSeverities":["ok","low"]}').defaultSeverities, ['low']);
+  assert.deepEqual(parsePreferences('{"defaultSeverities":["ok"]}').defaultSeverities, ['critical', 'warning', 'low']);
 });
 
 test('saved preferences preserve false flags, deduplicate levels and reject unknown values', () => {
@@ -27,8 +32,16 @@ test('default display filter hides unchecked levels while explicit all and singl
   assert.ok(matchesSeverity('critical', 'default', ['critical', 'warning']));
   assert.ok(!matchesSeverity('low', 'default', ['critical', 'warning']));
   assert.ok(matchesSeverity('low', 'all', ['critical']));
-  assert.ok(matchesSeverity('ok', 'ok', ['critical']));
-  assert.ok(!matchesSeverity('critical', 'ok', ['critical']));
+  assert.ok(matchesSeverity('low', 'low', ['critical']));
+  assert.ok(!matchesSeverity('critical', 'low', ['critical']));
+});
+
+test('successful and incomplete checks stay out of findings even with explicit filters', () => {
+  for (const severity of ['ok', 'unknown']) {
+    for (const filter of ['all', 'default', severity]) {
+      assert.equal(matchesSeverity(severity, filter, ['critical', 'warning', 'low']), false);
+    }
+  }
 });
 
 const project = (phase, critical = 0, error = null) => [{ id: 'p', title: 'Закупка', files: [{
@@ -63,7 +76,7 @@ test('queue failures, failed documents inside ZIP and failed reruns produce an e
 });
 
 test('a repeated run can report critical findings again, independently of the display preference', () => {
-  const prefs = normalizePreferences({ defaultSeverities: ['ok'] });
+  const prefs = normalizePreferences({ defaultSeverities: ['low'] });
   assert.ok(!matchesSeverity('critical', 'default', prefs.defaultSeverities));
   const events = analysisEvents(analysisSnapshot(project('processing', 2)), analysisSnapshot(project('ready', 2)));
   assert.ok(events.some(event => event.kind === 'critical'));

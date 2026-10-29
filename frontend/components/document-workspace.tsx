@@ -20,7 +20,6 @@ const reviewTabs = [
   { id: 'rules', label: 'Правила проверки' },
   { id: 'assistant', label: 'ИИ-помощник' },
 ] as const;
-const severityOrder: Severity[] = ['critical', 'warning', 'low', 'ok'];
 const noPendingStatuses: ReadonlySet<string> = new Set();
 const statusOptions = Object.entries(statusLabels).map(([value, label]) => ({ value, label }));
 type ReviewTab = typeof reviewTabs[number]['id'];
@@ -116,7 +115,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
   const [status, setStatus] = useState('all');
   const [filterText, setFilterText] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
-  const [collapsed, setCollapsed] = useState<Severity[]>(['ok']);
+  const [collapsed, setCollapsed] = useState<Severity[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [chatTarget, setChatTarget] = useState<{ id: string; key: number } | null>(null);
   const [mobilePane, setMobilePane] = useState<'document' | 'findings'>('document');
@@ -132,24 +131,24 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
   const totalPages = document.totalPages;
   const currentPage = pageContent?.page === page ? pageContent : null;
   const sections = currentPage?.sections ?? [];
-  const categories = [...new Set(findings.map(finding => finding.category).filter(Boolean))];
-  const filtered = useMemo(() => findings.filter(finding =>
+  const riskFindings = useMemo(() => findings.filter(finding => isRiskSeverity(finding.severity)), [findings]);
+  const categories = [...new Set(riskFindings.map(finding => finding.category).filter(Boolean))];
+  const filtered = useMemo(() => riskFindings.filter(finding =>
     (category === 'all' || category === finding.category)
     && matchesSeverity(finding.severity, severity, defaultSeverities)
     && (status === 'all' || (statuses[finding.id] ?? finding.status) === status)
     && `${finding.title} ${finding.description} ${finding.quote}`.toLocaleLowerCase('ru').includes(filterText.trim().toLocaleLowerCase('ru'))
   ).sort((a, b) => {
-    // Successful checks have no display number and remain after numbered findings.
+    // Findings without a display number remain after numbered findings.
     if (a.number === null) return b.number === null ? 0 : 1;
     if (b.number === null) return -1;
     return order === 'asc' ? a.number - b.number : b.number - a.number;
-  }), [findings, category, severity, defaultSeverities, status, statuses, filterText, order]);
+  }), [riskFindings, category, severity, defaultSeverities, status, statuses, filterText, order]);
   const severityFiltered = severity === 'default' ? defaultSeverities.length < displaySeverities.length : severity !== 'all';
   const activeFilterCount = [category !== 'all', severityFiltered, status !== 'all', Boolean(filterText.trim())].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
   const selectedFinding = findings.find(finding => finding.id === selected);
   const detail = findings.find(finding => finding.id === detailId);
-  const riskFindings = findings.filter(finding => isRiskSeverity(finding.severity));
   const visibleEvidence = filtered.filter(finding => finding.quoteVerified && isRiskSeverity(finding.severity));
   const reviewed = riskFindings.filter(finding => (statuses[finding.id] ?? finding.status) !== 'unseen').length;
   const reviewPercent = riskFindings.length ? Math.round(reviewed / riskFindings.length * 100) : 0;
@@ -247,7 +246,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     <div className={`document-workspace live-document-workspace ${expanded ? 'reader-expanded' : ''} ${showPages ? '' : 'pages-hidden'} mobile-${mobilePane}`}>
     <div className="mobile-pane-tabs" role="group" aria-label="Панель документа">
       <button aria-pressed={mobilePane === 'document'} className={mobilePane === 'document' ? 'active' : ''} onClick={() => setMobilePane('document')}><FileSearch size={16} />Документ</button>
-      <button aria-pressed={mobilePane === 'findings' && tab !== 'assistant'} className={mobilePane === 'findings' && tab !== 'assistant' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{findings.length}</span></button>
+      <button aria-pressed={mobilePane === 'findings' && tab !== 'assistant'} className={mobilePane === 'findings' && tab !== 'assistant' ? 'active' : ''} onClick={returnToFindings}><List size={16} />Результаты <span>{riskFindings.length}</span></button>
       <button aria-pressed={mobilePane === 'findings' && tab === 'assistant'} className={mobilePane === 'findings' && tab === 'assistant' ? 'active' : ''} onClick={openAssistant}><MessageSquare size={16} />Помощник</button>
     </div>
 
@@ -330,7 +329,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     </section>
 
     <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
-      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} data-onboarding={item.id === 'rules' ? undefined : `document-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{findings.length}</span>}</button>)}</div>
+      <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} data-onboarding={item.id === 'rules' ? undefined : `document-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{riskFindings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
         <div className="filters">
           <CustomSelect
@@ -364,18 +363,17 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
               { value: 'critical', label: 'Критические' },
               { value: 'warning', label: 'Внимание' },
               { value: 'low', label: 'Низкий риск' },
-              { value: 'ok', label: 'Без замечаний' },
             ]}
           />
           <button type="button" ref={searchToggleRef} className={`icon-button ${searchVisible ? 'is-active' : ''}`} aria-label={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} title={searchVisible ? 'Закрыть поиск замечаний' : 'Поиск замечаний'} aria-expanded={searchVisible} aria-controls={searchVisible ? 'finding-search' : undefined} onClick={() => searchVisible ? closeSearch() : setSearchVisible(true)}><Search size={18} /></button>
         </div>
         {searchVisible && <div id="finding-search" className="finding-search field-search" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeSearch(); } }}><Search size={16} /><input autoFocus placeholder="Название, описание или цитата" aria-label="Поиск замечаний" value={filterText} onChange={event => setFilterText(event.target.value)} /><IconButton label="Очистить поиск замечаний" disabled={!filterText} onClick={() => setFilterText('')}><X size={15} /></IconButton></div>}
-        <div className="filter-summary"><span role="status" aria-live="polite">Результаты: <strong>{filtered.length}</strong> из {findings.length}</span>{hasFilters ? <button onClick={resetFilters}><RotateCcw size={13} />Сбросить фильтры <span className="filter-count">{activeFilterCount}</span></button> : <span className="filter-summary-note">По уровню риска</span>}</div>
+        <div className="filter-summary"><span role="status" aria-live="polite">Результаты: <strong>{filtered.length}</strong> из {riskFindings.length}</span>{hasFilters ? <button onClick={resetFilters}><RotateCcw size={13} />Сбросить фильтры <span className="filter-count">{activeFilterCount}</span></button> : <span className="filter-summary-note">По уровню риска</span>}</div>
         <div className="findings-scroll">
           <table className="findings-table">
             <colgroup><col className="col-number" /><col /><col className="col-clause" /><col className="col-page" /><col className="col-status" /><col className="col-more" /></colgroup>
             <thead><tr><th aria-sort={order === 'asc' ? 'ascending' : 'descending'}><button aria-label={`Номера внутри групп: ${order === 'asc' ? 'по возрастанию' : 'по убыванию'}. Изменить порядок`} onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}>№ <span>{order === 'asc' ? '↑' : '↓'}</span></button></th><th>Замечание</th><th>Пункт</th><th>Стр.</th><th>Статус проверки</th><th aria-label="Действия" /></tr></thead>
-            {severityOrder.map(level => {
+            {displaySeverities.map(level => {
               const group = filtered.filter(finding => finding.severity === level);
               if (!group.length) return null;
               const isCollapsed = collapsed.includes(level);
@@ -404,7 +402,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
               </tbody>;
             })}
           </table>
-          {!filtered.length && <div className="empty-state"><FileSearch size={30} /><h3>{findings.length === 0 ? 'Нет результатов по выбранным правилам' : 'Замечаний не найдено'}</h3><p>{findings.length === 0 ? 'Нет результатов для отображения. Можно изменить набор правил и повторить проверку.' : 'Попробуйте изменить условия фильтра.'}</p>{findings.length === 0 ? <button className="secondary-button" onClick={onManageRules}>Управление правилами</button> : hasFilters && <button className="secondary-button" onClick={resetFilters}>Сбросить фильтры</button>}</div>}
+          {!filtered.length && <div className="empty-state"><FileSearch size={30} /><h3>{findings.length === 0 ? 'Нет результатов по выбранным правилам' : riskFindings.length === 0 ? 'Замечаний не выявлено' : 'Замечаний не найдено'}</h3><p>{findings.length === 0 ? 'Нет результатов для отображения. Можно изменить набор правил и повторить проверку.' : riskFindings.length === 0 ? 'По завершённым проверкам замечаний нет.' : 'Попробуйте изменить условия фильтра.'}</p>{findings.length === 0 ? <button className="secondary-button" onClick={onManageRules}>Управление правилами</button> : riskFindings.length > 0 && hasFilters && <button className="secondary-button" onClick={resetFilters}>Сбросить фильтры</button>}</div>}
         </div>
         <div className="review-footer">
           {riskFindings.length > 0 ? <><span><Eye size={14} />Рассмотрено замечаний <strong>{reviewed} из {riskFindings.length}</strong></span><div className="review-progress-wrap"><div className="review-progress" role="progressbar" aria-label="Прогресс рассмотрения замечаний" aria-valuetext={`${reviewed} из ${riskFindings.length}, ${reviewPercent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewPercent}><i style={{ width: `${reviewPercent}%` }} /></div><span>{reviewPercent}%</span></div></>
