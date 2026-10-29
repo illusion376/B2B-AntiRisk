@@ -161,14 +161,15 @@ def test_csv_formula_injection_is_neutralized():
     assert csv_cell(5) == 5
 
 
-def _collected_report(status="COMPLETED", include_dismissed=False, with_findings=False):
+def _collected_report(status="COMPLETED", include_dismissed=False, with_findings=False,
+                      severity="RED", review_status="DISMISSED"):
     analysis = Analysis(id=uuid.uuid4(), title="Contract", original_filename="contract.pdf",
                         created_at=datetime.now())
     document = Document(id=uuid.uuid4(), analysis_id=analysis.id, file_name="contract.pdf", status=status,
                         total_pages=1, is_scanned=False, risk_score=99)
-    rule = RiskRule(id="r1", title="Неустойка", category="Штрафы", severity="RED")
-    finding = RiskFinding(id=uuid.uuid4(), document_id=document.id, rule_id=rule.id, severity="RED",
-                          title="Неустойка", comment="Отменённый риск", review_status="DISMISSED",
+    rule = RiskRule(id="r1", title="Неустойка", category="Штрафы", severity=severity)
+    finding = RiskFinding(id=uuid.uuid4(), document_id=document.id, rule_id=rule.id, severity=severity,
+                          title="Неустойка", comment="Условие договора", review_status=review_status,
                           sort_index=0, quote_verified=False, source="HEURISTIC")
     db = MagicMock()
     db.scalars.side_effect = [[document], [finding] if with_findings else [], [rule]]
@@ -192,6 +193,26 @@ def test_report_counts_executed_rules_even_when_all_findings_are_dismissed(inclu
     assert data.light == data.documents[0].light == "GREEN"
     assert data.risk_score == data.documents[0].risk_score == 0
     assert len(data.documents[0].findings) == int(include_dismissed)
+
+
+@pytest.mark.parametrize("include_dismissed", [False, True])
+@pytest.mark.parametrize("review_status,expected_light,expected_score", [
+    ("NEW", "YELLOW", 3),
+    ("CONFIRMED", "YELLOW", 3),
+    ("DISMISSED", "GREEN", 0),
+])
+def test_low_risk_report_status_and_json(include_dismissed, review_status, expected_light, expected_score):
+    data = _collected_report(include_dismissed=include_dismissed, with_findings=True,
+                             severity="LOW", review_status=review_status)
+    report = reports.generate(data, "brief", "json")
+    payload = json.loads(report.path.read_text(encoding="utf-8"))
+
+    assert data.light == data.documents[0].light == expected_light
+    assert data.risk_score == data.documents[0].risk_score == expected_score
+    assert payload["traffic_light"] == payload["documents"][0]["traffic_light"] == expected_light
+    assert payload["risk_score"] == payload["documents"][0]["risk_score"] == expected_score
+    if data.all_findings:
+        assert data.all_findings[0].severity == "LOW"
 
 
 @pytest.mark.parametrize("mode", ["brief", "detailed", "protocol"])
