@@ -5,6 +5,7 @@ from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
+import httpx
 from docx import Document as WordDocument
 from fastapi.testclient import TestClient
 from pgvector.sqlalchemy import Vector
@@ -19,6 +20,7 @@ from app.db import get_db
 from app.main import app
 from app.models import Analysis, Base, Document, DocumentChatMessage, DocumentPage, RiskFinding, RiskRule, User
 from app.services import document_chat
+from app.services.llm import LLMClient
 
 
 @compiles(JSONB, "sqlite")
@@ -34,7 +36,7 @@ def _vector_sqlite(_type, compiler, **kw):
 @pytest.fixture
 def chat(monkeypatch):
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-    state = {"prompts": [], "error": None, "reply": None, "locked": False, "during_reply": None}
+    state = {"prompts": [], "models": [], "error": None, "reply": None, "locked": False, "during_reply": None}
 
     @event.listens_for(engine, "connect")
     def configure(connection, _):
@@ -85,6 +87,7 @@ def chat(monkeypatch):
     class FakeLLM:
         def __init__(self, **kwargs):
             assert kwargs["response_schema"]["additionalProperties"] is False
+            state["models"].append(kwargs["model"])
 
         async def __aenter__(self):
             return self
@@ -120,6 +123,43 @@ def chat(monkeypatch):
     client.close()
     app.dependency_overrides.clear()
     engine.dispose()
+
+
+@pytest.mark.parametrize("model", ["openai/gpt-6-luna", "anthropic/claude-haiku-5-5",
+                                   "deepseek/deepseek-v4-flash", None])
+def test_assistant_sends_saved_analysis_model_to_provider(chat, monkeypatch, model):
+    with Session(chat.engine) as db:
+        document = db.get(Document, chat.document_id)
+        document.analysis_mode = "llm" if model else "keyword"
+        document.llm_model = model
+        db.commit()
+    monkeypatch.setattr(settings, "llm_model", "server-default-model")
+    requests = []
+
+    def provider(request):
+        requests.append(json.loads(request.content))
+        reply = {"answer": "Ответ по документу", "source_ids": [], "draft_title": None, "draft_content": None}
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(reply)}}]})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_client(
+        **kwargs, transport=httpx.MockTransport(provider)))
+    monkeypatch.setattr(document_chat, "LLMClient", LLMClient)
+    response = chat.client.post(chat.url, json={"message": "Объясни результат проверки"})
+    assert response.status_code == 200, response.text
+    assert [request["model"] for request in requests] == [model or "server-default-model"]
+
+
+def test_assistant_model_is_scoped_to_each_document(chat):
+    models = ["deepseek/deepseek-v4-flash", "anthropic/claude-haiku-5-5"]
+    with Session(chat.engine) as db:
+        for document_id, model in zip([chat.document_id, chat.other_doc], models):
+            db.get(Document, document_id).llm_model = model
+        db.commit()
+    for document_id in [chat.document_id, chat.other_doc, chat.document_id]:
+        response = chat.client.post(f"/api/documents/{document_id}/chat", json={"message": "Вопрос"})
+        assert response.status_code == 200, response.text
+    assert chat.state["models"] == [*models, models[0]]
 
 
 def test_turn_uses_server_document_findings_and_preserves_history(chat):
@@ -170,7 +210,9 @@ def test_ownership_and_document_isolation(chat):
 
 
 @pytest.mark.parametrize("payload", [{"message": " "}, {"message": "a" * 4001}, {"message": "Вопрос", "history": []},
-                                     {"message": "Вопрос", "context": "fake"}, {"message": "Вопрос", "mode": "edit-file"}])
+                                     {"message": "Вопрос", "context": "fake"}, {"message": "Вопрос", "mode": "edit-file"},
+                                     {"message": "Вопрос", "model": "client-model"},
+                                     {"message": "Вопрос", "llm_model": "client-model"}])
 def test_client_cannot_supply_context_or_unbounded_requests(chat, payload):
     assert chat.client.post(chat.url, json=payload).status_code == 422
     assert not chat.state["prompts"]
@@ -184,11 +226,15 @@ def test_unconfigured_provider_is_explicit_and_history_remains_readable(chat, mo
 
 
 def test_provider_failure_does_not_save_half_a_turn_or_expose_secrets(chat):
+    with Session(chat.engine) as db:
+        db.get(Document, chat.document_id).llm_model = "deepseek/deepseek-v4-flash"
+        db.commit()
     chat.state["error"] = RuntimeError("SECRET and sensitive contract")
     result = chat.client.post(chat.url, json={"message": "Вопрос"})
     assert result.status_code == 502
     assert "SECRET" not in result.text
     assert chat.client.get(chat.url).json()["messages"] == []
+    assert chat.state["models"] == ["deepseek/deepseek-v4-flash"]
 
 
 @pytest.mark.parametrize("reply", [
@@ -210,14 +256,19 @@ def test_concurrent_turn_is_rejected_before_provider_call(chat):
 
 
 def test_new_analysis_does_not_reuse_old_conversation(chat):
+    with Session(chat.engine) as db:
+        db.get(Document, chat.document_id).llm_model = "deepseek/deepseek-v4-flash"
+        db.commit()
     chat.client.post(chat.url, json={"message": "Старый вопрос"})
     with Session(chat.engine) as db:
         document = db.get(Document, chat.document_id)
         document.chat_revision = uuid.uuid4()
+        document.llm_model = "anthropic/claude-haiku-5-5"
         db.commit()
     assert chat.client.get(chat.url).json()["messages"] == []
     assert chat.client.post(chat.url, json={"message": "Новый вопрос"}).status_code == 200
     assert chat.state["prompts"][-1]["history"] == []
+    assert chat.state["models"] == ["deepseek/deepseek-v4-flash", "anthropic/claude-haiku-5-5"]
 
 
 def test_rename_and_review_keep_the_conversation(chat):
