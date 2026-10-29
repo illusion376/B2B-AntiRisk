@@ -23,14 +23,14 @@ def risk_score(severities: Iterable[str]) -> int | None:
 
 
 def traffic_light(severities: Iterable[str]) -> str:
-    """Зелёный — только без рисков; LOW требует внимания и даёт жёлтый итог.
+    """Низкий риск LOW допускает зелёный итог; YELLOW и RED повышают его цвет.
 
-    Подтверждённый риск виден и при неполной оценке; UNKNOWN не становится зелёным.
+    RED и YELLOW видны и при неполной оценке; UNKNOWN не становится зелёным.
     """
     values = set(severities)
     if "RED" in values:
         return "RED"
-    if "YELLOW" in values or "LOW" in values:
+    if "YELLOW" in values:
         return "YELLOW"
     if "UNKNOWN" in values:
         return "UNKNOWN"
