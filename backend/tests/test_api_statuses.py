@@ -62,6 +62,39 @@ def test_document_score_uses_visible_findings_after_rule_disabled():
     assert document.risk_score == 99  # сборка ответа не изменяет сохранённый результат
 
 
+@pytest.mark.parametrize("counts,expected_score,expected_light", [
+    (SeverityCounts(low=1), 3, "warning"),
+    (SeverityCounts(low=1, ok=1), 3, "warning"),
+    (SeverityCounts(low=1, unknown=1), None, "warning"),
+    (SeverityCounts(low=1, critical=1), 32, "critical"),
+])
+def test_document_low_risk_never_produces_green(counts, expected_score, expected_light):
+    result = deps.document_out(make_document(uuid.uuid4()), (counts, 2))
+
+    assert result.traffic_light == expected_light
+    assert result.risk_score == expected_score
+    assert result.counts.low == 1
+
+
+def test_low_risk_is_visible_in_analysis_file_and_project(monkeypatch):
+    project = Project(id=uuid.uuid4(), title="Test", description="", created_at=NOW, updated_at=NOW)
+    analysis = make_analysis(project.id)
+    document = make_document(analysis.id)
+    counts = SeverityCounts(low=1)
+    mock_counts(monkeypatch, {analysis.id: (counts, 1)}, {document.id: (counts, 1)})
+    db = MagicMock()
+    db.scalars.side_effect = [[analysis], [document], [document]]
+
+    result = deps.projects_out(db, [project])[0]
+    analysis_result = deps.analyses_out(db, [analysis])[0]
+    file = result.files[0]
+
+    assert result.traffic_light == file.traffic_light == analysis_result.traffic_light == "warning"
+    assert file.documents[0].traffic_light == "warning"
+    assert file.risk_score == file.documents[0].risk_score == analysis_result.risk_score == 3
+    assert result.counts.low == file.counts.low == analysis_result.counts.low == 1
+
+
 @pytest.mark.parametrize("critical,expected_light", [(0, "unknown"), (1, "critical")])
 def test_incomplete_checks_never_produce_green_or_numeric_score(critical, expected_light):
     result = deps.document_out(make_document(uuid.uuid4()),
