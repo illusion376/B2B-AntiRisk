@@ -10,7 +10,7 @@ Next.js 16, React 19 и TypeScript. Production-сборка экспортиру
 
 Нужны Node.js **20.9+**, доступный backend и работающие PostgreSQL, Redis и worker.
 Для разработки интерфейса можно запустить серверную часть из корня репозитория,
-предварительно настроив `.env` по [инструкции запуска](../README.md#запуск):
+предварительно настроив `.env` по [инструкции запуска](../README.md#быстрый-старт):
 
 ```bash
 docker compose up -d --build backend worker
