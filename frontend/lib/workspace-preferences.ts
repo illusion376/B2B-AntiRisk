@@ -1,7 +1,8 @@
 import type { AnalysisSensitivity, Severity } from './types';
+import { isRiskSeverity } from './labels';
 
 export const preferenceKey = 'b2b-antirisk.workspace-preferences.v1';
-export const displaySeverities = ['critical', 'warning', 'low', 'ok'] as const;
+export const displaySeverities = ['critical', 'warning', 'low'] as const;
 export type DisplaySeverity = typeof displaySeverities[number];
 export type NoticeKind = 'completed' | 'error' | 'critical';
 export interface WorkspacePreferences {
@@ -45,5 +46,6 @@ export function parsePreferences(raw: string | null): WorkspacePreferences {
 }
 
 export function matchesSeverity(severity: Severity, filter: string, defaults: readonly DisplaySeverity[]): boolean {
-  return filter === 'all' || (filter === 'default' ? defaults.some(value => value === severity) : severity === filter);
+  return isRiskSeverity(severity)
+    && (filter === 'all' || (filter === 'default' ? defaults.some(value => value === severity) : severity === filter));
 }
