@@ -14,7 +14,7 @@ PROVIDERS = {
 # Only these three models can be selected for a new analysis.
 # IDs are from https://proxyapi.ru/models/browse/text, not display names sent to the API.
 FEATURED = {
-    "openai/gpt-6-luna": ("GPT-6 luna", "Сбалансированная проверка договоров"),
+    "openai/gpt-6-luna": ("GPT-6 Luna", "Сбалансированная проверка договоров"),
     "anthropic/claude-haiku-5-5": ("Claude Haiku 5.5", "Более точная проверка договоров"),
     "deepseek/deepseek-v4-flash": ("DeepSeek V4 Flash", "Детальная проверка договоров"),
 }
