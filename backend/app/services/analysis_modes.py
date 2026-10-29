@@ -34,7 +34,7 @@ def resolve_analysis_mode(requested: str | None = None) -> AnalysisMode:
     if mode == "llm" and not _llm_available():
         raise AnalysisModeError(
             "analysis_mode_unavailable",
-            "LLM недоступна: настройте LLM_API_KEY от ProxyAPI, LLM_BASE_URL и LLM_MODEL на сервере.",
+            "LLM недоступна: настройте LLM_API_KEY от ProxyAPI и LLM_BASE_URL на сервере.",
             mode,
         )
     return mode
@@ -53,7 +53,7 @@ def capabilities() -> AnalysisModesOut:
         AnalysisModeOut(id="llm", label="LLM · ProxyAPI", available=_llm_available(),
                         description=("Анализ условий документа языковой моделью через серверный API."
                                      if _llm_available() else
-                                     "Для анализа настройте LLM_API_KEY от ProxyAPI, LLM_BASE_URL и LLM_MODEL на сервере.")),
+                                     "Для анализа настройте LLM_API_KEY от ProxyAPI и LLM_BASE_URL на сервере.")),
         AnalysisModeOut(id="keyword", label="Ключевые слова", available=True,
                         description="Предварительный поиск совпадений по словам. Не определяет наличие нарушения."),
     ]
