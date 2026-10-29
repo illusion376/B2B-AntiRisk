@@ -51,6 +51,7 @@ Markdown-таблиц и ссылок. При нехватке данных об
 class ChatContext:
     data: dict
     sources: dict[str, ChatSource]
+    model: str | None = None
 
 
 def context_version(document: Document) -> str:
@@ -167,7 +168,7 @@ def build_context(db: Session, document: Document, user: User, findings: list[Ri
         "findings": items, "findings_truncated": len(items) < len(eligible),
         "document_passages": passages, "document_truncated": truncated,
         "sources": [s.model_dump(mode="json") for s in sources.values()],
-    }, sources=sources)
+    }, sources=sources, model=document.llm_model)
 
 
 def history_data(messages: list[DocumentChatMessage]) -> tuple[list[dict], dict | None]:
@@ -188,7 +189,7 @@ async def answer(context: ChatContext, request: ChatRequest, messages: list[Docu
     history, latest_draft = history_data(messages)
     payload = {"server_context": context.data, "history": history, "latest_draft": latest_draft,
                "question": request.message, "mode": request.mode}
-    async with LLMClient(response_schema=AssistantReply.model_json_schema()) as client:
+    async with LLMClient(response_schema=AssistantReply.model_json_schema(), model=context.model) as client:
         try:
             result = await client.complete_json(SYSTEM_PROMPT, json.dumps(payload, ensure_ascii=False))
         except (TimeoutError, httpx.TimeoutException):
