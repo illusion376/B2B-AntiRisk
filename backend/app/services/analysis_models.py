@@ -14,9 +14,9 @@ PROVIDERS = {
 # Only these three models can be selected for a new analysis.
 # IDs are from https://proxyapi.ru/models/browse/text, not display names sent to the API.
 FEATURED = {
-    "openai/gpt-4.1-mini": ("GPT-4.1 mini", "Сбалансированная проверка договоров"),
-    "anthropic/claude-sonnet-4-5": ("Claude Sonnet 4.5", "Анализ содержания и формулировок"),
-    "deepseek/deepseek-v4-flash": ("DeepSeek V4 Flash", "Анализ текста и логики условий"),
+    "openai/gpt-6-luna": ("GPT-6 luna", "Сбалансированная проверка договоров"),
+    "anthropic/claude-haiku-5-5": ("Claude Haiku 5.5", "Более точная проверка договоров"),
+    "deepseek/deepseek-v4-flash": ("DeepSeek V4 Flash", "Детальная проверка договоров"),
 }
 _cache: dict[tuple, tuple[float, AnalysisModelsOut]] = {}
 _lock = Lock()
@@ -24,7 +24,7 @@ _lock = Lock()
 
 def _default_model() -> str:
     configured = settings.llm_model.strip()
-    return configured if configured in FEATURED else "openai/gpt-4.1-mini"
+    return configured if configured in FEATURED else "openai/gpt-6-luna"
 
 
 def _option(model_id: str, *, available: bool) -> AnalysisModelOut:
@@ -32,7 +32,7 @@ def _option(model_id: str, *, available: bool) -> AnalysisModelOut:
     label, description = FEATURED[model_id]
     return AnalysisModelOut(id=model_id, label=label, provider=PROVIDERS[vendor], provider_id=vendor,
                             description=description, available=available,
-                            recommended=model_id == "openai/gpt-4.1-mini")
+                            recommended=model_id == "openai/gpt-6-luna")
 
 
 def model_catalog() -> AnalysisModelsOut:
