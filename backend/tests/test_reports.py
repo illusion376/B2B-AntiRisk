@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pymupdf
 import pytest
 from docx import Document as DocxDocument
+from docx.oxml.ns import qn
 
 from app.models import Analysis, Document, RiskFinding, RiskRule, User
 from app.services import reports
@@ -68,11 +69,18 @@ def test_docx_modes(contract_pdf, tmp_path, mode):
 
 
 @pytest.mark.parametrize("mode", ["brief", "detailed"])
-def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode):
+@pytest.mark.parametrize("only_low", [False, True])
+def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode, only_low):
     data = _data(contract_pdf)
+    if only_low:
+        data.documents[0].findings = [f for f in data.documents[0].findings if f.severity == "LOW"]
+        data.documents[0].light = "GREEN"
+        data.documents[0].risk_score = 3
     docx = DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}.docx"))
     summary = docx.tables[1].rows[0].cells
-    assert [c.text for c in summary] == ["Критичных: 1", "Требуют внимания: 1, низкий риск: 1"]
+    higher = 0 if only_low else 1
+    assert [c.text for c in summary] == [f"Критичных: {higher}", f"Требуют внимания: {higher}", "Низкий риск: 1"]
+    assert summary[2]._tc.tcPr.find(qn("w:shd")).get(qn("w:fill")) == "E8F5E9"
     text = "\n".join(p.text for p in docx.paragraphs)
     cells = "\n".join(c.text for t in docx.tables for r in t.rows for c in r.cells)
     assert "Светофор" not in text + cells and "Индекс риска" not in text + cells
@@ -197,8 +205,8 @@ def test_report_counts_executed_rules_even_when_all_findings_are_dismissed(inclu
 
 @pytest.mark.parametrize("include_dismissed", [False, True])
 @pytest.mark.parametrize("review_status,expected_light,expected_score", [
-    ("NEW", "YELLOW", 3),
-    ("CONFIRMED", "YELLOW", 3),
+    ("NEW", "GREEN", 3),
+    ("CONFIRMED", "GREEN", 3),
     ("DISMISSED", "GREEN", 0),
 ])
 def test_low_risk_report_status_and_json(include_dismissed, review_status, expected_light, expected_score):

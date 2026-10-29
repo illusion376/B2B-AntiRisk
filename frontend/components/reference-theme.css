@@ -8,7 +8,7 @@
     linear-gradient(120deg,#f3f7fa,#fafbfd 65%,#f4f6fa);
 }
 .dashboard-canvas::after { content: ''; position: absolute; inset: auto 0 0; height: clamp(180px,33.333%,420px); background: url('/workspace-waves.svg') center bottom / 100% 100% no-repeat; pointer-events: none; }
-.dashboard-canvas .dashboard-shell.app-shell { --nav-width: 264px; --dash-line: #e8ecf2; --line: #e8ecf2; --surface: #fff; grid-template-columns: var(--nav-width) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) 40px; background: transparent; color: #171b23; }
+.dashboard-canvas .dashboard-shell.app-shell { --nav-width: 264px; --dash-line: #e8ecf2; --line: #e8ecf2; --surface: #fff; grid-template-columns: var(--nav-width) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); background: transparent; color: #171b23; }
 
 /* The navigation floats above the background, including its compact footer. */
 .dashboard-shell .dashboard-sidebar {
@@ -129,7 +129,6 @@
 .dashboard-shell .dashboard-table-footer nav > span { background: linear-gradient(145deg,#3b444f,#1b242e); box-shadow: 0 3px 7px #27374714; }
 .dashboard-shell .dashboard-search-result { margin: 0 0 16px; font-size: 12px; }
 .dashboard-shell .dashboard-empty { min-height: 230px; }
-.dashboard-shell .statusbar { height: 26px; padding: 0 24px; background: transparent; border: 0; color: #748296; font-size: 8px; font-weight: 400; }
 .dashboard-shell .settings-grid { gap: 18px; }
 .dashboard-shell .settings-card { padding: 22px; background: #fffffff0; border: 1px solid #e7eaf1; border-radius: 15px; box-shadow: 0 7px 26px #77829c05; }
 .dashboard-shell .settings-card-heading h2 { font-size: 15px; font-weight: 600; color: #273041; }
@@ -393,7 +392,6 @@
   .dashboard-shell.analysis-shell .mobile-pane-tabs button { border-radius: 8px; }
   .dashboard-shell.analysis-shell .mobile-pane-tabs button.active { color: #d51e34; background: #fff0f3; border-color: #f2ccd4; }
   .dashboard-shell .modal { width: calc(100vw - 28px); max-height: 90dvh; padding: 20px; border-radius: 15px; }
-  .dashboard-shell .statusbar { padding: 0 16px; font-size: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-shell .dashboard-sidebar { transition: none; }

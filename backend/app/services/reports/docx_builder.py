@@ -155,9 +155,8 @@ def _summary(doc, data: ReportData) -> None:
     findings = [f for f in data.all_findings if f.review_status != "DISMISSED"]
     values = [
         (f"Критичных: {sum(f.severity == 'RED' for f in findings)}", SEVERITY_FILL["RED"]),
-        (f"Требуют внимания: {sum(f.severity == 'YELLOW' for f in findings)}"
-         + (f", низкий риск: {low}" if (low := sum(f.severity == 'LOW' for f in findings)) else ""),
-         SEVERITY_FILL["YELLOW"]),
+        (f"Требуют внимания: {sum(f.severity == 'YELLOW' for f in findings)}", SEVERITY_FILL["YELLOW"]),
+        (f"Низкий риск: {sum(f.severity == 'LOW' for f in findings)}", SEVERITY_FILL["LOW"]),
     ]
     table = doc.add_table(rows=1, cols=len(values))
     table.style = "Table Grid"
