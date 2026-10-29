@@ -63,12 +63,14 @@ def test_document_score_uses_visible_findings_after_rule_disabled():
 
 
 @pytest.mark.parametrize("counts,expected_score,expected_light", [
-    (SeverityCounts(low=1), 3, "warning"),
-    (SeverityCounts(low=1, ok=1), 3, "warning"),
-    (SeverityCounts(low=1, unknown=1), None, "warning"),
+    (SeverityCounts(low=1), 3, "ok"),
+    (SeverityCounts(low=1, ok=1), 3, "ok"),
+    (SeverityCounts(low=1, unknown=1), None, "unknown"),
+    (SeverityCounts(low=1, warning=1), 13, "warning"),
+    (SeverityCounts(low=1, warning=1, unknown=1), None, "warning"),
     (SeverityCounts(low=1, critical=1), 32, "critical"),
 ])
-def test_document_low_risk_never_produces_green(counts, expected_score, expected_light):
+def test_document_low_risk_uses_green_without_hiding_higher_risks_or_incomplete_checks(counts, expected_score, expected_light):
     result = deps.document_out(make_document(uuid.uuid4()), (counts, 2))
 
     assert result.traffic_light == expected_light
@@ -89,8 +91,8 @@ def test_low_risk_is_visible_in_analysis_file_and_project(monkeypatch):
     analysis_result = deps.analyses_out(db, [analysis])[0]
     file = result.files[0]
 
-    assert result.traffic_light == file.traffic_light == analysis_result.traffic_light == "warning"
-    assert file.documents[0].traffic_light == "warning"
+    assert result.traffic_light == file.traffic_light == analysis_result.traffic_light == "ok"
+    assert file.documents[0].traffic_light == "ok"
     assert file.risk_score == file.documents[0].risk_score == analysis_result.risk_score == 3
     assert result.counts.low == file.counts.low == analysis_result.counts.low == 1
 
