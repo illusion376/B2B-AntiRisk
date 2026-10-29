@@ -76,7 +76,7 @@ def _json_payload(data: ReportData, mode: str) -> dict:
     def finding(f):
         return {k: v for k, v in f.__dict__.items() if k != "highlights"} | {"highlights": f.highlights}
 
-    return {
+    payload = {
         "mode": mode,
         "analysis_id": str(data.analysis_id),
         "title": data.title,
@@ -97,6 +97,13 @@ def _json_payload(data: ReportData, mode: str) -> dict:
             for d in data.documents
         ],
     }
+    if data.target_document:
+        payload["target_document"] = {
+            "id": str(data.target_document.id),
+            "file_name": data.target_document.file_name,
+            "relative_path": data.target_document.relative_path,
+        }
+    return payload
 
 
 # Начало ячейки, которое Excel воспримет как формулу (в т. ч. за пробелами и управляющими символами)
@@ -124,6 +131,10 @@ def _write_csv(data: ReportData, mode: str, path: Path) -> None:
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = _SafeCsvWriter(f)
         writer.writerow(["Пакет", data.title])
+        if data.target_document:
+            writer.writerow(["Проверенный файл", data.target_document.relative_path or data.target_document.file_name])
+            if data.target_document.file_name != data.original_filename:
+                writer.writerow(["Исходный архив", data.original_filename])
         writer.writerow(["Режим", MODE_IDS[mode].title])
         writer.writerow(["Подготовил", data.author or "—"])
         writer.writerow(["Компания", data.company or "—"])
@@ -152,7 +163,11 @@ def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
         raise ReportError("Нет документов для отчёта")
 
     out_dir = storage.subdir(data.analysis_id, "reports")
-    base = f"{_slug(data.title)}_{mode}"
+    if data.target_document:
+        doc_stem = Path(data.target_document.file_name).stem
+        base = f"{_slug(doc_stem)}_{mode}"
+    else:
+        base = f"{_slug(data.title)}_{mode}"
     target = out_dir / f"{uuid.uuid4().hex}"
 
     if mode == "annotated":
