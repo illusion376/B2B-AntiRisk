@@ -6,7 +6,8 @@ def risk_score(severities: Iterable[str]) -> int | None:
     """Насыщающаяся шкала: каждое красное замечание «съедает» 30% оставшегося запаса, жёлтое — 10%,
     низкий риск — 3%.
 
-    0 красных и 0 жёлтых -> 0; 1 красное -> 30; 3 красных + 5 жёлтых -> 80; дальше растёт медленно к 100.
+    Без рисков -> 0; 1 низкий риск -> 3; 1 красное -> 30; 3 красных + 5 жёлтых -> 80;
+    дальше растёт медленно к 100.
     """
     safe = 1.0
     for severity in severities:
@@ -22,11 +23,14 @@ def risk_score(severities: Iterable[str]) -> int | None:
 
 
 def traffic_light(severities: Iterable[str]) -> str:
-    """Подтверждённый риск виден и при неполной оценке; UNKNOWN не становится зелёным."""
+    """Зелёный — только без рисков; LOW требует внимания и даёт жёлтый итог.
+
+    Подтверждённый риск виден и при неполной оценке; UNKNOWN не становится зелёным.
+    """
     values = set(severities)
     if "RED" in values:
         return "RED"
-    if "YELLOW" in values:
+    if "YELLOW" in values or "LOW" in values:
         return "YELLOW"
     if "UNKNOWN" in values:
         return "UNKNOWN"

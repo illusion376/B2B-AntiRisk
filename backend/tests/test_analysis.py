@@ -1,5 +1,7 @@
 import uuid
 
+import pytest
+
 from app.models import RiskRule
 from app.services.analyzer import RuleContext, _build_drafts, evaluate_heuristic
 from app.services.embeddings import _hash_embedding
@@ -99,14 +101,25 @@ def test_hash_embedding_similarity():
     assert a @ b > a @ c
 
 
-def test_scoring():
-    assert risk_score([]) == 0
-    assert risk_score(["RED"]) == 30
-    assert risk_score(["RED"] * 3 + ["YELLOW"] * 5 + ["GREEN"] * 12) == 80
-    assert risk_score(["LOW"]) == 3
-    assert traffic_light(["LOW", "GREEN"]) == "GREEN"  # низкий риск светофор не окрашивает
-    assert traffic_light(["GREEN", "YELLOW"]) == "YELLOW"
-    assert traffic_light(["GREEN"]) == "GREEN"
+@pytest.mark.parametrize("severities,expected_score,expected_light", [
+    ([], 0, "GREEN"),
+    (["GREEN"], 0, "GREEN"),
+    (["LOW"], 3, "YELLOW"),
+    (["LOW", "GREEN"], 3, "YELLOW"),
+    (["LOW", "LOW"], 6, "YELLOW"),
+    (["GREEN", "YELLOW"], 10, "YELLOW"),
+    (["LOW", "YELLOW"], 13, "YELLOW"),
+    (["RED"], 30, "RED"),
+    (["LOW", "RED"], 32, "RED"),
+    (["RED"] * 3 + ["YELLOW"] * 5 + ["GREEN"] * 12, 80, "RED"),
+    (["UNKNOWN", "GREEN"], None, "UNKNOWN"),
+    (["LOW", "UNKNOWN"], None, "YELLOW"),
+    (["YELLOW", "UNKNOWN"], None, "YELLOW"),
+    (["RED", "LOW", "UNKNOWN"], None, "RED"),
+])
+def test_scoring(severities, expected_score, expected_light):
+    assert risk_score(iter(severities)) == expected_score
+    assert traffic_light(iter(severities)) == expected_light
 
 
 def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):

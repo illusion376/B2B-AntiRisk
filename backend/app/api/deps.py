@@ -116,7 +116,7 @@ def light(counts: SeverityCounts, finished: bool, rules_checked: int) -> str | N
     if not finished or not _has_results(counts, rules_checked):
         return None
     return SEVERITY_TO_API[traffic_light(["RED"] * counts.critical + ["YELLOW"] * counts.warning
-                                       + ["UNKNOWN"] * counts.unknown)]
+                                       + ["LOW"] * counts.low + ["UNKNOWN"] * counts.unknown)]
 
 
 # ---------- сборка ответов ----------
