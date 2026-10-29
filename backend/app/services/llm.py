@@ -1,4 +1,3 @@
-"""Клиент ProxyAPI chat/completions. Использует HTTP без SDK и локальных моделей."""
 import json
 import logging
 import re
@@ -51,7 +50,6 @@ def parse_json_response(content: str) -> dict:
     try:
         value = json.loads(content, object_pairs_hook=_unique_object, parse_constant=_reject_nonfinite)
     except (json.JSONDecodeError, ValueError) as exc:
-        # Contract text can be sensitive. Do not include response bodies in errors or logs.
         raise LLMError("Модель вернула некорректный JSON") from exc
     if not isinstance(value, dict):
         raise LLMError("Ожидался JSON-объект")
@@ -72,7 +70,6 @@ def _reject_nonfinite(value: str) -> None:
 
 
 def _is_reasoning_model(model: str) -> bool:
-    # Accept direct OpenAI names and provider-prefixed IDs (ProxyAPI/OpenRouter).
     name = model.rsplit("/", 1)[-1].lower()
     return re.match(r"^(?:gpt-(?:[5-9]|\d{2,})|o[134])(?:[.\-:]|$)", name) is not None
 
@@ -121,8 +118,6 @@ class LLMClient:
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         if _is_reasoning_model(model):
-            # GPT-5/o-series reject max_tokens and non-default temperature values.
-            # This budget includes both reasoning and the visible JSON answer.
             payload["max_completion_tokens"] = settings.llm_max_tokens
             payload["reasoning_effort"] = settings.llm_reasoning_effort
         else:
@@ -140,9 +135,6 @@ class LLMClient:
         if response.status_code == 400 and requested_format and any(
             parameter in response.text.lower() for parameter in ("response_format", "json_schema")
         ):
-            # Older compatible providers may only support JSON mode or prompt-based JSON.
-            # The analyzer still validates the result and every quote locally.
-            # Decide from this request: several rules may be negotiating concurrently.
             if requested_format == "json_schema":
                 log.warning("LLM provider rejected JSON schema, falling back to JSON object mode")
                 self._response_schema = None
@@ -159,7 +151,6 @@ class LLMClient:
         try:
             data = response.json()
             choice = data["choices"][0]
-            # Even a syntactically valid prefix cannot be trusted after token truncation.
             if choice.get("finish_reason") == "length":
                 raise LLMOutputLimitError("LLM исчерпала лимит ответа; увеличьте LLM_MAX_TOKENS")
             if choice.get("finish_reason") not in (None, "stop"):

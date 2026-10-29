@@ -1,4 +1,3 @@
-"""ORM-модели. Таблицы создаются SQL-скриптами (db/init-db.sql + db/migrations), не SQLAlchemy."""
 import uuid
 from datetime import datetime
 
