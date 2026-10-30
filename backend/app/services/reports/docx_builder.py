@@ -130,12 +130,14 @@ def _header(doc, data: ReportData, title: str) -> None:
         )
         if is_from_archive:
             rows.append(("Исходный архив", data.original_filename))
-        if data.title and data.title != doc_display_name and data.title != data.original_filename:
-            rows.append(("Пакет документов", data.title))
     else:
-        rows.append(("Пакет документов", data.title))
-        rows.append(("Исходный файл", data.original_filename))
-        rows.append(("Документов в отчёте", str(len(data.documents))))
+        is_archive = bool(
+            data.original_filename.lower().endswith((".zip", ".tar", ".gz", ".7z", ".rar"))
+            or len(data.documents) > 1
+        )
+        rows.append(("Исходный архив" if is_archive else "Исходный файл", data.original_filename))
+        if len(data.documents) > 1:
+            rows.append(("Документов в отчёте", str(len(data.documents))))
 
     rows.extend([
         ("Дата загрузки", data.created_at.strftime("%d.%m.%Y %H:%M") if data.created_at else "—"),

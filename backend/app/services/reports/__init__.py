@@ -130,11 +130,21 @@ def _write_csv(data: ReportData, mode: str, path: Path) -> None:
     """Таблица как у CSV-отчёта фронтенда: UTF-8 с BOM и «;» — открывается в Excel без настройки."""
     with open(path, "w", encoding="utf-8-sig", newline="") as f:
         writer = _SafeCsvWriter(f)
-        writer.writerow(["Пакет", data.title])
         if data.target_document:
             writer.writerow(["Проверенный файл", data.target_document.relative_path or data.target_document.file_name])
-            if data.target_document.file_name != data.original_filename:
+            if (
+                data.original_filename.lower().endswith((".zip", ".tar", ".gz", ".7z", ".rar"))
+                or data.target_document.file_name != data.original_filename
+            ):
                 writer.writerow(["Исходный архив", data.original_filename])
+        else:
+            is_archive = bool(
+                data.original_filename.lower().endswith((".zip", ".tar", ".gz", ".7z", ".rar"))
+                or len(data.documents) > 1
+            )
+            writer.writerow(["Исходный архив" if is_archive else "Исходный файл", data.original_filename])
+            if len(data.documents) > 1:
+                writer.writerow(["Документов в отчёте", len(data.documents)])
         writer.writerow(["Режим", MODE_IDS[mode].title])
         writer.writerow(["Подготовил", data.author or "—"])
         writer.writerow(["Компания", data.company or "—"])
