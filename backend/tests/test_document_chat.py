@@ -345,3 +345,24 @@ def test_short_document_is_complete_and_long_document_retrieves_distant_passage(
     assert sum(len(p["text"]) for p in passages) <= 8000
     passages, _ = document_chat.select_passages(pages, "Объясни на странице 99", 100, budget=12000)
     assert {99, 100}.issubset({p["page"] for p in passages})
+
+
+@pytest.mark.parametrize("mode", ["question", "report", "protocol"])
+def test_off_topic_refusal_is_saved_without_sources_or_draft(chat, mode):
+    chat.state["reply"] = {
+        "answer": document_chat.OFF_TOPIC_ANSWER, "source_ids": [],
+        "draft_title": None, "draft_content": None,
+    }
+    response = chat.client.post(chat.url, json={
+        "message": "Реши мне уравнение 2x - 50 = 3x - 67",
+        "finding_id": str(chat.finding_id), "mode": mode,
+    })
+    assert response.status_code == 200
+    reply = response.json()["messages"][1]
+    assert reply["content"] == document_chat.OFF_TOPIC_ANSWER
+    assert reply["sources"] == []
+    assert reply["draft_title"] is None
+    assert reply["draft_content"] is None
+    assert len(chat.client.get(chat.url).json()["messages"]) == 2
+    chat.state["reply"] = None
+    assert chat.client.post(chat.url, json={"message": "Как исправить штраф в пункте 6.2?"}).status_code == 200
