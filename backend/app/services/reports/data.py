@@ -84,6 +84,17 @@ class ReportData:
     rules_checked: int
     documents: list[ReportDocument]
     rules: list[RiskRule]
+    target_document_id: uuid.UUID | None = None
+
+    @property
+    def target_document(self) -> ReportDocument | None:
+        if self.target_document_id:
+            for d in self.documents:
+                if d.id == self.target_document_id:
+                    return d
+        if len(self.documents) == 1:
+            return self.documents[0]
+        return None
 
     @property
     def all_findings(self) -> list[ReportFinding]:
@@ -156,4 +167,5 @@ def collect(db: Session, analysis: Analysis, user: User, document_id: uuid.UUID 
         rules_checked=len(rules),
         documents=result_docs,
         rules=rules,
+        target_document_id=document_id,
     )

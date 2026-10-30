@@ -41,6 +41,7 @@ CREATE TRIGGER trigger_analyses_updated_at
 CREATE TABLE IF NOT EXISTS documents(
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     analysis_id UUID REFERENCES analyses(id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL DEFAULT '',
     file_path TEXT NOT NULL,
     total_pages INT DEFAULT 1,
     is_scanned BOOLEAN DEFAULT FALSE,
