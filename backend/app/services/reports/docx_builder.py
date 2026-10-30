@@ -117,15 +117,35 @@ def _header(doc, data: ReportData, title: str) -> None:
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     meta = doc.add_table(rows=0, cols=2)
     meta.style = "Table Grid"
-    rows = [
-        ("Пакет документов", data.title),
-        ("Исходный файл", data.original_filename),
+
+    target_doc = data.target_document
+    rows = []
+    if target_doc:
+        doc_display_name = target_doc.relative_path or target_doc.file_name
+        rows.append(("Проверенный файл", doc_display_name))
+        is_from_archive = bool(
+            data.original_filename.lower().endswith((".zip", ".tar", ".gz", ".7z", ".rar"))
+            or (target_doc.relative_path and target_doc.relative_path != data.original_filename)
+            or (target_doc.file_name != data.original_filename)
+        )
+        if is_from_archive:
+            rows.append(("Исходный архив", data.original_filename))
+    else:
+        is_archive = bool(
+            data.original_filename.lower().endswith((".zip", ".tar", ".gz", ".7z", ".rar"))
+            or len(data.documents) > 1
+        )
+        rows.append(("Исходный архив" if is_archive else "Исходный файл", data.original_filename))
+        if len(data.documents) > 1:
+            rows.append(("Документов в отчёте", str(len(data.documents))))
+
+    rows.extend([
         ("Дата загрузки", data.created_at.strftime("%d.%m.%Y %H:%M") if data.created_at else "—"),
         ("Дата отчёта", data.generated_at.strftime("%d.%m.%Y %H:%M")),
         ("Проверено правил", str(data.rules_checked)),
         ("Подготовил", data.author or "—"),
         ("Компания", data.company or "—"),
-    ]
+    ])
     for label, value in rows:
         cells = meta.add_row().cells
         _cell_text(cells[0], label, bold=True)
@@ -332,7 +352,10 @@ def build_protocol(data: ReportData, target: Path) -> Path:
     doc = _new_document(landscape=True, author=data.author)
     heading = doc.add_heading("ПРОТОКОЛ РАЗНОГЛАСИЙ", level=1)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    names = ", ".join(d.file_name for d in data.documents) or data.original_filename
+    if data.target_document:
+        names = data.target_document.relative_path or data.target_document.file_name
+    else:
+        names = ", ".join(d.relative_path or d.file_name for d in data.documents) or data.original_filename
     p = doc.add_paragraph(f"к проекту контракта (документы: {names})")
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Дата: {data.generated_at.strftime('%d.%m.%Y')}")
