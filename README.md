@@ -37,8 +37,7 @@ cp .env.example .env
 
 ### 2. Настройте подключение
 
-В корневом `.env` задайте ключ ProxyAPI. Для первого запуска удобно использовать
-локальные хэш-эмбеддинги — оставьте оба параметра эмбеддингов пустыми:
+В корневом `.env` задайте ваш ключ ProxyAPI в двух параметрах - для языковой модели и для векторного поиска:
 
 ```dotenv
 ANALYSIS_ENGINE=auto
@@ -46,15 +45,16 @@ LLM_BASE_URL=https://api.proxyapi.ru/v1
 LLM_API_KEY=your-proxyapi-key
 LLM_MAX_TOKENS=8192
 
-EMBEDDING_BASE_URL=
-EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=https://api.proxyapi.ru/v1
+EMBEDDING_API_KEY=your-proxyapi-key
+EMBEDDING_MODEL=baai/bge-m3
 ```
 
 Замените `your-proxyapi-key` действующим ключом. **Модель анализа выбирается в селекторе интерфейса;
 в `.env` её указывать не нужно.**
 
-В `.env.example` адрес внешних эмбеддингов уже заполнен. Для варианта выше его нужно очистить.
-Если оставить также `LLM_API_KEY` пустым, режим `auto` выберет поиск по ключевым словам.
+Если оставить `LLM_API_KEY` пустым, режим `auto` выберет поиск по ключевым словам.
+Если оставить `EMBEDDING_BASE_URL` и `EMBEDDING_API_KEY` пустыми, то подключатся локальные эмбеддинги.
 
 ### 3. Запустите приложение
 
