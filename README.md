@@ -13,11 +13,11 @@
 
 <p align="center">
   <a href="#быстрый-старт">Быстрый старт</a> ·
-  <a href="#api">API</a> ·
   <a href="#архитектура">Архитектура</a> ·
   <a href="#модели-и-режимы">Модели</a> ·
   <a href="#настройка">Настройка</a> ·
-  <a href="#разработка">Разработка</a>
+  <a href="#разработка">Разработка</a> ·
+  <a href="#api">API</a>
 </p>
 
 ## Быстрый старт
@@ -77,49 +77,6 @@ docker compose up -d --build
 
 Режим, модель и чувствительность сохраняются на сервере при запуске задачи.
 Следующее изменение настроек применяется к новым запускам.
-
-## API
-
-Интерактивная документация и схемы эндпоинтов — [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger).
-
-Сквозной сценарий автоматической проверки контракта через REST API:
-
-```bash
-# 1. Проверить статус сервисов (БД, Celery, LLM, OCR)
-curl -s http://localhost:3000/api/health | jq '{status, database, queue, llm, ocr}'
-
-# 2. Создать проект (папку закупки)
-PROJECT_ID=$(curl -s -X POST http://localhost:3000/api/projects \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Закупка № 0123","description":"Поставка оборудования по 44-ФЗ"}' | jq -r .id)
-
-# 3. Загрузить пакет документов (PDF, скан, DOCX или ZIP)
-DOC_ID=$(curl -s -X POST "http://localhost:3000/api/projects/$PROJECT_ID/files" \
-  -F "files=@test_documents/contract_low_risk.pdf" | jq -r '.files[0].documents[0].id')
-
-# 4. Запустить анализ рисков
-curl -s -X POST "http://localhost:3000/api/projects/$PROJECT_ID/start"
-
-# 5. Получить статус и оценку «светофора» (traffic_light: red | yellow | green, risk_score: 0..100)
-curl -s "http://localhost:3000/api/projects/$PROJECT_ID" \
-  | jq '{phase: .files[0].phase, light: .traffic_light, risk: .risk_score, counts: .counts}'
-
-# 6. Получить замечания с цитатами, пунктами договора и уровнем риска
-curl -s "http://localhost:3000/api/documents/$DOC_ID/findings" \
-  | jq '.groups[].items[] | {severity, title, clause, page, quote}'
-
-# 7. Выгрузить готовые отчёты и протокол разногласий
-curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=brief&format=docx" -o report.docx
-curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=protocol&format=docx" -o protocol.docx
-curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=annotated&format=pdf" -o annotated.pdf
-
-# 8. Задать вопрос ИИ-помощнику по найденному риску
-curl -s -X POST "http://localhost:3000/api/documents/$DOC_ID/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Как сформулировать этот пункт для протокола разногласий?"}' | jq -r '.messages[-1].content'
-```
-
-> **Примечание для Windows PowerShell:** для передачи JSON экранируйте строку маркером `--%` (`curl.exe ... --% -d "{\"title\":\"Закупка\"}"`) либо используйте Git Bash / WSL.
 
 ## Архитектура
 
@@ -276,6 +233,19 @@ docker compose up -d --force-recreate backend worker
 В Compose адреса БД, Redis и путь к файлам заданы для внутренней сети контейнеров.
 `DATABASE_URL`, `REDIS_URL` и `STORAGE_DIR` из примера нужны при локальном запуске Python вне Docker.
 
+## Структура репозитория
+
+| Путь | Содержимое |
+|---|---|
+| [frontend/app](frontend/app) | Страница приложения, layout и общие стили |
+| [frontend/components](frontend/components) | Проекты, документы, селектор моделей, правила, настройки и чат |
+| [frontend/lib](frontend/lib) | API-клиент, типы, навигация и настройки браузера |
+| [backend/app/api](backend/app/api) | Маршруты FastAPI |
+| [backend/app/services](backend/app/services) | Обработка файлов, поиск, анализ, чат и экспорт |
+| [backend/tests](backend/tests) | Модульные и API-тесты, сквозной smoke |
+| [database](database) | Базовая схема PostgreSQL и SQL-миграции |
+| [docs/architecture.md](docs/architecture.md) | Связи сервисов, обработка документа и модель данных |
+
 ## Разработка
 
 **Backend:** Python 3.12. **Frontend:** Node.js 20.9+; в Docker используется Node.js 22.
@@ -314,15 +284,180 @@ python backend/tests/smoke.py
 Он создаёт тестовые данные, загружает документы и проверяет обработку, поиск, замечания и отчёты
 в настроенном на сервере режиме анализа.
 
-## Структура репозитория
+### API
 
-| Путь | Содержимое |
+**[Swagger UI](http://localhost:8000/docs)** — интерактивная документация,
+схемы запросов и ответов.
+
+| Подключение | Адрес |
 |---|---|
-| [frontend/app](frontend/app) | Страница приложения, layout и общие стили |
-| [frontend/components](frontend/components) | Проекты, документы, селектор моделей, правила, настройки и чат |
-| [frontend/lib](frontend/lib) | API-клиент, типы, навигация и настройки браузера |
-| [backend/app/api](backend/app/api) | Маршруты FastAPI |
-| [backend/app/services](backend/app/services) | Обработка файлов, поиск, анализ, чат и экспорт |
-| [backend/tests](backend/tests) | Модульные и API-тесты, сквозной smoke |
-| [database](database) | Базовая схема PostgreSQL и SQL-миграции |
-| [docs/architecture.md](docs/architecture.md) | Связи сервисов, обработка документа и модель данных |
+| Через frontend / Nginx | `http://localhost:3000/api` |
+| Напрямую к FastAPI | `http://localhost:8000/api` |
+
+#### Маршруты сценария
+
+Все пути ниже указаны относительно базового адреса API.
+
+| Шаг | Метод | Маршрут | Назначение |
+|:---:|---|---|---|
+| 1 | `GET` | `/health` | Проверить БД, Redis и настройки обработки |
+| 2 | `POST` | `/projects` | Создать проект |
+| 3 | `POST` | `/projects/{project_id}/files` | Загрузить документы |
+| 4 | `POST` | `/projects/{project_id}/start` | Запустить анализ |
+| 5 | `GET` | `/projects/{project_id}` | Получить статусы и оценку риска |
+| 6 | `GET` | `/documents/{document_id}/findings` | Получить замечания с цитатами |
+| 7 | `GET` | `/documents/{document_id}/report` | Скачать отчёт |
+| 8 | `POST` | `/documents/{document_id}/chat` | Задать вопрос ИИ-помощнику |
+
+#### Пример проверки контракта
+
+Нужны запущенный стек, **Bash**, **curl** и **jq**.
+Выполняйте шаги по порядку в одной сессии терминала из корня репозитория:
+`PROJECT_ID` и `DOC_ID` сохраняются между запросами.
+
+```bash
+API_URL="http://localhost:3000/api"
+```
+
+<details>
+<summary><strong>1. Проверить сервисы</strong> · GET /health</summary>
+
+```bash
+curl -fsS "$API_URL/health" \
+  | jq '{status, database, queue, llm, ocr}'
+```
+
+`database` и `queue` показывают доступность БД и Redis.
+Поля `llm` и `ocr` описывают конфигурацию; запрос не проверяет вызов модели или выполнение OCR.
+
+</details>
+
+<details>
+<summary><strong>2. Создать проект</strong> · POST /projects</summary>
+
+```bash
+PROJECT_ID=$(
+  curl -fsS -X POST "$API_URL/projects" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "title": "Закупка № 0123",
+      "description": "Поставка оборудования по 44-ФЗ"
+    }' | jq -er '.id'
+)
+```
+
+Сохранённый `PROJECT_ID` используется для загрузки файлов и запуска проверки.
+При повторном выполнении укажите новое название: имена проектов должны быть уникальными.
+
+</details>
+
+<details>
+<summary><strong>3. Загрузить документы</strong> · POST /projects/{project_id}/files</summary>
+
+```bash
+DOC_ID=$(
+  curl -fsS -X POST "$API_URL/projects/$PROJECT_ID/files" \
+    -F "files=@test_documents/contract_low_risk.pdf" \
+    | jq -er '.files[0].documents[0].id'
+)
+```
+
+Пример сохраняет ID одного тестового документа.
+Для нескольких файлов повторите параметр `-F "files=@путь"`;
+для ZIP ответ содержит документы из архива. Ошибки загрузки возвращаются в массиве `errors`.
+
+</details>
+
+<details>
+<summary><strong>4. Запустить анализ</strong> · POST /projects/{project_id}/start</summary>
+
+```bash
+curl -fsS -X POST "$API_URL/projects/$PROJECT_ID/start" | jq
+```
+
+Загрузка сама по себе не запускает анализ.
+Этот запрос использует серверные настройки по умолчанию;
+параметры `analysis_mode`, `llm_model` и `analysis_sensitivity`
+можно передать в JSON-теле — их схемы доступны в Swagger.
+
+</details>
+
+<details>
+<summary><strong>5. Проверить готовность и риск</strong> · GET /projects/{project_id}</summary>
+
+```bash
+curl -fsS "$API_URL/projects/$PROJECT_ID" \
+  | jq '{
+      traffic_light,
+      counts,
+      files: [.files[] | {
+        name, status, phase, progress, traffic_light, risk_score
+      }]
+    }'
+```
+
+Повторяйте запрос до завершения обработки.
+Для тестового документа успешное завершение — `status: "COMPLETED"`
+и `phase: "ready"`. При `FAILED` проверьте `error_message` в полном ответе API.
+
+| `traffic_light` | Значение |
+|---|---|
+| `critical` | 🔴 Критический риск |
+| `warning` | 🟡 Требует внимания |
+| `ok` | 🟢 Без замечаний или низкий риск |
+| `unknown` | Недостаточно данных |
+
+Индекс `risk_score` находится у каждого файла в `files[]` и принимает значения 0–100;
+при неполной оценке он равен `null`.
+
+</details>
+
+<details>
+<summary><strong>6. Получить замечания</strong> · GET /documents/{document_id}/findings</summary>
+
+```bash
+curl -fsS "$API_URL/documents/$DOC_ID/findings" \
+  | jq '.groups[].items[] | {severity, title, clause, page, quote}'
+```
+
+В ответе — уровень риска, пункт договора, страница и цитата.
+
+</details>
+
+<details>
+<summary><strong>7. Скачать отчёты</strong> · GET /documents/{document_id}/report</summary>
+
+```bash
+REPORT_URL="$API_URL/documents/$DOC_ID/report"
+
+curl -fsS "$REPORT_URL?mode=brief&format=docx" -o report.docx
+curl -fsS "$REPORT_URL?mode=protocol&format=docx" -o protocol.docx
+curl -fsS "$REPORT_URL?mode=annotated&format=pdf" -o annotated.pdf
+```
+
+Получатся краткий отчёт, протокол разногласий и PDF с пометками.
+Скачивайте их после завершения проверки; PDF с пометками требует полной оценки документа.
+
+</details>
+
+<details>
+<summary><strong>8. Спросить ИИ-помощника</strong> · POST /documents/{document_id}/chat</summary>
+
+```bash
+QUESTION="Как сформулировать этот пункт для протокола разногласий?"
+
+jq -n --arg message "$QUESTION" '{message: $message}' \
+  | curl -fsS -X POST "$API_URL/documents/$DOC_ID/chat" \
+      -H "Content-Type: application/json" \
+      --data-binary @- \
+  | jq -r '.messages[-1].content'
+```
+
+Помощник доступен после завершения анализа и при настроенном LLM-подключении.
+Он использует модель, сохранённую при проверке документа.
+
+</details>
+
+> **Windows:** выполняйте Bash-примеры в **Git Bash** или **WSL** —
+> так сохранятся переменные, переносы строк и JSON. Для нативного PowerShell
+> используйте `Invoke-RestMethod` и `ConvertTo-Json`.
