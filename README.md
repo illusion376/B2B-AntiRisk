@@ -25,6 +25,9 @@
 
 **[Смотреть ролик](https://github.com/illusion376/B2B-AntiRisk/raw/develop/presentation_rybolovy.mp4)** — команда «Рыболовы», как устроено решение и демонстрация работы (MP4, 29 МБ, со звуком; файл в репозитории — `presentation_rybolovy.mp4`).
 
+ **Контакты команды «Рыболовы» для связи и предоставления ключей:**  
+ • Иванов Кирилл: [@KIRILL_IVV](https://t.me/KIRILL_IVV)  
+ 
 ## Быстрый старт
 
 Нужны **Git** и **Docker с Compose v2**. Для первой сборки требуется доступ к сети.
