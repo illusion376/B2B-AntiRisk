@@ -13,6 +13,7 @@
 
 <p align="center">
   <a href="#быстрый-старт">Быстрый старт</a> ·
+  <a href="#api">API</a> ·
   <a href="#архитектура">Архитектура</a> ·
   <a href="#модели-и-режимы">Модели</a> ·
   <a href="#настройка">Настройка</a> ·
@@ -69,13 +70,56 @@ docker compose up -d --build
 
 ### 4. Выполните первую проверку
 
-1. Создайте проект и загрузите документы.
+1. Создайте проект и загрузите документы. Для быстрой проверки можно использовать готовый тестовый контракт из репозитория: `test_documents/contract_low_risk.pdf` (или `.docx`).
 2. В **«Настройках»** выберите режим анализа, модель и чувствительность.
 3. Нажмите **«Начать анализ»** в проекте. Загрузка сама по себе не запускает проверку.
-4. Откройте обработанный документ, рассмотрите замечания и скачайте отчёт.
+4. Откройте обработанный документ, рассмотрите замечания (цветовой «светофор» рисков с цитатами из текста) и скачайте отчёт или протокол разногласий.
 
 Режим, модель и чувствительность сохраняются на сервере при запуске задачи.
 Следующее изменение настроек применяется к новым запускам.
+
+## API
+
+Интерактивная документация и схемы эндпоинтов — [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger).
+
+Сквозной сценарий автоматической проверки контракта через REST API:
+
+```bash
+# 1. Проверить статус сервисов (БД, Celery, LLM, OCR)
+curl -s http://localhost:3000/api/health | jq '{status, database, queue, llm, ocr}'
+
+# 2. Создать проект (папку закупки)
+PROJECT_ID=$(curl -s -X POST http://localhost:3000/api/projects \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Закупка № 0123","description":"Поставка оборудования по 44-ФЗ"}' | jq -r .id)
+
+# 3. Загрузить пакет документов (PDF, скан, DOCX или ZIP)
+DOC_ID=$(curl -s -X POST "http://localhost:3000/api/projects/$PROJECT_ID/files" \
+  -F "files=@test_documents/contract_low_risk.pdf" | jq -r '.files[0].documents[0].id')
+
+# 4. Запустить анализ рисков
+curl -s -X POST "http://localhost:3000/api/projects/$PROJECT_ID/start"
+
+# 5. Получить статус и оценку «светофора» (traffic_light: red | yellow | green, risk_score: 0..100)
+curl -s "http://localhost:3000/api/projects/$PROJECT_ID" \
+  | jq '{phase: .files[0].phase, light: .traffic_light, risk: .risk_score, counts: .counts}'
+
+# 6. Получить замечания с цитатами, пунктами договора и уровнем риска
+curl -s "http://localhost:3000/api/documents/$DOC_ID/findings" \
+  | jq '.groups[].items[] | {severity, title, clause, page, quote}'
+
+# 7. Выгрузить готовые отчёты и протокол разногласий
+curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=brief&format=docx" -o report.docx
+curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=protocol&format=docx" -o protocol.docx
+curl -s "http://localhost:3000/api/documents/$DOC_ID/report?mode=annotated&format=pdf" -o annotated.pdf
+
+# 8. Задать вопрос ИИ-помощнику по найденному риску
+curl -s -X POST "http://localhost:3000/api/documents/$DOC_ID/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Как сформулировать этот пункт для протокола разногласий?"}' | jq -r '.messages[-1].content'
+```
+
+> **Примечание для Windows PowerShell:** для передачи JSON экранируйте строку маркером `--%` (`curl.exe ... --% -d "{\"title\":\"Закупка\"}"`) либо используйте Git Bash / WSL.
 
 ## Архитектура
 
