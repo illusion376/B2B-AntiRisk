@@ -1,4 +1,3 @@
-
 export function reportFilename(disposition: string | null, fallback = 'report.docx'): string {
   let name: string | undefined;
   const encoded = disposition?.match(/(?:^|;)\s*filename\*\s*=\s*(?:"?UTF-8'[^']*')([^;\"]+)/i);

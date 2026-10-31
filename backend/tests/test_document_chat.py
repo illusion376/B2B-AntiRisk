@@ -22,16 +22,13 @@ from app.models import Analysis, Base, Document, DocumentChatMessage, DocumentPa
 from app.services import document_chat
 from app.services.llm import LLMClient
 
-
 @compiles(JSONB, "sqlite")
 def _json_sqlite(_type, compiler, **kw):
     return "JSON"
 
-
 @compiles(Vector, "sqlite")
 def _vector_sqlite(_type, compiler, **kw):
     return "TEXT"
-
 
 @pytest.fixture
 def chat(monkeypatch):
@@ -124,7 +121,6 @@ def chat(monkeypatch):
     app.dependency_overrides.clear()
     engine.dispose()
 
-
 @pytest.mark.parametrize("model", ["openai/gpt-6-luna", "anthropic/claude-haiku-5-5",
                                    "deepseek/deepseek-v4-flash", None])
 def test_assistant_sends_saved_analysis_model_to_provider(chat, monkeypatch, model):
@@ -149,7 +145,6 @@ def test_assistant_sends_saved_analysis_model_to_provider(chat, monkeypatch, mod
     assert response.status_code == 200, response.text
     assert [request["model"] for request in requests] == [model or "server-default-model"]
 
-
 def test_assistant_model_is_scoped_to_each_document(chat):
     models = ["deepseek/deepseek-v4-flash", "anthropic/claude-haiku-5-5"]
     with Session(chat.engine) as db:
@@ -160,7 +155,6 @@ def test_assistant_model_is_scoped_to_each_document(chat):
         response = chat.client.post(f"/api/documents/{document_id}/chat", json={"message": "Вопрос"})
         assert response.status_code == 200, response.text
     assert chat.state["models"] == [*models, models[0]]
-
 
 def test_turn_uses_server_document_findings_and_preserves_history(chat):
     result = chat.client.post(chat.url, json={"message": "Почему это риск?", "finding_id": str(chat.finding_id)})
@@ -184,13 +178,11 @@ def test_turn_uses_server_document_findings_and_preserves_history(chat):
     assert chat.client.post(chat.url, json={"message": "Как его исправить?"}).status_code == 200
     assert len(chat.state["prompts"][1]["history"]) == 2
 
-
 @pytest.mark.parametrize("target", ["other_finding", "hidden_id"])
 def test_foreign_or_disabled_finding_is_rejected_without_calling_llm(chat, target):
     response = chat.client.post(chat.url, json={"message": "Объясни", "finding_id": str(getattr(chat, target))})
     assert response.status_code == 404
     assert chat.state["prompts"] == []
-
 
 def test_explicit_dismissed_finding_can_be_discussed_without_changing_report(chat):
     result = chat.client.post(chat.url, json={"message": "Почему отклонено?", "finding_id": str(chat.dismissed_id)})
@@ -198,7 +190,6 @@ def test_explicit_dismissed_finding_can_be_discussed_without_changing_report(cha
     context = chat.state["prompts"][0]["server_context"]
     assert context["findings"][0]["status"] == "dismissed"
     assert context["report"]["counts"]["YELLOW"] == 0
-
 
 def test_ownership_and_document_isolation(chat):
     for method in ("get", "post"):
@@ -208,7 +199,6 @@ def test_ownership_and_document_isolation(chat):
     assert chat.client.get(f"/api/documents/{chat.other_doc}/chat").json()["messages"] == []
     assert not chat.state["prompts"]
 
-
 @pytest.mark.parametrize("payload", [{"message": " "}, {"message": "a" * 4001}, {"message": "Вопрос", "history": []},
                                      {"message": "Вопрос", "context": "fake"}, {"message": "Вопрос", "mode": "edit-file"},
                                      {"message": "Вопрос", "model": "client-model"},
@@ -217,13 +207,11 @@ def test_client_cannot_supply_context_or_unbounded_requests(chat, payload):
     assert chat.client.post(chat.url, json=payload).status_code == 422
     assert not chat.state["prompts"]
 
-
 def test_unconfigured_provider_is_explicit_and_history_remains_readable(chat, monkeypatch):
     monkeypatch.setattr(settings, "llm_api_key", None)
     assert chat.client.get(chat.url).json()["available"] is False
     assert chat.client.post(chat.url, json={"message": "Вопрос"}).status_code == 503
     assert not chat.state["prompts"]
-
 
 def test_provider_failure_does_not_save_half_a_turn_or_expose_secrets(chat):
     with Session(chat.engine) as db:
@@ -236,7 +224,6 @@ def test_provider_failure_does_not_save_half_a_turn_or_expose_secrets(chat):
     assert chat.client.get(chat.url).json()["messages"] == []
     assert chat.state["models"] == ["deepseek/deepseek-v4-flash"]
 
-
 @pytest.mark.parametrize("reply", [
     {"answer": " ", "source_ids": [], "draft_title": None, "draft_content": None},
     {"answer": "Ответ", "source_ids": ["invented-page-999"], "draft_title": None, "draft_content": None},
@@ -248,12 +235,10 @@ def test_invalid_model_output_cannot_be_saved_as_an_answer(chat, reply):
     assert chat.client.post(chat.url, json={"message": "Вопрос"}).status_code == 502
     assert chat.client.get(chat.url).json()["messages"] == []
 
-
 def test_concurrent_turn_is_rejected_before_provider_call(chat):
     chat.state["locked"] = True
     assert chat.client.post(chat.url, json={"message": "Вопрос"}).status_code == 409
     assert not chat.state["prompts"]
-
 
 def test_new_analysis_does_not_reuse_old_conversation(chat):
     with Session(chat.engine) as db:
@@ -270,7 +255,6 @@ def test_new_analysis_does_not_reuse_old_conversation(chat):
     assert chat.state["prompts"][-1]["history"] == []
     assert chat.state["models"] == ["deepseek/deepseek-v4-flash", "anthropic/claude-haiku-5-5"]
 
-
 def test_rename_and_review_keep_the_conversation(chat):
     chat.client.post(chat.url, json={"message": "Вопрос"})
     with Session(chat.engine) as db:
@@ -285,7 +269,6 @@ def test_rename_and_review_keep_the_conversation(chat):
     assert context["document"]["name"] == "new-name.pdf"
     assert context["findings"][0]["status"] == "accepted"
 
-
 def test_changed_findings_during_generation_reject_stale_answer(chat):
     def update():
         with Session(chat.engine) as db:
@@ -295,14 +278,12 @@ def test_changed_findings_during_generation_reject_stale_answer(chat):
     assert chat.client.post(chat.url, json={"message": "Вопрос"}).status_code == 409
     assert chat.client.get(chat.url).json()["messages"] == []
 
-
 def test_unfinished_document_cannot_start_chat(chat):
     with Session(chat.engine) as db:
         db.get(Document, chat.document_id).status = "ANALYZING"
         db.commit()
     assert chat.client.get(chat.url).status_code == 409
     assert chat.client.post(chat.url, json={"message": "Вопрос"}).status_code == 409
-
 
 def test_draft_can_be_refined_and_downloaded_only_by_its_owner(chat):
     response = chat.client.post(chat.url, json={"message": "Составь протокол", "mode": "protocol"})
@@ -332,7 +313,6 @@ def test_draft_can_be_refined_and_downloaded_only_by_its_owner(chat):
         assert db.get(RiskFinding, chat.finding_id).review_status == "NEW"
         assert len(list(db.scalars(select(DocumentChatMessage)))) == 4
 
-
 def test_short_document_is_complete_and_long_document_retrieves_distant_passage():
     passages, truncated = document_chat.select_passages([(1, "Первый"), (2, "Последний")], "", None)
     assert [p["page"] for p in passages] == [1, 2]
@@ -345,7 +325,6 @@ def test_short_document_is_complete_and_long_document_retrieves_distant_passage(
     assert sum(len(p["text"]) for p in passages) <= 8000
     passages, _ = document_chat.select_passages(pages, "Объясни на странице 99", 100, budget=12000)
     assert {99, 100}.issubset({p["page"] for p in passages})
-
 
 @pytest.mark.parametrize("mode", ["question", "report", "protocol"])
 def test_off_topic_refusal_is_saved_without_sources_or_draft(chat, mode):

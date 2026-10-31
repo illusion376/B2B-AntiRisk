@@ -7,7 +7,6 @@ import pytest
 from app.services import llm
 from app.services.llm import LLMClient, LLMError, parse_json_response
 
-
 @pytest.fixture(autouse=True)
 def proxy_key(monkeypatch):
     monkeypatch.setattr(llm.settings, "llm_api_key", "test-proxy-key")
@@ -23,7 +22,6 @@ def proxy_key(monkeypatch):
 
     monkeypatch.setattr(llm.httpx, "AsyncClient", mock_client)
 
-
 @pytest.mark.parametrize("content", [
     "", None, [], "[]", "{not json}", '{"verdict":"RISK","verdict":"OK"}',
     '{"confidence": NaN}', '{"confidence": Infinity}', '{"confidence": -Infinity}',
@@ -31,7 +29,6 @@ def proxy_key(monkeypatch):
 def test_json_parser_rejects_ambiguous_or_non_json_results(content):
     with pytest.raises(LLMError):
         parse_json_response(content)
-
 
 @pytest.mark.parametrize("provider_payload", [
     {}, {"choices": []}, {"choices": None}, {"choices": [None]},
@@ -52,7 +49,6 @@ def test_invalid_provider_envelopes_are_explicit_errors(monkeypatch, provider_pa
                 await client._chat("system", "prompt")
     asyncio.run(run())
 
-
 def test_provider_request_uses_configured_path_model_and_json_mode(monkeypatch):
     monkeypatch.setattr(llm.settings, "llm_base_url", "https://provider.invalid/v1")
     monkeypatch.setattr(llm.settings, "llm_model", "configured-model")
@@ -71,12 +67,10 @@ def test_provider_request_uses_configured_path_model_and_json_mode(monkeypatch):
             assert await client.complete_json("system", "prompt") == {"verdict": "NOT_FOUND"}
     asyncio.run(run())
 
-
 def test_missing_llm_endpoint_fails_explicitly(monkeypatch):
     monkeypatch.setattr(llm.settings, "llm_base_url", "")
     with pytest.raises(LLMError, match="LLM_BASE_URL"):
         LLMClient()
-
 
 def test_exhausted_provider_retries_log_safe_http_code(monkeypatch, caplog):
     from tenacity import wait_none
@@ -97,7 +91,6 @@ def test_exhausted_provider_retries_log_safe_http_code(monkeypatch, caplog):
     assert "HTTP_503" in caplog.text
     assert "sensitive" not in caplog.text and "confidential" not in caplog.text
     assert "provider.invalid" not in caplog.text
-
 
 @pytest.mark.parametrize("model", [
     "gpt-5-mini", "openai/gpt-5-mini", "gpt-5-nano", "gpt-5-2025-08-07",
@@ -126,7 +119,6 @@ def test_reasoning_models_use_supported_request_parameters(monkeypatch, model):
             assert await client.complete_json("Return JSON", "Check") == {"ok": True}
     asyncio.run(run())
 
-
 @pytest.mark.parametrize("model", ["qwen2.5:7b-instruct", "gpt-4o-mini", "anthropic/claude-sonnet-4-6"])
 def test_other_models_keep_configured_sampling_and_token_limit(monkeypatch, model):
     monkeypatch.setattr(llm.settings, "llm_base_url", "https://provider.invalid/v1")
@@ -149,7 +141,6 @@ def test_other_models_keep_configured_sampling_and_token_limit(monkeypatch, mode
             assert await client.complete_json("Return JSON", "Check") == {}
     asyncio.run(run())
 
-
 def test_truncated_response_is_not_accepted_or_retried_with_same_budget(monkeypatch, caplog):
     from tenacity import wait_none
     monkeypatch.setattr(llm.settings, "llm_base_url", "https://provider.invalid/v1")
@@ -170,7 +161,6 @@ def test_truncated_response_is_not_accepted_or_retried_with_same_budget(monkeypa
     assert len(requests) == 1
     assert "OUTPUT_TOKEN_LIMIT" in caplog.text
     assert "confidential" not in caplog.text
-
 
 def test_analysis_schema_is_requested_in_strict_mode(monkeypatch):
     from app.services.analyzer import LLMResult
@@ -193,7 +183,6 @@ def test_analysis_schema_is_requested_in_strict_mode(monkeypatch):
             client._client = httpx.AsyncClient(base_url="https://provider.invalid/v1", transport=httpx.MockTransport(handler))
             assert await client.complete_json("Return JSON", "Check") == answer
     asyncio.run(run())
-
 
 def test_schema_fallback_keeps_the_same_model_and_parses_json(monkeypatch):
     from tenacity import wait_none
@@ -222,7 +211,6 @@ def test_schema_fallback_keeps_the_same_model_and_parses_json(monkeypatch):
             assert await client.complete_json("Return JSON", "Check again") == {"ok": True}
     asyncio.run(run())
     assert formats == ["json_schema", "json_object", None, None]
-
 
 def test_concurrent_schema_rejections_do_not_disable_supported_json_mode(monkeypatch):
     from tenacity import wait_none

@@ -47,7 +47,6 @@ export function useAnalysisModes() {
     } catch { setStorageError(true); }
   }
 
-
   return { config, loading, error, refresh, selectMode, storageError,
     selectedMode: preference ?? config?.defaultMode ?? null };
 }

@@ -15,14 +15,12 @@ log = logging.getLogger(__name__)
 
 _LOCK_KEY = 873_215_001
 
-
 def _migrations_dir() -> Path | None:
     candidates = [
         settings.migrations_dir,
         Path(__file__).resolve().parents[2] / "database" / "migrations",
     ]
     return next((p for p in candidates if p.is_dir()), None)
-
 
 def run_migrations() -> None:
     directory = _migrations_dir()

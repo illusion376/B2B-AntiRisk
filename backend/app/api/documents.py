@@ -28,12 +28,10 @@ from app.vocab import (
 
 router = APIRouter(prefix="/api/documents", tags=["Документы"])
 
-
 def content_disposition(filename: str, inline: bool = False) -> str:
     kind = "inline" if inline else "attachment"
     ascii_name = filename.encode("ascii", "ignore").decode() or "file"
     return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
-
 
 def _pages_words(db: Session, document_id: uuid.UUID) -> list[dict]:
     return [
@@ -42,12 +40,10 @@ def _pages_words(db: Session, document_id: uuid.UUID) -> list[dict]:
                                .where(DocumentPage.document_id == document_id).order_by(DocumentPage.page_number))
     ]
 
-
 @router.get("/{document_id}", response_model=DocumentOut, summary="Карточка документа: статус, страницы, светофор")
 def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     doc = get_document_or_404(db, document_id, user)
     return document_out(doc, counts_by_document(db, [doc.id]).get(doc.id))
-
 
 @router.patch("/{document_id}", response_model=DocumentOut, summary="Переименовать документ")
 def rename_document(document_id: uuid.UUID, body: DocumentUpdate, db: Session = Depends(get_db),
@@ -68,7 +64,6 @@ def rename_document(document_id: uuid.UUID, body: DocumentUpdate, db: Session = 
     db.commit()
     return document_out(doc, counts_by_document(db, [doc.id]).get(doc.id))
 
-
 @router.get("/{document_id}/file", summary="PDF документа (docx/txt и сканы уже приведены к PDF)")
 def get_preview(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     doc = get_document_or_404(db, document_id, user)
@@ -78,7 +73,6 @@ def get_preview(document_id: uuid.UUID, db: Session = Depends(get_db), user: Use
     return FileResponse(doc.preview_path, media_type="application/pdf",
                         headers={"Content-Disposition": content_disposition(name, inline=True)})
 
-
 @router.get("/{document_id}/original", summary="Скачать исходный файл")
 def get_original(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     doc = get_document_or_404(db, document_id, user)
@@ -86,7 +80,6 @@ def get_original(document_id: uuid.UUID, db: Session = Depends(get_db), user: Us
         raise HTTPException(404, "Файл не найден")
     return FileResponse(doc.file_path, media_type="application/octet-stream",
                         headers={"Content-Disposition": content_disposition(doc.file_name)})
-
 
 @router.get("/{document_id}/pages/{page_number}/thumbnail", summary="Миниатюра страницы (PNG) для панели «Страницы»",
             response_class=Response, responses={200: {"content": {"image/png": {}}}})
@@ -106,13 +99,10 @@ def get_thumbnail(
         raise HTTPException(404, "Нет такой страницы") from exc
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
-
 _SPACES = re.compile(r"\s+")
-
 
 def _norm(text: str) -> str:
     return _SPACES.sub(" ", text.lower().replace("ё", "е")).strip()
-
 
 @router.get("/{document_id}/pages/{page_number}", response_model=PageContent,
             summary="Текст страницы разделами и пунктами с привязкой замечаний (аналог getPageSections)")
@@ -127,7 +117,6 @@ def get_page(document_id: uuid.UUID, page_number: int, db: Session = Depends(get
                        .where(DocumentPage.document_id == document_id, DocumentPage.page_number <= page_number)
                        .order_by(DocumentPage.page_number)).all()
     sections = page_sections([(n, t) for n, t in texts], page_number)
-
 
     findings = db.scalars(select(RiskFinding).where(
         RiskFinding.document_id == document_id, RiskFinding.page_number == page_number,
@@ -146,11 +135,9 @@ def get_page(document_id: uuid.UUID, page_number: int, db: Session = Depends(get
     return PageContent(page=page_number, total_pages=doc.total_pages, width=page.width, height=page.height,
                        is_ocr=page.is_ocr, ocr_confidence=page.ocr_confidence, sections=sections)
 
-
 @router.get("/{document_id}/outline", response_model=list[OutlineSection], summary="Оглавление (вкладка «Навигация»)")
 def get_outline(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return get_document_or_404(db, document_id, user).outline or []
-
 
 @router.get("/{document_id}/search", response_model=SearchResponse, summary="Поиск по тексту документа (в т. ч. по сканам)")
 def search_document(
@@ -163,7 +150,6 @@ def search_document(
     get_document_or_404(db, document_id, user)
     hits, total = search_pages(_pages_words(db, document_id), q, limit)
     return SearchResponse(query=q, total=total, hits=hits)
-
 
 @router.get("/{document_id}/findings", response_model=FindingsResponse,
             summary="Замечания документа по группам светофора с фильтрами (категория, уровень, статус, поиск)")
@@ -215,7 +201,6 @@ def document_findings(
         },
     )
 
-
 @router.post("/{document_id}/reanalyze", response_model=DocumentOut, status_code=status.HTTP_202_ACCEPTED,
              summary="Запустить проверку или повторный анализ документа")
 def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
@@ -254,7 +239,6 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
     enqueue_documents(db, [doc], body.rule_ids if (body and not is_initial) else None)
     return document_out(doc, counts_by_document(db, [doc.id]).get(doc.id))
 
-
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Удалить документ и его результаты")
 def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     doc = get_document_or_404(db, document_id, user)
@@ -264,4 +248,3 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), user:
     db.flush()
     refresh_analysis(db, analysis_id)
     db.commit()
-

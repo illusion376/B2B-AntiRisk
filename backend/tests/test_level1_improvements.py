@@ -16,7 +16,6 @@ from app.services.retrieval import (
     compute_chunk_similarity,
 )
 
-
 def _make_rule(rule_id: str, title: str, severity: str = "YELLOW", legal: str = "44-ФЗ") -> RiskRule:
     return RiskRule(
         id=rule_id,
@@ -29,7 +28,6 @@ def _make_rule(rule_id: str, title: str, severity: str = "YELLOW", legal: str = 
         llm_prompt=f"Проверь {title}",
         legal_reference=legal,
     )
-
 
 def _make_draft(
     rule: RiskRule,
@@ -58,11 +56,6 @@ def _make_draft(
         source="LLM",
     )
 
-
-
-
-
-
 def test_quote_overlap_ratio():
     q1 = "Поставщик уплачивает Заказчику штраф в размере 10% от цены Контракта за каждый день просрочки"
     q2 = "Поставщик уплачивает Заказчику штраф в размере 10% от цены Контракта за каждый день нарушения"
@@ -74,7 +67,6 @@ def test_quote_overlap_ratio():
 
     assert quote_overlap_ratio(q1, q3) < 0.20
 
-
 def test_are_duplicate_by_same_clause():
     rule1 = _make_rule("uncapped_liability", "Неограниченная ответственность", "YELLOW")
     rule2 = _make_rule("unreasonable_penalty", "Несоразмерный штраф", "RED")
@@ -84,18 +76,15 @@ def test_are_duplicate_by_same_clause():
 
     assert are_duplicate_findings(d1, d2) is True
 
-
 def test_are_duplicate_by_overlapping_quote():
     rule1 = _make_rule("uncapped_liability", "Неограниченная ответственность", "YELLOW")
     rule2 = _make_rule("unreasonable_penalty", "Несоразмерный штраф", "RED")
-
 
     q = "Заказчик удерживает неустойку из обеспечения исполнения контракта в безусловном порядке"
     d1 = _make_draft(rule1, "YELLOW", None, q, "Риск удержания", page=4)
     d2 = _make_draft(rule2, "RED", "раздел 8", q + " без согласия поставщика", "Штраф", page=4)
 
     assert are_duplicate_findings(d1, d2) is True
-
 
 def test_not_duplicate_for_different_clauses_and_quotes():
     rule1 = _make_rule("uncapped_liability", "Неограниченная ответственность", "RED")
@@ -105,7 +94,6 @@ def test_not_duplicate_for_different_clauses_and_quotes():
     d2 = _make_draft(rule2, "YELLOW", "4.1", "Оплата производится в течение 60 дней", "Оплата", page=2)
 
     assert are_duplicate_findings(d1, d2) is False
-
 
 def test_merge_two_drafts_combines_attributes():
     rule1 = _make_rule("uncapped_liability", "Неограниченная ответственность", "YELLOW", "ст. 34 44-ФЗ")
@@ -127,7 +115,6 @@ def test_merge_two_drafts_combines_attributes():
 
     merged = merge_two_drafts(d1, d2)
 
-
     assert merged.severity == "RED"
 
     assert merged.clause == "6.2"
@@ -143,7 +130,6 @@ def test_merge_two_drafts_combines_attributes():
     assert "Установить предел ответственности" in merged.counter_proposal
 
     assert merged.confidence == 0.92
-
 
 def test_merge_duplicate_drafts_in_list():
     rule1 = _make_rule("r1", "Правило 1", "YELLOW")
@@ -166,18 +152,12 @@ def test_merge_duplicate_drafts_in_list():
     drafts = [d1, d2, d3, green_draft]
     merged = merge_duplicate_drafts(drafts)
 
-
     assert len(merged) == 3
 
     assert merged[0].severity == "RED"
     assert merged[0].clause == "5.1"
 
     assert merged[2].severity == "GREEN"
-
-
-
-
-
 
 def test_compute_chunk_similarity_embeddings():
     v1 = [1.0, 0.0, 0.0]
@@ -190,7 +170,6 @@ def test_compute_chunk_similarity_embeddings():
 
     assert pytest.approx(compute_chunk_similarity(c1, c2), 0.01) == 1.0
     assert pytest.approx(compute_chunk_similarity(c1, c3), 0.01) == 0.0
-
 
 def test_compute_chunk_similarity_text_fallback():
 
@@ -205,15 +184,12 @@ def test_compute_chunk_similarity_text_fallback():
     assert compute_chunk_similarity(c1, c2) >= 0.85
     assert compute_chunk_similarity(c1, c3) < 0.50
 
-
 def test_apply_mmr_selects_diverse_chunks():
 
     boilerplate1 = "Приложение № 1: Спецификация оборудования. Наименование товара, количество, единицы измерения."
     boilerplate2 = "Приложение № 2: Спецификация оборудования. Наименование товара, количество, единицы измерения повторно."
     boilerplate3 = "Приложение № 3: Спецификация оборудования. Наименование товара, количество, единицы измерения повторно."
     warranty_clause = "Раздел 7: Гарантийные обязательства. Поставщик гарантирует устранение дефектов в течение 24 часов."
-
-
 
     c1 = RetrievedChunk(uuid.uuid4(), 1, 10, 10, "Прил. 1", boilerplate1, score=0.035, fts_hit=True)
     c2 = RetrievedChunk(uuid.uuid4(), 2, 11, 11, "Прил. 2", boilerplate2, score=0.034, fts_hit=True)

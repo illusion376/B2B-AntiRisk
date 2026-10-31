@@ -4,10 +4,8 @@ from app.services.quotes import locate_quote
 from app.services.search import search_pages
 from app.services.structure import build_chunks, build_outline, detect_law_type, split_segments
 
-
 def _pages_dicts(pages):
     return [{"page_number": p.page_number, "words": p.words} for p in pages]
-
 
 def test_extract_and_structure(contract_pdf):
     pages = extract_pages(contract_pdf)
@@ -31,7 +29,6 @@ def test_extract_and_structure(contract_pdf):
     assert "ограниченной общей суммой" in joined
     assert detect_law_type(joined) == "44-FZ"
 
-
 def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     pages = _pages_dicts(extract_pages(contract_pdf))
 
@@ -40,7 +37,6 @@ def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     assert exact.highlights and exact.highlights[0]["page"] == 1
     assert len(exact.highlights[0]["rects"]) == 2
 
-
     hyphen = locate_quote(pages, "НЕ ОГРАНИЧЕННОЙ общей суммой «Контракта»", (1, 1))
     assert hyphen.verified and hyphen.clause == "6.2"
 
@@ -48,13 +44,11 @@ def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     assert not fuzzy.verified and fuzzy.page_number == 2 and fuzzy.clause == "7.2"
     assert "60 календарных дней" in fuzzy.text
 
-
     heading = locate_quote(pages, "СРОК ДЕЙСТВИЯ КОНТРАКТА 7.1. Настоящий Контракт вступает в силу", (2, 2))
     assert heading.verified and heading.clause == "7.1"
 
     missing = locate_quote(pages, "Заказчик вправе изменить цену в одностороннем порядке", (1, 2))
     assert not missing.verified
-
 
 def test_search(contract_pdf):
     pages = _pages_dicts(extract_pages(contract_pdf))
@@ -62,7 +56,6 @@ def test_search(contract_pdf):
     assert total >= 3
     assert {h.page for h in hits} == {1, 2}
     assert all(h.highlights for h in hits)
-
 
 def test_page_sections_for_html_viewer(contract_pdf):
     from app.services.structure import page_sections

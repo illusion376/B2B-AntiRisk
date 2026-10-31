@@ -18,7 +18,6 @@ export function validateUpload(file: Pick<File, 'name' | 'size'>, existing: Proj
   return null;
 }
 
-
 export function getProcessing(file: ProcessingState, _now?: number) {
   return { phase: file.phase, progress: file.progress, label: file.label };
 }

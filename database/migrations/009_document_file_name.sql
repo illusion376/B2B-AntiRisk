@@ -1,8 +1,4 @@
-
-
-
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_name VARCHAR(255);
-
 
 UPDATE documents
 SET file_name = SUBSTRING(

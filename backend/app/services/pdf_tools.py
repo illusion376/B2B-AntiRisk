@@ -17,7 +17,6 @@ _COLORS = {"RED": (0.90, 0.22, 0.21), "YELLOW": (0.98, 0.70, 0.10), "LOW": (0.40
            "GREEN": (0.26, 0.63, 0.28)}
 _SEVERITY_LABEL = {"RED": "Критично", "YELLOW": "Внимание", "LOW": "Низкий риск", "GREEN": "Без рисков"}
 
-
 def thumbnail(pdf_path: Path, analysis_id: uuid.UUID, document_id: uuid.UUID, page_number: int, width: int) -> Path:
     target = storage.subdir(analysis_id, "thumbs") / f"{document_id}_{page_number}_{width}.png"
     if target.exists():
@@ -31,13 +30,9 @@ def thumbnail(pdf_path: Path, analysis_id: uuid.UUID, document_id: uuid.UUID, pa
         pix.save(target)
     return target
 
-
-
-
 _MARGIN = 190
 _NOTE_CSS = "* {font-family: sans-serif; font-size: 7.5pt; line-height: 1.25;} .meta {color: #555555;}"
 _PAGE_BOTTOM = 12
-
 
 @dataclass(eq=False)
 class _Note:
@@ -45,10 +40,8 @@ class _Note:
     page_index: int | None = None
     rect: fitz.Rect | None = None
 
-
 def _hex(color: tuple[float, float, float]) -> str:
     return "#" + "".join(f"{round(c * 255):02x}" for c in color)
-
 
 def _note_html(f: dict, with_location: bool = False) -> str:
     color = _hex(_COLORS.get(f["severity"], _COLORS["YELLOW"]))
@@ -64,7 +57,6 @@ def _note_html(f: dict, with_location: bool = False) -> str:
         parts.append(f"<b>Рекомендация:</b> {escape(f['counter_proposal'])}")
     return "<br>".join(parts)
 
-
 def _put_html(page, rect: fitz.Rect, html: str, scale_low: float = 1) -> float | None:
     """Пишет HTML в прямоугольник; возвращает занятую высоту или None, если текст не помещается.
 
@@ -75,13 +67,11 @@ def _put_html(page, rect: fitz.Rect, html: str, scale_low: float = 1) -> float |
         return None
     return rect.height - spare if scale >= 1 else rect.height
 
-
 def _widen(page, width: float) -> None:
     """Добавляет поле справа; координаты содержимого и подсветки не меняются."""
     media, crop = page.mediabox, page.cropbox
     page.set_mediabox(fitz.Rect(media.x0, media.y0, media.x1 + width, media.y1))
     page.set_cropbox(fitz.Rect(crop.x0, crop.y0, crop.x1 + width, crop.y1))
-
 
 def _marker(page, rect: fitz.Rect, number, color, content_width: float, placed: list[fitz.Rect]) -> None:
     """Цветная метка с номером замечания на правом краю страницы, на уровне первой строки цитаты.
@@ -96,7 +86,6 @@ def _marker(page, rect: fitz.Rect, number, color, content_width: float, placed: 
     placed.append(box)
     page.draw_rect(box, color=None, fill=color)
     page.insert_text(fitz.Point(box.x0 + 2.5, box.y1 - 2.3), label, fontname="hebo", fontsize=7, color=(1, 1, 1))
-
 
 def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
     """Размещает комментарии на поле справа напротив цитат. Возвращает те, что не поместились."""
@@ -138,14 +127,12 @@ def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
                 leftovers.append(n)
     return leftovers
 
-
 def _appendix_page(doc) -> tuple[fitz.Page, float]:
     page = doc.new_page(width=595, height=842)
     used = _put_html(page, fitz.Rect(50, 40, 545, 800),
                      "<b style='font-size: 11pt'>Замечания к документу</b><br><span class='meta'>"
                      "Не уместились на полях страниц или не привязаны к точному месту в тексте.</span>")
     return page, 40 + (used or 0) + 12
-
 
 def _notes_appendix(doc, notes: list[_Note]) -> None:
     """Страницы в конце документа для замечаний, которые не поместились на полях."""
@@ -162,7 +149,6 @@ def _notes_appendix(doc, notes: list[_Note]) -> None:
         color = _COLORS.get(n.finding["severity"], _COLORS["YELLOW"])
         page.draw_rect(fitz.Rect(50, cursor, 52.5, cursor + used), color=None, fill=color)
         cursor += used + 10
-
 
 def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author: str | None = None,
                   company: str | None = None) -> Path:

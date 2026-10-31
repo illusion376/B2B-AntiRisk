@@ -1,4 +1,3 @@
-
 @layer components {
   .workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 26px 0 0; }
   .workspace-summary-card { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; row-gap: 2px; padding: 16px 18px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
@@ -65,7 +64,6 @@
   }
 }
 
-
 .dashboard-shell .project-row-actions, .dashboard-shell .project-actions { display: flex; align-items: center; gap: 6px; }
 .dashboard-shell .project-row-actions { justify-content: flex-end; }
 .dashboard-shell .project-heading-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
@@ -79,7 +77,6 @@
 .project-delete-warning p + p { margin-top: 10px; }
 .dashboard-shell .modal .project-delete-confirm { background: #a12f29; border-color: #a12f29; color: #fff; }
 .dashboard-shell .modal .project-delete-confirm:hover { background: #85241f; }
-
 
 .dashboard-shell .dashboard-state.failed { color: #b04d40; }
 .dashboard-shell .project-files-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
@@ -100,7 +97,6 @@
 .dashboard-shell .project-no-documents { padding: 0 12px 15px 55px; color: #888; font-size: .75rem; line-height: 1.6; }
 .dashboard-shell .project-files-empty .secondary-button,
 .dashboard-shell .dashboard-empty .primary-button { margin-top: 18px; }
-
 
 .dashboard-shell .project-files-view { padding: 22px 28px; background: #fafbfc; }
 .dashboard-shell .project-upload-section { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; margin: 0 0 20px; }

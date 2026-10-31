@@ -23,7 +23,6 @@ CREATE TABLE IF NOT EXISTS analyses (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -97,7 +96,6 @@ CREATE TABLE IF NOT EXISTS risk_findings (
 
 CREATE INDEX IF NOT EXISTS idx_findings_analysis_id ON risk_findings(analysis_id);
 
-
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -142,7 +140,6 @@ BEGIN
 END;
 $$;
 
-
 INSERT INTO users (id, email, full_name, company_name, role)
 VALUES
 (
@@ -153,4 +150,3 @@ VALUES
     'USER'
 )
 ON CONFLICT (email) DO NOTHING;
-

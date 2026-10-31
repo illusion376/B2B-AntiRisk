@@ -17,10 +17,8 @@ log = logging.getLogger(__name__)
 
 _CLASSIFIER_INSTANCE = None
 
-
 class NLIError(RuntimeError):
     pass
-
 
 class NLIClassifier:
     def __init__(
@@ -59,9 +57,7 @@ class NLIClassifier:
         model.eval()
         self.model = model
 
-
         id2label = getattr(model.config, "id2label", {}) or {}
-
 
         self.idx_entailment = 0
         self.idx_neutral = 1
@@ -121,7 +117,6 @@ class NLIClassifier:
                 })
 
         return results
-
 
 def get_nli_classifier() -> NLIClassifier:
     """Ленивая инициализация синглтона классификатора."""

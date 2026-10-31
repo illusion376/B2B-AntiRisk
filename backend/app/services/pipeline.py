@@ -36,12 +36,8 @@ _STAGE_RANK = {"UPLOADED": -1, "QUEUED": 0, "CONVERTING": 1, "OCR": 1, "VECTORIZ
 _ANALYSIS_STAGE = {-1: "UPLOADED", 0: "QUEUED", 1: "OCR", 2: "VECTORIZING", 3: "ANALYZING"}
 _SEVERITY_ORDER = {severity: i for i, severity in enumerate(SEVERITY_ORDER)}
 
-
 class ProcessingError(RuntimeError):
     """Ошибка с понятным пользователю сообщением."""
-
-
-
 
 def set_document(document_id: uuid.UUID, **fields) -> None:
     with session_scope() as db:
@@ -49,7 +45,6 @@ def set_document(document_id: uuid.UUID, **fields) -> None:
         analysis_id = db.scalar(select(Document.analysis_id).where(Document.id == document_id))
         if analysis_id:
             refresh_analysis(db, analysis_id)
-
 
 def refresh_analysis(db: Session, analysis_id: uuid.UUID) -> None:
     """Пересчитывает статус и прогресс анализа по его документам.
@@ -101,7 +96,6 @@ def refresh_analysis(db: Session, analysis_id: uuid.UUID) -> None:
     if previous_status != analysis.analysis_status:
         _log_completion(db, analysis)
 
-
 def _log_completion(db: Session, analysis: Analysis) -> None:
     """Запись в журнале — источник «Истории» и уведомлений во фронтенде."""
     counts = dict(db.execute(
@@ -126,9 +120,6 @@ def _log_completion(db: Session, analysis: Analysis) -> None:
         },
     ))
 
-
-
-
 def _extract(document_id: uuid.UUID, pdf_path: Path) -> list[PageContent]:
     last_update = 0.0
 
@@ -140,7 +131,6 @@ def _extract(document_id: uuid.UUID, pdf_path: Path) -> list[PageContent]:
             set_document(document_id, progress=10 + round(40 * done / max(total, 1)))
 
     return extract_pages(pdf_path, on_page=on_page)
-
 
 def _save_pages(db: Session, document_id: uuid.UUID, pages: list[PageContent]) -> None:
     db.execute(delete(DocumentPage).where(DocumentPage.document_id == document_id))
@@ -155,7 +145,6 @@ def _save_pages(db: Session, document_id: uuid.UUID, pages: list[PageContent]) -
         ocr_confidence=p.ocr_confidence,
     ) for p in pages)
 
-
 def rule_embedding_key(rule: RiskRule) -> str:
     """Ключ кэша эмбеддинга правила: модель + хэш текста запроса.
 
@@ -164,7 +153,6 @@ def rule_embedding_key(rule: RiskRule) -> str:
     """
     digest = hashlib.sha256(rule.semantic_query.encode("utf-8")).hexdigest()[:12]
     return f"{settings.embedding_model_id}#{digest}"
-
 
 def ensure_rule_embeddings(db: Session, rules: list[RiskRule]) -> None:
     """Эмбеддинг semantic_query кэшируется в risk_rules и пересчитывается при смене модели или текста."""
@@ -177,7 +165,6 @@ def ensure_rule_embeddings(db: Session, rules: list[RiskRule]) -> None:
         rule.embedding_model = rule_embedding_key(rule)
     db.flush()
 
-
 def applicable_rules(db: Session, law_type: str | None, rule_ids: list[str] | None = None) -> list[RiskRule]:
     query = select(RiskRule).where(RiskRule.is_active.is_(True)).order_by(RiskRule.sort_order, RiskRule.id)
     if law_type in ("44-FZ", "223-FZ"):
@@ -186,14 +173,12 @@ def applicable_rules(db: Session, law_type: str | None, rule_ids: list[str] | No
         query = query.where(RiskRule.id.in_(rule_ids))
     return list(db.scalars(query))
 
-
 def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) -> None:
     """Прогоняет правила по уже извлечённому и векторизованному документу и сохраняет замечания."""
     with session_scope() as db:
         doc = db.get(Document, document_id)
         if doc is None:
             raise ProcessingError("Документ не найден")
-
 
         mode = resolve_analysis_mode(doc.analysis_mode)
         doc.analysis_mode = mode
@@ -227,7 +212,6 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
 
     drafts = merge_duplicate_drafts(drafts)
 
-
     with session_scope() as db:
         stmt = delete(RiskFinding).where(RiskFinding.document_id == document_id)
         if rule_ids:
@@ -246,7 +230,6 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
                            if any(draft.source == "ERROR" for draft in drafts) else None),
         ))
         refresh_analysis(db, analysis_id)
-
 
 def _save_findings(db: Session, analysis_id: uuid.UUID, document_id: uuid.UUID, drafts: list[FindingDraft]) -> None:
     for d in drafts:
@@ -270,7 +253,6 @@ def _save_findings(db: Session, analysis_id: uuid.UUID, document_id: uuid.UUID, 
             source=d.source,
         ))
 
-
 def _renumber(db: Session, document_id: uuid.UUID) -> None:
     """Порядок как в макете: критические, затем «внимание», затем «без замечаний»; внутри — по документу."""
     rows = db.execute(
@@ -285,7 +267,6 @@ def _renumber(db: Session, document_id: uuid.UUID) -> None:
     ))
     for index, (finding, _) in enumerate(ordered):
         finding.sort_index = index
-
 
 def process_document(document_id: uuid.UUID) -> None:
     started = time.monotonic()

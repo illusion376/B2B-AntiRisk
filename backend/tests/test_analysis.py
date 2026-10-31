@@ -10,7 +10,6 @@ from app.services.llm import parse_json_response
 from app.services.retrieval import RetrievedChunk
 from app.services.scoring import risk_score, traffic_light
 
-
 def _rule(severity="RED") -> RiskRule:
     return RiskRule(
         id="unreasonable_penalty", law_type="44-FZ", category="Штрафы и пени", severity=severity,
@@ -19,15 +18,12 @@ def _rule(severity="RED") -> RiskRule:
         llm_prompt="Проверь размер пени", legal_reference="ст. 34 44-ФЗ",
     )
 
-
 def _chunk(content: str, page: int = 1) -> RetrievedChunk:
     return RetrievedChunk(uuid.uuid4(), 0, page, page, "6. Ответственность сторон › п. 6.2", content, 0.03, True)
-
 
 def test_parse_json_response_variants():
     assert parse_json_response('```json\n{"verdict": "OK"}\n```') == {"verdict": "OK"}
     assert parse_json_response('Ответ: {"verdict": "RISK", "issues": []} конец') == {"verdict": "RISK", "issues": []}
-
 
 def test_llm_answer_to_drafts(contract_pdf):
     pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
@@ -59,12 +55,10 @@ def test_llm_answer_to_drafts(contract_pdf):
     }, pages)
     assert no_evidence[0].severity == "UNKNOWN"
 
-
     yellow_rule = _rule("YELLOW")
     answer["issues"][0]["severity"] = "RED"
     raised = _build_drafts(yellow_rule, RuleContext(yellow_rule, [chunk]), answer, pages)
     assert raised[0].severity == "YELLOW"
-
 
     low_rule = _rule("LOW")
     lowered = _build_drafts(low_rule, RuleContext(low_rule, [chunk]), answer, pages)
@@ -74,12 +68,10 @@ def test_llm_answer_to_drafts(contract_pdf):
     assert _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)[0].severity == "LOW"
     answer["issues"][0]["severity"] = "RED"
 
-
     answer["issues"][0]["quote"] = "Совершенно другой текст, которого нет"
     unverified = _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)
     assert unverified[0].severity == "UNKNOWN" and not unverified[0].quote_verified
     assert unverified[0].confidence is None and unverified[0].exact_quote is None
-
 
 def test_heuristic_mode(contract_pdf):
     pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
@@ -90,7 +82,6 @@ def test_heuristic_mode(contract_pdf):
     assert len(drafts) == 1
     assert drafts[0].severity == "YELLOW" and drafts[0].source == "HEURISTIC" and drafts[0].quote_verified
 
-
 def test_hash_embedding_similarity():
     import numpy as np
 
@@ -99,7 +90,6 @@ def test_hash_embedding_similarity():
     c = np.array(_hash_embedding("гарантийный срок производителя", 1024))
     assert len(a) == 1024 and abs(np.linalg.norm(a) - 1) < 1e-5
     assert a @ b > a @ c
-
 
 @pytest.mark.parametrize("severities,expected_score,expected_light", [
     ([], 0, "GREEN"),
@@ -121,7 +111,6 @@ def test_hash_embedding_similarity():
 def test_scoring(severities, expected_score, expected_light):
     assert risk_score(iter(severities)) == expected_score
     assert traffic_light(iter(severities)) == expected_light
-
 
 def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     import asyncio
@@ -162,7 +151,6 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     assert len(calls) == 2
     assert "44-ФЗ" in calls[0] and "[F1] (стр. 1" in calls[0]
 
-
 def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
     from unittest.mock import MagicMock
     from app.services import analyzer, nli
@@ -188,7 +176,6 @@ def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
     assert drafts[0].confidence == 0.88
     assert "Семантический NLI-анализ подтвердил риск" in drafts[0].comment
 
-
 def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
     from unittest.mock import MagicMock
     from app.services import analyzer, nli
@@ -207,7 +194,6 @@ def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
     assert drafts[0].severity == "GREEN"
     assert drafts[0].source == "NLI"
     assert "риск опровергнут" in drafts[0].comment
-
 
 def test_nli_failure_does_not_change_explicit_mode(contract_pdf, monkeypatch):
     from app.services import analyzer, nli

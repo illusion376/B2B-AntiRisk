@@ -1,2 +1,1 @@
-
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS llm_model VARCHAR(200);

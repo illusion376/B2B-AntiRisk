@@ -15,7 +15,6 @@ from app.vocab import REVIEW_FROM_API, REVIEW_LABELS
 
 router = APIRouter(prefix="/api/findings", tags=["Замечания"])
 
-
 def _get(db: Session, finding_id: uuid.UUID, user: User) -> RiskFinding:
     finding = db.get(RiskFinding, finding_id)
     if finding is None:
@@ -23,11 +22,9 @@ def _get(db: Session, finding_id: uuid.UUID, user: User) -> RiskFinding:
     get_document_or_404(db, finding.document_id, user)
     return finding
 
-
 @router.get("/{finding_id}", response_model=FindingOut)
 def get_finding(finding_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return finding_out(_get(db, finding_id, user))
-
 
 @router.patch("/{finding_id}", response_model=FindingOut,
               summary="Статус проверки замечания: unseen (не просмотрено) / accepted (принято) / dismissed (отклонено)")
@@ -46,7 +43,6 @@ def update_finding(finding_id: uuid.UUID, body: FindingUpdate, db: Session = Dep
         "document_id": str(finding.document_id),
     })
     db.flush()
-
 
     severities = db.scalars(select(RiskFinding.severity).where(
         RiskFinding.document_id == finding.document_id, RiskFinding.review_status != "DISMISSED")).all()

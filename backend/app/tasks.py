@@ -7,11 +7,9 @@ from app.services.analysis_modes import AnalysisModeError
 
 log = logging.getLogger(__name__)
 
-
 @celery_app.task(name="documents.process")
 def process_document(document_id: str) -> None:
     pipeline.process_document(uuid.UUID(document_id))
-
 
 @celery_app.task(name="documents.reanalyze")
 def reanalyze_document(document_id: str, rule_ids: list[str] | None = None) -> None:

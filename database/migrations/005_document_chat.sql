@@ -1,5 +1,3 @@
-
-
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS chat_revision UUID NOT NULL DEFAULT uuid_generate_v4();
 
 CREATE TABLE IF NOT EXISTS document_chat_messages (

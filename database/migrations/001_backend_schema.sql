@@ -1,8 +1,3 @@
-
-
-
-
-
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS law_type VARCHAR(20) NOT NULL DEFAULT 'AUTO';
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS file_size BIGINT;
@@ -10,9 +5,6 @@ ALTER TABLE analyses ADD COLUMN IF NOT EXISTS stored_path TEXT;
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS rules_checked INT NOT NULL DEFAULT 0;
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_analyses_user_id ON analyses(user_id, created_at DESC);
-
-
-
 
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_name VARCHAR(255) NOT NULL DEFAULT '';
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS relative_path TEXT;
@@ -37,9 +29,6 @@ CREATE TRIGGER trigger_documents_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-
-
-
 CREATE TABLE IF NOT EXISTS document_pages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -53,14 +42,12 @@ CREATE TABLE IF NOT EXISTS document_pages (
     UNIQUE (document_id, page_number)
 );
 
-
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS chunk_index INT;
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS page_end INT;
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS tsv tsvector
     GENERATED ALWAYS AS (to_tsvector('russian', content)) STORED;
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON document_chunks USING gin (tsv);
-
 
 ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS legal_reference TEXT;
 ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 100;
@@ -73,8 +60,6 @@ CREATE TRIGGER trigger_risk_rules_updated_at
     BEFORE UPDATE ON risk_rules
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
-
 
 ALTER TABLE risk_findings ALTER COLUMN page_number DROP NOT NULL;
 ALTER TABLE risk_findings ALTER COLUMN exact_quote DROP NOT NULL;
@@ -93,7 +78,6 @@ ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewer_comment TEXT;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_findings_document_id ON risk_findings(document_id);
-
 
 UPDATE risk_rules SET legal_reference = 'ч. 4–8 ст. 34 44-ФЗ; Правила, утв. ПП РФ от 30.08.2017 № 1042', sort_order = 10
 WHERE id = 'unreasonable_penalty' AND legal_reference IS NULL;

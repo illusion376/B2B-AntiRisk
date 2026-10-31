@@ -64,25 +64,20 @@ selected_finding помогает понять тематический вопр
 (полный текст черновика либо оба null). Пиши обычным текстом с абзацами и списками, без HTML,
 Markdown-таблиц и ссылок. При нехватке данных объясни это, не заполняй пробелы догадками.""".replace("__OFF_TOPIC_ANSWER__", OFF_TOPIC_ANSWER)
 
-
 @dataclass
 class ChatContext:
     data: dict
     sources: dict[str, ChatSource]
     model: str | None = None
 
-
 def context_version(document: Document) -> str:
 
-
     return str(document.chat_revision)
-
 
 def visible_results(db: Session, document: Document) -> list[RiskFinding]:
     return list(db.scalars(select(RiskFinding).where(
         RiskFinding.document_id == document.id, visible_findings(),
     ).order_by(RiskFinding.sort_index, RiskFinding.id)))
-
 
 def result_data(finding: RiskFinding) -> dict:
     return {
@@ -96,11 +91,9 @@ def result_data(finding: RiskFinding) -> dict:
         "reviewer_comment": finding.reviewer_comment,
     }
 
-
 def results_version(findings: list[RiskFinding]) -> str:
     return hashlib.sha256(json.dumps([result_data(f) for f in findings], ensure_ascii=False,
                                     sort_keys=True).encode()).hexdigest()
-
 
 def select_passages(pages: Iterable[tuple[int, str]], query: str, selected_page: int | None,
                     budget: int = DOCUMENT_BUDGET) -> tuple[list[dict], bool]:
@@ -136,7 +129,6 @@ def select_passages(pages: Iterable[tuple[int, str]], query: str, selected_page:
         chosen.append({"id": f"page-{page}-{part}", "page": page, "part": part, "text": content})
     chosen.sort(key=lambda p: (p["page"], p["part"]))
     return chosen, total_chars > budget - remaining
-
 
 def build_context(db: Session, document: Document, user: User, findings: list[RiskFinding],
                   selected: RiskFinding | None, question: str) -> ChatContext:
@@ -188,7 +180,6 @@ def build_context(db: Session, document: Document, user: User, findings: list[Ri
         "sources": [s.model_dump(mode="json") for s in sources.values()],
     }, sources=sources, model=document.llm_model)
 
-
 def history_data(messages: list[DocumentChatMessage]) -> tuple[list[dict], dict | None]:
     history = []
     remaining = HISTORY_BUDGET
@@ -202,7 +193,6 @@ def history_data(messages: list[DocumentChatMessage]) -> tuple[list[dict], dict 
                             "finding_id": str(message.finding_id) if message.finding_id else None})
     return list(reversed(history)), latest_draft
 
-
 async def answer(context: ChatContext, request: ChatRequest, messages: list[DocumentChatMessage]) -> tuple[AssistantReply, list[dict]]:
     history, latest_draft = history_data(messages)
     payload = {"server_context": context.data, "history": history, "latest_draft": latest_draft,
@@ -213,7 +203,6 @@ async def answer(context: ChatContext, request: ChatRequest, messages: list[Docu
         except (TimeoutError, httpx.TimeoutException):
             raise
         except Exception as exc:
-
 
             raise LLMError("Не удалось получить ответ модели") from exc
     reply = AssistantReply.model_validate(result)

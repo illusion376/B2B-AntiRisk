@@ -185,8 +185,6 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     if (selectedFinding) setCollapsed(previous => previous.filter(level => level !== selectedFinding.severity));
   }, [selectedFinding]);
 
-
-
   useEffect(() => { scrollToSelected(); }, [page, selected, currentPage, viewerMode]);
 
   function scrollToSelected() {

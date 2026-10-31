@@ -25,17 +25,14 @@ from app.vocab import SEVERITY_FROM_API, SEVERITY_TO_API
 
 router = APIRouter(prefix="/api/rules", tags=["Правила проверки"])
 
-
 def default_query(title: str, description: str) -> str:
     return f"{title}. {description}".strip(" .")
-
 
 def default_prompt(title: str, description: str) -> str:
     text = f"Проверь условие «{title}»."
     if description:
         text += f" {description.rstrip('.')}."
     return text + " Риском является условие, которое ухудшает положение поставщика или нарушает 44-ФЗ / 223-ФЗ."
-
 
 def rule_out(rule: RiskRule) -> RuleOut:
     return RuleOut(
@@ -46,7 +43,6 @@ def rule_out(rule: RiskRule) -> RuleOut:
         created_at=rule.created_at, updated_at=rule.updated_at,
     )
 
-
 def _model_fields(body: RuleCreate) -> dict:
     data = body.model_dump(exclude={"id", "severity", "enabled"})
     data["severity"] = SEVERITY_FROM_API[body.severity]
@@ -55,18 +51,15 @@ def _model_fields(body: RuleCreate) -> dict:
     data["llm_prompt"] = data["llm_prompt"] or default_prompt(body.title, body.description)
     return data
 
-
 def _get(db: Session, rule_id: str) -> RiskRule:
     rule = db.get(RiskRule, rule_id)
     if rule is None:
         raise HTTPException(404, "Правило не найдено")
     return rule
 
-
 def _require_editor(user: User) -> None:
     if user.role == "AUDITOR":
         raise HTTPException(403, "Недостаточно прав для изменения правил")
-
 
 @router.get("", response_model=list[RuleOut], summary="Список правил")
 def list_rules(
@@ -85,11 +78,9 @@ def list_rules(
         query = query.where(RiskRule.category == category)
     return [rule_out(r) for r in db.scalars(query)]
 
-
 @router.get("/{rule_id}", response_model=RuleOut)
 def get_rule(rule_id: str, db: Session = Depends(get_db), _: User = Depends(current_user)):
     return rule_out(_get(db, rule_id))
-
 
 @router.post("", response_model=RuleOut, status_code=status.HTTP_201_CREATED, summary="Добавить правило")
 def create_rule(body: RuleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -103,7 +94,6 @@ def create_rule(body: RuleCreate, db: Session = Depends(get_db), user: User = De
     db.commit()
     db.refresh(rule)
     return rule_out(rule)
-
 
 @router.patch("/{rule_id}", response_model=RuleOut, summary="Изменить правило (в т. ч. включить/выключить)")
 def update_rule(rule_id: str, body: RuleUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -137,7 +127,6 @@ def update_rule(rule_id: str, body: RuleUpdate, db: Session = Depends(get_db), u
     db.refresh(rule)
     return rule_out(rule)
 
-
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Удалить правило и его замечания")
 def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _require_editor(user)
@@ -147,7 +136,6 @@ def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depend
     db.delete(rule)
     log_action(db, user.id, "RULE_DELETED", "rule", None, {"rule_id": rule_id, "title": rule.title})
     db.commit()
-
 
 def _run_rule(db: Session, rule: RiskRule, document_id: uuid.UUID) -> RuleTestResult:
     mode = analysis_mode_or_422()
@@ -175,7 +163,6 @@ def _run_rule(db: Session, rule: RiskRule, document_id: uuid.UUID) -> RuleTestRe
     ]
     return RuleTestResult(rule_id=rule.id, findings=findings, fragments=fragments)
 
-
 @router.post("/{rule_id}/test", response_model=RuleTestResult,
              summary="Проверить сохранённое правило на документе (результат не сохраняется)")
 def test_rule(rule_id: str, body: RuleTestRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -185,7 +172,6 @@ def test_rule(rule_id: str, body: RuleTestRequest, db: Session = Depends(get_db)
     result = _run_rule(db, _get(db, rule_id), doc.id)
     db.commit()
     return result
-
 
 @router.post("/preview", response_model=RuleTestResult,
              summary="Проверить черновик правила на документе до сохранения")

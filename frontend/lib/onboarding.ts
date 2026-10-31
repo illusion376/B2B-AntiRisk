@@ -29,7 +29,6 @@ export function parseOnboarding(raw: string | null): OnboardingProgress {
 
 export type ProjectTourStage = 'upload' | 'start' | 'waiting' | 'open' | 'failed' | 'unavailable';
 
-
 export function projectTourStage(project: Project): ProjectTourStage {
   if (!project.files.length) return 'upload';
   const items = project.files.flatMap(file => [file, ...file.documents]);

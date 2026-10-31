@@ -18,7 +18,6 @@ celery_app.conf.update(
     timezone="Europe/Moscow",
 )
 
-
 @worker_process_init.connect
 def _reset_db_pool(**_) -> None:
 

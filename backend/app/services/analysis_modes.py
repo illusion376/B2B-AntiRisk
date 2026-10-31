@@ -4,22 +4,18 @@ from fastapi import HTTPException
 from app.config import settings
 from app.schemas import AnalysisMode, AnalysisModeOut, AnalysisModesOut
 
-
 class AnalysisModeError(ValueError):
     def __init__(self, code: str, message: str, mode: str):
         super().__init__(message)
         self.detail = {"code": code, "message": message, "analysis_mode": mode}
 
-
 def _llm_available() -> bool:
     return settings.llm_enabled
-
 
 def default_analysis_mode() -> AnalysisMode:
     if settings.analysis_engine == "auto":
         return "llm" if settings.llm_enabled else settings.heuristic_engine
     return settings.analysis_engine
-
 
 def resolve_analysis_mode(requested: str | None = None) -> AnalysisMode:
     mode = default_analysis_mode() if requested is None else requested
@@ -39,13 +35,11 @@ def resolve_analysis_mode(requested: str | None = None) -> AnalysisMode:
         )
     return mode
 
-
 def analysis_mode_or_422(requested: str | None = None) -> AnalysisMode:
     try:
         return resolve_analysis_mode(requested)
     except AnalysisModeError as exc:
         raise HTTPException(422, detail=exc.detail) from exc
-
 
 def capabilities() -> AnalysisModesOut:
 

@@ -51,12 +51,10 @@ SCANNED_PAGE = """9. ОБЕСПЕЧЕНИЕ ИСПОЛНЕНИЯ КОНТРАК�
 
 failures: list[str] = []
 
-
 def check(condition: bool, message: str) -> None:
     print(("  OK   " if condition else "  FAIL ") + message)
     if not condition:
         failures.append(message)
-
 
 def build_contract_pdf() -> bytes:
     if FONT is None:
@@ -66,7 +64,6 @@ def build_contract_pdf() -> bytes:
         page = doc.new_page()
         page.insert_textbox(pymupdf.Rect(60, 60, 540, 780), text, fontsize=11, fontname="cyr", fontfile=FONT)
 
-
     tmp = pymupdf.open()
     tmp_page = tmp.new_page()
     tmp_page.insert_textbox(pymupdf.Rect(60, 60, 540, 780), SCANNED_PAGE, fontsize=12, fontname="cyr", fontfile=FONT)
@@ -74,7 +71,6 @@ def build_contract_pdf() -> bytes:
     scan = doc.new_page()
     scan.insert_image(scan.rect, stream=image)
     return doc.tobytes()
-
 
 def build_spec_docx() -> bytes:
     doc = DocxDocument()
@@ -89,7 +85,6 @@ def build_spec_docx() -> bytes:
     doc.save(buf)
     return buf.getvalue()
 
-
 def build_zip() -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -97,7 +92,6 @@ def build_zip() -> bytes:
         zf.writestr("Документация/Техническое задание.docx", build_spec_docx())
         zf.writestr("Документация/readme.exe", b"not a document")
     return buf.getvalue()
-
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
@@ -244,7 +238,6 @@ def main() -> None:
             print("  -", f)
         sys.exit(1)
     print(f"Все проверки пройдены. Проект «{title}», id={pid}, файл id={file_id}")
-
 
 if __name__ == "__main__":
     main()

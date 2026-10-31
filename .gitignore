@@ -1,4 +1,4 @@
-
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,7 +19,7 @@ wheels/
 .installed.cfg
 *.egg
 
-
+# Virtual environments
 .venv/
 env/
 venv/
@@ -27,14 +27,14 @@ ENV/
 env.bak/
 venv.bak/
 
-
+# Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
 .storage/
 storage/
 
-
+# Node & Next.js
 node_modules/
 .next/
 out/
@@ -44,12 +44,12 @@ yarn-error.log*
 .pnpm-debug.log*
 *.tsbuildinfo
 
-
+# Environment variables
 .env
 .env.local
 .env.*.local
 
-
+# IDE & OS
 .vscode/
 .idea/
 *.swp

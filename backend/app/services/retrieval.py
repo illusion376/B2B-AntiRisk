@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 
-
 @dataclass
 class RetrievedChunk:
     id: uuid.UUID
@@ -22,10 +21,8 @@ class RetrievedChunk:
     embedding: list[float] | None = None
     distance: float | None = None
 
-
 def vector_literal(vec: list[float]) -> str:
     return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
-
 
 def _parse_embedding(val) -> list[float] | None:
     if val is None:
@@ -41,7 +38,6 @@ def _parse_embedding(val) -> list[float] | None:
         return [float(x) for x in cleaned.split(",") if x.strip()]
     return None
 
-
 def compute_chunk_similarity(c1: RetrievedChunk, c2: RetrievedChunk) -> float:
     """Оценивает семантическое/текстовое сходство двух чанков в диапазоне [0.0, 1.0]."""
 
@@ -54,11 +50,9 @@ def compute_chunk_similarity(c1: RetrievedChunk, c2: RetrievedChunk) -> float:
             cos_sim = float(np.dot(v1, v2) / (norm1 * norm2))
             return max(0.0, min(1.0, cos_sim))
 
-
     from rapidfuzz import fuzz
     ratio = fuzz.token_set_ratio(c1.content, c2.content) / 100.0
     return max(0.0, min(1.0, float(ratio)))
-
 
 def apply_mmr(
     chunks: list[RetrievedChunk],
@@ -91,9 +85,7 @@ def apply_mmr(
 
             rel_score = candidate.score / max_score
 
-
             max_sim = max(compute_chunk_similarity(candidate, sel) for sel in selected)
-
 
             redundancy_penalty = 2.0 if max_sim >= sim_threshold else 0.0
 
@@ -111,10 +103,6 @@ def apply_mmr(
             break
 
     return selected
-
-
-
-
 
 _HYBRID_SQL = text("""
 WITH q AS (
@@ -150,7 +138,6 @@ WHERE vec.id IS NOT NULL OR fts.id IS NOT NULL
 ORDER BY score DESC
 LIMIT :candidates
 """)
-
 
 def hybrid_search(
     db: Session,
@@ -188,4 +175,3 @@ def hybrid_search(
     selected_chunks = apply_mmr(candidate_chunks, top_k=top_k)
 
     return sorted(selected_chunks, key=lambda c: (c.chunk_index is None, c.chunk_index or 0))
-

@@ -16,10 +16,8 @@ from app.services.storage import IMAGES, NEEDS_CONVERSION
 
 log = logging.getLogger(__name__)
 
-
 class ConversionError(RuntimeError):
     pass
-
 
 def to_pdf(source: Path, target: Path) -> Path:
     ext = source.suffix.lower()
@@ -32,7 +30,6 @@ def to_pdf(source: Path, target: Path) -> Path:
         return _office_to_pdf(source, target)
     raise ConversionError(f"Формат {ext} не поддерживается")
 
-
 def _check_pdf(path: Path) -> None:
     try:
         with fitz.open(path) as doc:
@@ -43,7 +40,6 @@ def _check_pdf(path: Path) -> None:
     except fitz.FileDataError as exc:
         raise ConversionError("PDF повреждён") from exc
 
-
 def _image_to_pdf(source: Path, target: Path) -> Path:
 
     with fitz.open(source) as img, fitz.open() as out:
@@ -53,7 +49,6 @@ def _image_to_pdf(source: Path, target: Path) -> Path:
                 out.insert_pdf(page_pdf)
         out.save(target, garbage=3, deflate=True)
     return target
-
 
 def _office_to_pdf(source: Path, target: Path) -> Path:
     soffice = shutil.which(settings.soffice_bin)

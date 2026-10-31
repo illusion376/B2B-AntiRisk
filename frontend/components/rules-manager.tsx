@@ -198,7 +198,6 @@ const defaultCategories = [
 export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProps) {
   const availableCategories = Array.from(new Set([...categories, ...defaultCategories]));
 
-
   const [draft, setDraft] = useState<RuleDraft>(() => rule ? {
     title: rule.title,
     description: rule.description,

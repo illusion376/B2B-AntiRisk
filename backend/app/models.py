@@ -8,10 +8,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 EMBEDDING_DIM = 1024
 
-
 class Base(DeclarativeBase):
     pass
-
 
 class User(Base):
     __tablename__ = "users"
@@ -22,7 +20,6 @@ class User(Base):
     company_name: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50), default="USER")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
 
 class Project(Base):
     __tablename__ = "projects"
@@ -37,7 +34,6 @@ class Project(Base):
     analyses: Mapped[list["Analysis"]] = relationship(
         back_populates="project", order_by="Analysis.created_at", cascade="all, delete-orphan", passive_deletes=True
     )
-
 
 class Analysis(Base):
     __tablename__ = "analyses"
@@ -64,7 +60,6 @@ class Analysis(Base):
     documents: Mapped[list["Document"]] = relationship(
         back_populates="analysis", order_by="Document.relative_path", cascade="all, delete-orphan", passive_deletes=True
     )
-
 
 class Document(Base):
     __tablename__ = "documents"
@@ -98,7 +93,6 @@ class Document(Base):
 
     analysis: Mapped[Analysis] = relationship(back_populates="documents")
 
-
 class DocumentPage(Base):
     __tablename__ = "document_pages"
 
@@ -111,7 +105,6 @@ class DocumentPage(Base):
     words: Mapped[list] = mapped_column(JSONB, default=list)
     is_ocr: Mapped[bool] = mapped_column(Boolean, default=False)
     ocr_confidence: Mapped[float | None] = mapped_column(Float)
-
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -126,7 +119,6 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(EMBEDDING_DIM))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
 
 class RiskRule(Base):
     __tablename__ = "risk_rules"
@@ -146,7 +138,6 @@ class RiskRule(Base):
     embedding_model: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
 
 class RiskFinding(Base):
     __tablename__ = "risk_findings"
@@ -176,7 +167,6 @@ class RiskFinding(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-
 class DocumentChatMessage(Base):
     __tablename__ = "document_chat_messages"
 
@@ -192,7 +182,6 @@ class DocumentChatMessage(Base):
     draft_content: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -203,7 +192,6 @@ class AuditLog(Base):
     entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     details: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
 
 def visible_findings():
     """Условие SQL: замечания включённых правил. Во фронтенде замечания отключённого правила

@@ -14,7 +14,6 @@ export interface ReportOptions extends RequestOptions { mode?: string; format?: 
 export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
 export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
 
-
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '');
 
 export class ApiError extends Error {
@@ -226,7 +225,6 @@ export function mapChatMessage(value: ChatMessageDto): ChatMessage {
     }),
   };
 }
-
 
 export function rulePayload(draft: Partial<RuleDraft>) {
   return {

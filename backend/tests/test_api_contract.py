@@ -8,7 +8,6 @@ from app.api.rules import _model_fields, default_prompt, default_query
 from app.schemas import ProjectCreate, RuleCreate
 from app.vocab import REVIEW_FROM_API, SEVERITY_FROM_API, parse_filter, weaker
 
-
 def test_vocabulary():
     assert parse_filter("critical, warning", SEVERITY_FROM_API, "severity") == ["RED", "YELLOW"]
     assert parse_filter("unseen,accepted", REVIEW_FROM_API, "status") == ["NEW", "CONFIRMED"]
@@ -17,14 +16,12 @@ def test_vocabulary():
         parse_filter("RED", SEVERITY_FROM_API, "severity")
     assert weaker("RED", "LOW") == "LOW" and weaker("LOW", "YELLOW") == "LOW"
 
-
 def test_project_validation():
     assert ProjectCreate(title="  Договор поставки ").title == "Договор поставки"
     with pytest.raises(ValidationError):
         ProjectCreate(title="   ")
     with pytest.raises(ValidationError):
         ProjectCreate(title="x" * 121)
-
 
 def test_rule_from_frontend_form():
     """Фронтенд присылает только название, описание, категорию и степень риска."""
@@ -37,7 +34,6 @@ def test_rule_from_frontend_form():
     assert "Срок оплаты" in fields["llm_prompt"]
     with pytest.raises(ValidationError):
         RuleCreate(title="x", category="y", severity="RED")
-
 
 def test_history_wording():
     title, detail = describe("ANALYSIS_COMPLETED", {"file": "Проект контракта.pdf", "rules": 20, "critical": 3,

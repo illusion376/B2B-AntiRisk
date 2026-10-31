@@ -16,13 +16,10 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
-
 class EmbeddingError(RuntimeError):
     pass
 
-
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-
 
 def _hash_embedding(text: str, dim: int) -> list[float]:
     vec = np.zeros(dim, dtype=np.float32)
@@ -42,7 +39,6 @@ def _hash_embedding(text: str, dim: int) -> list[float]:
         vec /= norm
     return vec.tolist()
 
-
 @retry(
     retry=retry_if_exception_type((httpx.TransportError, httpx.HTTPStatusError)),
     stop=stop_after_attempt(4),
@@ -60,7 +56,6 @@ def _remote_batch(client: httpx.Client, texts: list[str]) -> list[list[float]]:
         raise EmbeddingError(f"Embeddings API {response.status_code}: {response.text[:300]}")
     data = sorted(response.json()["data"], key=lambda d: d["index"])
     return [d["embedding"] for d in data]
-
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
@@ -84,7 +79,6 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 "или EMBEDDING_SEND_DIMENSIONS=true для text-embedding-3-*"
             )
     return vectors
-
 
 def embed_text(text: str) -> list[float]:
     return embed_texts([text])[0]

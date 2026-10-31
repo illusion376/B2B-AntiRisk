@@ -14,17 +14,13 @@ AnalysisSensitivity = Literal["strict", "balanced", "sensitive"]
 
 Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
 
-
 class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
-
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 Category = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 FileName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
-
 
 class UserOut(ORM):
     id: uuid.UUID
@@ -34,12 +30,10 @@ class UserOut(ORM):
     role: str
     initials: str
 
-
 class UserProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     company_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] | None = None
-
 
 class SeverityCounts(BaseModel):
     critical: int = 0
@@ -48,9 +42,6 @@ class SeverityCounts(BaseModel):
     ok: int = 0
     unknown: int = 0
     unseen: int = 0
-
-
-
 
 class DocumentOut(ORM):
     id: uuid.UUID
@@ -85,10 +76,8 @@ class DocumentOut(ORM):
     created_at: datetime
     updated_at: datetime | None
 
-
 class DocumentUpdate(BaseModel):
     file_name: FileName
-
 
 class ProjectFileOut(BaseModel):
     """Загруженный файл проекта (ProjectFile во фронтенде). Для ZIP — documents содержит файлы архива."""
@@ -108,16 +97,13 @@ class ProjectFileOut(BaseModel):
     rules_checked: int
     documents: list[DocumentOut]
 
-
 class ProjectCreate(BaseModel):
     title: Title
     description: LongText = ""
 
-
 class ProjectUpdate(BaseModel):
     title: Title | None = None
     description: LongText | None = None
-
 
 class ProjectOut(BaseModel):
     id: uuid.UUID
@@ -130,18 +116,13 @@ class ProjectOut(BaseModel):
     counts: SeverityCounts
     traffic_light: TrafficLight | None
 
-
 class UploadError(BaseModel):
     name: str
     detail: str
 
-
 class UploadResult(BaseModel):
     files: list[ProjectFileOut]
     errors: list[UploadError]
-
-
-
 
 class AnalysisOut(ORM):
     id: uuid.UUID
@@ -164,22 +145,16 @@ class AnalysisOut(ORM):
     updated_at: datetime | None
     completed_at: datetime | None
 
-
 class AnalysisDetail(AnalysisOut):
     documents: list[DocumentOut] = []
-
 
 class AnalysisPage(BaseModel):
     items: list[AnalysisOut]
     total: int
 
-
-
-
 class Highlight(BaseModel):
     page: int
     rects: list[list[float]]
-
 
 class FindingOut(BaseModel):
     """Finding во фронтенде + доказательная база (цитата, норма, подсветка)."""
@@ -206,13 +181,11 @@ class FindingOut(BaseModel):
     reviewed_at: datetime | None
     created_at: datetime
 
-
 class FindingGroup(BaseModel):
     severity: Severity
     label: str
     count: int
     items: list[FindingOut]
-
 
 class FindingsResponse(BaseModel):
     document_id: uuid.UUID | None
@@ -221,36 +194,28 @@ class FindingsResponse(BaseModel):
     categories: list[str]
     statuses: dict[str, int]
 
-
 class FindingUpdate(BaseModel):
     status: ReviewStatus | None = None
     reviewer_comment: str | None = Field(default=None, max_length=5000)
-
-
-
 
 class OutlineClause(BaseModel):
     clause: str
     title: str
     page: int
 
-
 class OutlineSection(BaseModel):
     title: str | None
     page: int
     clauses: list[OutlineClause] = []
-
 
 class Paragraph(BaseModel):
     clause: str
     text: str
     finding_ids: list[uuid.UUID] = []
 
-
 class Section(BaseModel):
     title: str
     paragraphs: list[Paragraph]
-
 
 class PageContent(BaseModel):
     """Страница для HTML-просмотрщика фронтенда (getPageSections)."""
@@ -262,21 +227,16 @@ class PageContent(BaseModel):
     ocr_confidence: float | None
     sections: list[Section]
 
-
 class SearchHit(BaseModel):
     page: int
     clause: str | None = None
     snippet: str
     highlights: list[Highlight]
 
-
 class SearchResponse(BaseModel):
     query: str
     total: int
     hits: list[SearchHit]
-
-
-
 
 class RuleFields(BaseModel):
     title: Title
@@ -291,11 +251,9 @@ class RuleFields(BaseModel):
     legal_reference: str | None = None
     sort_order: int = 100
 
-
 class RuleCreate(RuleFields):
     id: str | None = Field(default=None, pattern=r"^[a-z0-9_]{3,50}$",
                            description="Строковый ключ; если не задан — сгенерируется")
-
 
 class RuleUpdate(BaseModel):
     title: Title | None = None
@@ -308,7 +266,6 @@ class RuleUpdate(BaseModel):
     llm_prompt: str | None = None
     legal_reference: str | None = None
     sort_order: int | None = None
-
 
 class RuleOut(BaseModel):
     """CheckRule во фронтенде + расширенные настройки ИИ."""
@@ -326,26 +283,21 @@ class RuleOut(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
-
 class RuleTestRequest(BaseModel):
     document_id: uuid.UUID
-
 
 class RuleTestResult(BaseModel):
     rule_id: str
     findings: list[dict]
     fragments: list[dict]
 
-
 class StartRequest(BaseModel):
     analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")
     llm_model: str | None = Field(default=None, min_length=1, max_length=200, description="Идентификатор модели ProxyAPI")
     analysis_sensitivity: AnalysisSensitivity = Field(default="balanced", description="Чувствительность к потенциальным рискам")
 
-
 class RerunRequest(StartRequest):
     rule_ids: list[str] | None = Field(default=None, description="Только эти правила; по умолчанию — все активные")
-
 
 class AnalysisModeOut(BaseModel):
     id: AnalysisMode
@@ -353,12 +305,10 @@ class AnalysisModeOut(BaseModel):
     available: bool
     description: str
 
-
 class AnalysisModesOut(BaseModel):
     default_mode: AnalysisMode
     modes: list[AnalysisModeOut]
     configured_model: str | None = None
-
 
 class AnalysisModelOut(BaseModel):
     id: str
@@ -369,22 +319,17 @@ class AnalysisModelOut(BaseModel):
     available: bool
     recommended: bool = False
 
-
 class AnalysisModelsOut(BaseModel):
     default_model: str | None
     models: list[AnalysisModelOut]
     source: Literal["provider", "fallback"]
     warning: str | None = None
 
-
-
-
 class ReportMode(BaseModel):
     id: str
     title: str
     description: str
     formats: list[str]
-
 
 class HistoryEntry(BaseModel):
     """HistoryEntry во фронтенде (+ время в ISO и ссылка на объект)."""

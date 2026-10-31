@@ -18,16 +18,13 @@ from app.config import settings
 from app.db import get_db
 from app.models import Analysis, Base, Document, User
 
-
 @compiles(JSONB, "sqlite")
 def sqlite_jsonb(_type, _compiler, **_kwargs):
     return "JSON"
 
-
 @compiles(UUID, "sqlite")
 def sqlite_uuid(_type, _compiler, **_kwargs):
     return "CHAR(32)"
-
 
 @pytest.fixture
 def profile_workspace(tmp_path, contract_pdf, monkeypatch):
@@ -59,7 +56,6 @@ def profile_workspace(tmp_path, contract_pdf, monkeypatch):
         yield client, owner, other, aid, did, sessions
     engine.dispose()
 
-
 def test_profile_is_committed_and_updates_only_the_current_user(profile_workspace):
     client, owner, other, _, _, sessions = profile_workspace
     response = client.patch("/api/users/me", json={"full_name": "  Иван Иванов  ", "company_name": " ООО «Поставщик» "})
@@ -76,7 +72,6 @@ def test_profile_is_committed_and_updates_only_the_current_user(profile_workspac
     assert client.get("/api/users/me").json() == profile
     assert client.get("/api/users/me", headers={"X-User-Id": str(other)}).json()["initials"] == "АП"
 
-
 @pytest.mark.parametrize("company", [None, "", "   "])
 def test_company_can_be_cleared_without_losing_the_name(profile_workspace, company):
     client, *_ = profile_workspace
@@ -84,13 +79,11 @@ def test_company_can_be_cleared_without_losing_the_name(profile_workspace, compa
     assert response.status_code == 200 and response.json()["company_name"] is None
     assert client.get("/api/users/me").json()["full_name"] == "Аналитик"
 
-
 def test_omitting_company_preserves_it(profile_workspace):
     client, *_ = profile_workspace
     response = client.patch("/api/users/me", json={"full_name": "Новое имя"})
     assert response.status_code == 200
     assert response.json()["company_name"] == "Старая компания"
-
 
 @pytest.mark.parametrize("payload", [
     {"full_name": "   "}, {"full_name": ""}, {"full_name": None}, {"full_name": "a" * 256},
@@ -102,7 +95,6 @@ def test_invalid_profiles_cannot_change_saved_data(profile_workspace, payload):
     before = client.get("/api/users/me").json()
     assert client.patch("/api/users/me", json=payload).status_code == 422
     assert client.get("/api/users/me").json() == before
-
 
 @pytest.mark.parametrize(("endpoint", "mode", "fmt"), [
     ("documents", "detailed", "docx"), ("analyses", "brief", "docx"), ("documents", "protocol", "docx"),
@@ -137,7 +129,6 @@ def test_saved_profile_is_used_by_new_reports(profile_workspace, endpoint, mode,
             else:
                 text = "\n".join(page.get_text() for page in document)
                 assert name in text and company in text
-
 
 def test_company_formula_is_escaped_in_csv_report(profile_workspace):
     client, _, _, _, did, _ = profile_workspace

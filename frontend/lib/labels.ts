@@ -1,6 +1,5 @@
 import type { AnalysisMode, RiskLevel, Severity } from './types';
 
-
 export const statusLabels = { unseen: 'Не просмотрено', accepted: 'Принято', dismissed: 'Отклонено' } as const;
 export const severityLabels: Record<Severity, string> = {
   critical: 'Критические замечания', warning: 'Требуют внимания', low: 'Низкий риск',

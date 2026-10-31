@@ -16,11 +16,9 @@ _STRIP = "«»\"'“”„()[]{}.,;:!?…"
 _CLAUSE_TOKEN = re.compile(r"^\d{1,2}(?:\.\d{1,3}){1,3}\.?$")
 _SECTION_TOKEN = re.compile(r"^\d{1,2}$")
 
-
 _STRICT_LEXEME = re.compile(r"[+\-−]?\d+(?:[.,:/]\d+)*(?:[%‰])?|[^\W\d_]+|[^\w\s]|[\w]", re.UNICODE)
 _WRAP = re.compile(r"([^\W\d_]{3,})[-\u00ad][ \t]*\r?\n[ \t]*([^\W\d_])", re.UNICODE)
 _NEGATIONS = {"не", "ни", "без"}
-
 
 def _dehyphenate_evidence(text: str, *, join_hard_wraps: bool = True) -> str:
     """Склеиваем только буквенный перенос строки, никогда числа/минус/«не-».
@@ -38,10 +36,8 @@ def _dehyphenate_evidence(text: str, *, join_hard_wraps: bool = True) -> str:
         text = _WRAP.sub(join, text)
     return re.sub(r"(?<=[^\W\d_])\u00ad(?=[^\W\d_])", "", text)
 
-
 def _strict_text_tokens(text: str, *, join_hard_wraps: bool = True) -> list[str]:
     return _STRICT_LEXEME.findall(_dehyphenate_evidence(text, join_hard_wraps=join_hard_wraps))
-
 
 def _exact_span(haystack: list[str], needle: list[str], *, strict: bool = False) -> tuple[int, int] | None:
     if not needle:
@@ -49,7 +45,6 @@ def _exact_span(haystack: list[str], needle: list[str], *, strict: bool = False)
     for first in range(len(haystack) - len(needle) + 1):
         if haystack[first:first + len(needle)] != needle:
             continue
-
 
         if strict and first and (
             haystack[first - 1].casefold() in _NEGATIONS
@@ -59,17 +54,14 @@ def _exact_span(haystack: list[str], needle: list[str], *, strict: bool = False)
         return first, first + len(needle) - 1
     return None
 
-
 def normalize_token(token: str) -> str:
     return token.lower().replace("ё", "е").strip(_STRIP).replace("–", "-").replace("—", "-")
-
 
 @dataclass
 class _Token:
     page: int
     words: list[int]
     norm: str
-
 
 @dataclass
 class QuoteMatch:
@@ -79,7 +71,6 @@ class QuoteMatch:
     clause: str | None
     highlights: list[dict] = field(default_factory=list)
     score: float = 0.0
-
 
 def tokenize_pages(pages: list[dict]) -> list[_Token]:
     """pages: [{"page_number", "words": [[x0,y0,x1,y1,text,line], ...]}]"""
@@ -101,7 +92,6 @@ def tokenize_pages(pages: list[dict]) -> list[_Token]:
             i += len(idx)
     return tokens
 
-
 def join_tokens(tokens: list[_Token]) -> tuple[str, list[int]]:
     """Склеивает токены через пробел; starts[i] — позиция начала i-го токена."""
     starts, parts, pos = [], [], 0
@@ -111,13 +101,11 @@ def join_tokens(tokens: list[_Token]) -> tuple[str, list[int]]:
         pos += len(t.norm) + 1
     return " ".join(parts), starts
 
-
 def _token_span(starts: list[int], begin: int, end: int) -> tuple[int, int]:
     """Индексы первого и последнего токена, пересекающих диапазон символов [begin, end)."""
     first = max(bisect_right(starts, begin) - 1, 0)
     last = max(bisect_left(starts, end) - 1, first)
     return first, last
-
 
 def _find(tokens: list[_Token], quote_norm: str, *, fuzzy: bool = True) -> tuple[int, int, float, bool] | None:
     if not tokens or not quote_norm:
@@ -134,7 +122,6 @@ def _find(tokens: list[_Token], quote_norm: str, *, fuzzy: bool = True) -> tuple
     first, last = _token_span(starts, alignment.dest_start, alignment.dest_end)
     return first, last, alignment.score, False
 
-
 def highlight_rects(pages_by_number: dict[int, dict], tokens: list[_Token]) -> list[dict]:
     """Прямоугольники по строкам: соседние слова одной строки объединяются."""
     by_page: dict[int, dict[int, list[float]]] = {}
@@ -150,12 +137,10 @@ def highlight_rects(pages_by_number: dict[int, dict], tokens: list[_Token]) -> l
                 lines[line] = [x0, y0, x1, y1]
     return [{"page": page, "rects": list(lines.values())} for page, lines in by_page.items()]
 
-
 def _starts_line(pages_by_number: dict[int, dict], token: _Token) -> bool:
     words = pages_by_number[token.page]["words"]
     wi = token.words[0]
     return wi == 0 or words[wi - 1][5] != words[wi][5]
-
 
 def clause_for(pages_by_number: dict[int, dict], tokens: list[_Token], start: int, end: int) -> str | None:
     """Номер пункта («6.2»), к которому относится цитата tokens[start:end + 1].
@@ -178,7 +163,6 @@ def clause_for(pages_by_number: dict[int, dict], tokens: list[_Token], start: in
             return token.norm
     return None
 
-
 def _strict_page_tokens(pages: list[dict], *, join_hard_wraps: bool = True) -> list[_Token]:
     tokens: list[_Token] = []
     for page in pages:
@@ -199,7 +183,6 @@ def _strict_page_tokens(pages: list[dict], *, join_hard_wraps: bool = True) -> l
             i += len(indices)
     return tokens
 
-
 def _original_text(pages_by_number: dict[int, dict], tokens: list[_Token], *, keep_lines: bool = False) -> str:
     parts: list[str] = []
     seen: set[tuple[int, int]] = set()
@@ -218,7 +201,6 @@ def _original_text(pages_by_number: dict[int, dict], tokens: list[_Token], *, ke
             previous_line = line
     return "".join(parts)
 
-
 def _strict_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | None,
                   candidate_text: str | None) -> QuoteMatch:
     empty = QuoteMatch(False, page_hint[0] if page_hint else None, None, None)
@@ -226,7 +208,6 @@ def _strict_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | No
     if candidate_text is None or not page_hint or page_hint[0] > page_hint[1]:
         return empty
     scoped_pages = [p for p in pages if page_hint[0] <= p["page_number"] <= page_hint[1]]
-
 
     for join_hard_wraps in (False, True):
         needle = _strict_text_tokens(quote, join_hard_wraps=join_hard_wraps)
@@ -258,7 +239,6 @@ def _strict_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | No
         highlights=highlight_rects(pages_by_number, matched),
         score=100.0,
     )
-
 
 def locate_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | None = None, *,
                  candidate_text: str | None = None, strict: bool = False) -> QuoteMatch:

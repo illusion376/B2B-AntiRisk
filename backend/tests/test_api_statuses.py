@@ -11,7 +11,6 @@ from app.schemas import SeverityCounts
 
 NOW = datetime.now(timezone.utc)
 
-
 def make_document(analysis_id, status="COMPLETED"):
     return Document(
         id=uuid.uuid4(), analysis_id=analysis_id, file_name="contract.pdf", relative_path="contract.pdf",
@@ -21,7 +20,6 @@ def make_document(analysis_id, status="COMPLETED"):
         processing_ms=10, created_at=NOW, updated_at=NOW,
     )
 
-
 def make_analysis(project_id=None, status="COMPLETED"):
     return Analysis(
         id=uuid.uuid4(), project_id=project_id, title="Contract", original_filename="contract.zip",
@@ -30,11 +28,9 @@ def make_analysis(project_id=None, status="COMPLETED"):
         completed_at=NOW,
     )
 
-
 def mock_counts(monkeypatch, analysis_counts=None, document_counts=None):
     monkeypatch.setattr(deps, "counts_by_analysis", lambda *_: analysis_counts or {})
     monkeypatch.setattr(deps, "counts_by_document", lambda *_: document_counts or {})
-
 
 @pytest.mark.parametrize("status", ["UPLOADED", "QUEUED", "ANALYZING", "FAILED", "UNSUPPORTED", "COMPLETED"])
 def test_document_without_visible_checks_has_no_traffic_light_or_score(status):
@@ -44,14 +40,12 @@ def test_document_without_visible_checks_has_no_traffic_light_or_score(status):
     assert result.risk_score is None
     assert result.rules_checked == 0
 
-
 def test_dismissed_findings_still_count_as_completed_checks():
     result = deps.document_out(make_document(uuid.uuid4()), (SeverityCounts(), 3))
 
     assert result.traffic_light == "ok"
     assert result.risk_score == 0
     assert result.rules_checked == 3
-
 
 def test_document_score_uses_visible_findings_after_rule_disabled():
     document = make_document(uuid.uuid4())
@@ -60,7 +54,6 @@ def test_document_score_uses_visible_findings_after_rule_disabled():
     assert result.traffic_light == "warning"
     assert result.risk_score == 13
     assert document.risk_score == 99
-
 
 @pytest.mark.parametrize("counts,expected_score,expected_light", [
     (SeverityCounts(low=1), 3, "ok"),
@@ -76,7 +69,6 @@ def test_document_low_risk_uses_green_without_hiding_higher_risks_or_incomplete_
     assert result.traffic_light == expected_light
     assert result.risk_score == expected_score
     assert result.counts.low == 1
-
 
 def test_low_risk_is_visible_in_analysis_file_and_project(monkeypatch):
     project = Project(id=uuid.uuid4(), title="Test", description="", created_at=NOW, updated_at=NOW)
@@ -96,7 +88,6 @@ def test_low_risk_is_visible_in_analysis_file_and_project(monkeypatch):
     assert file.risk_score == file.documents[0].risk_score == analysis_result.risk_score == 3
     assert result.counts.low == file.counts.low == analysis_result.counts.low == 1
 
-
 @pytest.mark.parametrize("critical,expected_light", [(0, "unknown"), (1, "critical")])
 def test_incomplete_checks_never_produce_green_or_numeric_score(critical, expected_light):
     result = deps.document_out(make_document(uuid.uuid4()),
@@ -105,7 +96,6 @@ def test_incomplete_checks_never_produce_green_or_numeric_score(critical, expect
     assert result.traffic_light == expected_light
     assert result.risk_score is None
     assert result.counts.unknown == 1
-
 
 def test_archive_does_not_hide_unknown_score_of_one_document(monkeypatch):
     analysis = make_analysis()
@@ -119,7 +109,6 @@ def test_archive_does_not_hide_unknown_score_of_one_document(monkeypatch):
 
     assert result.traffic_light == "critical"
     assert result.risk_score is None
-
 
 @pytest.mark.parametrize("status", ["FAILED", "COMPLETED"])
 def test_project_without_successful_checks_is_not_green(monkeypatch, status):
@@ -135,7 +124,6 @@ def test_project_without_successful_checks_is_not_green(monkeypatch, status):
     assert result.traffic_light is None
     assert result.files[0].traffic_light is None
     assert result.files[0].risk_score is None
-
 
 def test_analysis_and_project_file_share_filtered_counts_and_max_document_score(monkeypatch):
     analysis = make_analysis()
@@ -156,7 +144,6 @@ def test_analysis_and_project_file_share_filtered_counts_and_max_document_score(
     assert file.counts == result.counts == SeverityCounts(warning=2)
     assert file.rules_checked == result.rules_checked == 1
     assert result.documents_total == result.documents_supported == 2
-
 
 def test_partially_failed_archive_does_not_claim_successful_full_check(monkeypatch):
     analysis = make_analysis()

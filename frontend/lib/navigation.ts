@@ -12,7 +12,6 @@ export const defaultRoute: WorkspaceRoute = {
   view: 'documents', projectId: '', documentId: null, page: 1, findingId: null,
 };
 
-
 function identifier(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const id = value.trim();

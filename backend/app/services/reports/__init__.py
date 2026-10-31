@@ -39,10 +39,8 @@ MEDIA_TYPES = {
     "csv": "text/csv; charset=utf-8",
 }
 
-
 class ReportError(ValueError):
     pass
-
 
 @dataclass
 class ReportFile:
@@ -50,10 +48,8 @@ class ReportFile:
     filename: str
     media_type: str
 
-
 def _slug(text: str) -> str:
     return re.sub(r"[^\w\-]+", "_", text, flags=re.UNICODE).strip("_")[:80] or "report"
-
 
 def _docx_to_pdf(docx_path: Path) -> Path:
     soffice = shutil.which(settings.soffice_bin)
@@ -70,7 +66,6 @@ def _docx_to_pdf(docx_path: Path) -> Path:
     if not pdf_path.exists():
         raise ReportError("Не удалось сконвертировать отчёт в PDF")
     return pdf_path
-
 
 def _json_payload(data: ReportData, mode: str) -> dict:
     def finding(f):
@@ -105,10 +100,7 @@ def _json_payload(data: ReportData, mode: str) -> dict:
         }
     return payload
 
-
-
 _FORMULA_LIKE = re.compile(r"^(?:[\s\x00-\x1f\ufeff]*[=+\-@]|[\t\r\n])")
-
 
 def csv_cell(value):
     """Кавычки CSV не мешают Excel выполнить формулу: текст документа вида «=HYPERLINK(...)»
@@ -117,14 +109,12 @@ def csv_cell(value):
         return "'" + value
     return value
 
-
 class _SafeCsvWriter:
     def __init__(self, f):
         self._writer = csv.writer(f, delimiter=";", quoting=csv.QUOTE_ALL)
 
     def writerow(self, row: list) -> None:
         self._writer.writerow([csv_cell(v) for v in row])
-
 
 def _write_csv(data: ReportData, mode: str, path: Path) -> None:
     """Таблица как у CSV-отчёта фронтенда: UTF-8 с BOM и «;» — открывается в Excel без настройки."""
@@ -162,7 +152,6 @@ def _write_csv(data: ReportData, mode: str, path: Path) -> None:
                     item.exact_quote or "", item.counter_proposal or "", item.legal_reference or "",
                     REVIEW_LABELS.get(item.review_status, item.review_status),
                 ])
-
 
 def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
     if mode not in MODE_IDS:
