@@ -1,0 +1,241 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowDownWideNarrow, ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, Clock3, FileText, FolderOpen, Layers3, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
+import type { Project, ProjectDraft } from '@/lib/types';
+import { formatProjectDate } from '@/lib/projects';
+import { defaultRoute, serializeRoute } from '@/lib/navigation';
+import { CustomSelect, Modal } from './ui';
+import { ProjectActions } from './project-actions';
+import './project-enhancements.css';
+
+interface ProjectsViewProps {
+  projects: Project[];
+  onOpen: (project: Project) => void;
+  onCreate: () => void;
+  onRename: (project: Project) => void;
+  onDelete: (project: Project) => void;
+  query: string;
+  onQueryChange: (query: string) => void;
+}
+
+type ProjectFilter = 'all' | 'uploaded' | 'processing' | 'ready' | 'failed' | 'empty';
+const PAGE_SIZE = 8;
+const filterIcons = { all: Layers3, uploaded: Clock3, processing: RefreshCw, ready: CircleCheck, failed: AlertTriangle, empty: FileText };
+
+function projectState(project: Project): Exclude<ProjectFilter, 'all'> {
+  if (!project.files.length) return 'empty';
+  if (project.processingCount > 0 || project.files.some(file => file.phase === 'queued' || file.phase === 'processing'
+    || file.documents.some(document => document.phase === 'queued' || document.phase === 'processing'))) return 'processing';
+  if (project.files.some(file => file.phase === 'uploaded'
+    || file.documents.some(document => document.phase === 'uploaded'))) return 'uploaded';
+  if (project.files.some(file => file.phase === 'failed' || file.phase === 'unsupported'
+    || file.documents.some(document => document.phase === 'failed' || document.phase === 'unsupported'))) return 'failed';
+  return 'ready';
+}
+
+const projectStateLabels = {
+  uploaded: 'Ожидает запуска',
+  processing: 'В обработке',
+  ready: 'Готово',
+  failed: 'С ошибками',
+  empty: 'Ожидает файлов',
+};
+
+export function ProjectsView({ projects, onOpen, onCreate, onRename, onDelete, query, onQueryChange }: ProjectsViewProps) {
+  const [sort, setSort] = useState('recent');
+  const [filter, setFilter] = useState<ProjectFilter>('all');
+  const [page, setPage] = useState(0);
+  const normalizedQuery = query.trim().toLocaleLowerCase('ru');
+  const filtered = projects.filter(project => {
+    const searchText = [project.title, project.description, ...project.files.flatMap(file => [
+      file.name, ...file.documents.flatMap(document => [document.name, document.relativePath ?? '']),
+    ])].join(' ').toLocaleLowerCase('ru');
+    return (filter === 'all' || projectState(project) === filter) && searchText.includes(normalizedQuery);
+  }).sort((left, right) => sort === 'recent'
+    ? right.updatedAt - left.updatedAt
+    : left.title.localeCompare(right.title, 'ru', { numeric: true }));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  useEffect(() => setPage(0), [query, filter, sort]);
+
+  const filters: { id: ProjectFilter; label: string; count: number }[] = [
+    { id: 'all', label: 'Все проекты', count: projects.length },
+    { id: 'uploaded', label: 'Ожидают запуска', count: projects.filter(project => projectState(project) === 'uploaded').length },
+    { id: 'processing', label: 'В обработке', count: projects.filter(project => projectState(project) === 'processing').length },
+    { id: 'ready', label: 'Готовые', count: projects.filter(project => projectState(project) === 'ready').length },
+    { id: 'failed', label: 'С ошибками', count: projects.filter(project => projectState(project) === 'failed').length },
+    { id: 'empty', label: 'Без файлов', count: projects.filter(project => projectState(project) === 'empty').length },
+  ];
+
+  return (
+    <section className="secondary-view projects-view">
+      <header className="projects-hero">
+        <div className="projects-hero-copy"><h1>Проекты</h1><p>Здесь собраны все ваши проекты и загруженные документы</p></div>
+        <img className="projects-hero-art" src="/document-stack.svg" alt="" aria-hidden="true" />
+      </header>
+      <div className="dashboard-filter-tabs" role="group" aria-label="Фильтр проектов по статусу">
+        {filters.map(item => {
+          const Icon = filterIcons[item.id];
+          return (
+            <button key={item.id} aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+              <Icon size={21} aria-hidden="true" /><span className="project-filter-label">{item.label}</span><span className="project-filter-count">{item.count}</span>
+            </button>
+          );
+        })}
+      </div>
+      {normalizedQuery && (
+        <p className="dashboard-search-result" role="status">
+          По запросу «{query.trim()}» найдено: {filtered.length}
+          <button onClick={() => onQueryChange('')}>Сбросить поиск</button>
+        </p>
+      )}
+      <div className="projects-table-card">
+        {projects.length > 0 && <div className="projects-table-actions">
+          <button className="primary-button" onClick={onCreate}><Plus size={19} />Новый проект</button>
+          <CustomSelect
+            className="projects-sort"
+            ariaLabel="Сортировка проектов"
+            value={sort}
+            onChange={setSort}
+            icon={<ArrowDownWideNarrow size={16} />}
+            options={[
+              { value: 'recent', label: 'Сначала новые' },
+              { value: 'name', label: 'По названию' },
+            ]}
+          />
+        </div>}
+      {filtered.length > 0 ? (
+        <>
+          <div className="dashboard-table-scroll">
+            <table className="dashboard-project-table">
+              <thead>
+                <tr>
+                  <th scope="col">Проект</th><th scope="col">Статус</th><th scope="col">Файлы</th>
+                  <th scope="col" className="project-findings-cell">Замечания</th><th scope="col">Обновлён</th>
+                  <th scope="col"><span className="sr-only">Действия с проектом</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(project => {
+                  const state = projectState(project);
+                  const riskCount = project.counts.critical + project.counts.warning + project.counts.low;
+                  const hasResults = riskCount > 0 || project.counts.ok > 0 || project.counts.unknown > 0 || project.files.some(file => file.rulesChecked > 0);
+                  return (
+                    <tr key={project.id} className="dashboard-project-row">
+                      <td>
+                        <a
+                          className="dashboard-project-name project-row-link"
+                          href={serializeRoute({ ...defaultRoute, view: 'project', projectId: project.id })}
+                          aria-label={`Открыть проект «${project.title}»`}
+                          onClick={event => {
+                            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                            event.preventDefault();
+                            onOpen(project);
+                          }}
+                        >
+                          <span className="dashboard-file-symbol"><FolderOpen size={17} /></span>
+                          <span><strong>{project.title}</strong><small>{project.description || 'Документы проекта'}</small></span>
+                        </a>
+                      </td>
+                      <td data-label="Статус"><span className={`dashboard-state ${state}`}>{projectStateLabels[state]}</span></td>
+                      <td data-label="Файлы"><span className="dashboard-file-count"><FileText size={13} />{project.files.length}</span></td>
+                      <td data-label="Замечания" className="project-findings-cell">
+                        <span className={`dashboard-findings-count ${riskCount ? 'dashboard-risk-value' : ''}`} title={hasResults ? 'Замечания по результатам проверки документов проекта' : 'Нет результатов проверки'}>
+                          {hasResults ? riskCount : '—'}
+                        </span>
+                      </td>
+                      <td data-label="Обновлён"><time dateTime={new Date(project.updatedAt).toISOString()}>{formatProjectDate(project.updatedAt)}</time></td>
+                      <td>
+                        <div className="project-row-actions"><button className="dashboard-row-action" aria-label={`Открыть проект «${project.title}»`} title="Открыть проект" onClick={() => onOpen(project)}>
+                          <ArrowUpRight size={16} />
+                        </button>
+                        <ProjectActions project={project} onRename={onRename} onDelete={onDelete} compact /></div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="dashboard-table-footer">
+            <span>{currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, filtered.length)} из {filtered.length} проектов</span>
+            <nav aria-label="Страницы списка проектов">
+              <button aria-label="Предыдущая страница" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={15} /></button>
+              <span aria-current="page">{currentPage + 1}</span><small>/ {pageCount}</small>
+              <button aria-label="Следующая страница" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={15} /></button>
+            </nav>
+          </div>
+        </>
+      ) : (
+        <div className="empty-state dashboard-empty">
+          <FolderOpen size={29} />
+          <h3>{projects.length ? 'Проекты не найдены' : 'Создайте первый проект'}</h3>
+          <p>{projects.length ? 'Измените поисковый запрос или выбранный статус.' : 'Добавьте документы одной сделки, чтобы начать проверку.'}</p>
+          {projects.length ? (
+            <button className="secondary-button" onClick={() => { onQueryChange(''); setFilter('all'); }}>Сбросить фильтры</button>
+          ) : <button className="primary-button" onClick={onCreate}><Plus size={16} />Новый проект</button>}
+        </div>
+      )}
+      </div>
+    </section>
+  );
+}
+
+interface NewProjectDialogProps {
+  onCreate: (draft: ProjectDraft) => Promise<string | void>;
+  onClose: () => void;
+}
+
+export function NewProjectDialog({ onCreate, onClose }: NewProjectDialogProps) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+
+  async function createProject() {
+    if (!title.trim() || saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    setError('');
+    try {
+      const message = await onCreate({ title: title.trim(), description: description.trim() });
+      if (message) setError(message);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось создать проект. Попробуйте ещё раз.');
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Новый проект" onClose={() => { if (!saveLock.current) onClose(); }} closeDisabled={saving}>
+      <form aria-busy={saving} onSubmit={event => { event.preventDefault(); void createProject(); }}>
+        <label className="form-label" htmlFor="project-title">Название проекта <span aria-hidden="true">*</span></label>
+        <input
+          id="project-title" className="form-input" autoFocus required maxLength={120} disabled={saving}
+          placeholder="Например, договор поставки" value={title} aria-invalid={!!error}
+          aria-describedby={error ? 'project-error' : undefined}
+          onChange={event => { setTitle(event.target.value); setError(''); }}
+        />
+        <label className="form-label" htmlFor="project-description">Описание</label>
+        <textarea
+          id="project-description" className="form-input" rows={3} maxLength={1000} disabled={saving}
+          placeholder="О чём этот проект" value={description} onChange={event => setDescription(event.target.value)}
+        />
+        <p className="form-hint">После создания можно добавить документы, изображения или ZIP-архив.</p>
+        {error && <p className="field-error" id="project-error" role="alert">{error}</p>}
+        <div className="modal-actions">
+          <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Отмена</button>
+          <button className="primary-button" disabled={saving || !title.trim()}>
+            {saving ? <LoaderCircle size={16} className="spin" /> : <Plus size={16} />}
+            {saving ? 'Создаём проект…' : 'Создать проект'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}

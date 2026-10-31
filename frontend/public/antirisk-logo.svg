@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="790" height="630" viewBox="250 110 790 630" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="ink" x1="0" y1="289" x2="0" y2="566" gradientUnits="userSpaceOnUse"><stop stop-color="#1b2737"/><stop offset="1" stop-color="#151e2c"/></linearGradient>
+    <linearGradient id="red" x1="420" y1="119" x2="858" y2="258" gradientUnits="userSpaceOnUse"><stop stop-color="#ff353d"/><stop offset="1" stop-color="#df0d27"/></linearGradient>
+    <linearGradient id="gold" x1="580" y1="263" x2="680" y2="582" gradientUnits="userSpaceOnUse"><stop stop-color="#ffca00"/><stop offset="1" stop-color="#ff8900"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="590" x2="0" y2="730" gradientUnits="userSpaceOnUse"><stop stop-color="#00bf78"/><stop offset="1" stop-color="#009260"/></linearGradient>
+  </defs>
+  <path d="M450 227C554 124 721 124 828 227" fill="none" stroke="url(#red)" stroke-width="62" stroke-linecap="round"/>
+  <path fill="url(#ink)" fill-rule="evenodd" d="M274 289H377C435 289 471 315 472 355C473 384 458 408 437 419C467 432 482 452 482 481C482 533 444 566 385 566H274Q260 566 260 552V304Q260 289 274 289ZM330 349V398H365C383 398 395 389 395 374C395 359 384 349 367 349ZM330 454V507H371C392 507 404 498 404 480C404 463 393 454 372 454Z"/>
+  <path fill="url(#gold)" d="M527 377C519 377 513 371 516 360C529 302 575 263 637 263C707 263 749 294 749 354C749 404 728 433 691 466L630 510H734Q748 510 748 524V569Q748 582 735 582H528Q515 582 515 569V527Q515 517 523 510L641 406C657 392 668 378 668 360C668 342 656 329 637 329C616 329 600 341 594 363C592 372 588 377 579 377Z"/>
+  <path fill="url(#ink)" fill-rule="evenodd" d="M814 289H920C979 289 1015 315 1016 355C1017 384 1002 408 981 419C1011 432 1026 452 1026 481C1026 533 988 566 929 566H814Q800 566 800 552V304Q800 289 814 289ZM870 349V398H904C927 398 939 389 939 374C939 359 928 349 907 349ZM870 454V507H911C932 507 944 498 944 480C944 463 933 454 912 454Z"/>
+  <path d="M447 623C554 722 718 722 824 623" fill="none" stroke="url(#green)" stroke-width="62" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,34 @@
+.onboarding-tour { position: fixed; inset: 0; z-index: 1000; pointer-events: none; color: #252e3e; }
+.onboarding-tour[hidden] { display: none; }
+.onboarding-tour .onboarding-spotlight { position: fixed; border: 2px solid #ed5a68; border-radius: 12px; box-shadow: 0 0 0 9999px #17203380,0 0 0 4px #fff9; pointer-events: none; }
+.onboarding-tour .onboarding-shade { position: fixed; pointer-events: auto; }
+.onboarding-tour .onboarding-card { position: fixed; max-height: calc(100dvh - 24px); overflow-y: auto; padding: 23px 22px 14px; border: 1px solid #e7eaf1; border-radius: 14px; background: #fff; box-shadow: 0 18px 60px #14203a30; pointer-events: auto; }
+.onboarding-tour .onboarding-arrow { position: fixed; z-index: 1; width: 13px; height: 13px; background: #fff; transform: rotate(45deg); }
+.onboarding-tour .onboarding-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 7px; color: #8290a4; }
+.onboarding-tour .onboarding-close:hover { color: #d51e34; background: #fff0f2; }
+.onboarding-tour .onboarding-caption { margin: 0 20px 9px 0; color: #b0737b; font-size: 9px; letter-spacing: 1px; font-weight: 600; }
+.onboarding-tour .onboarding-card h2 { margin: 0 12px 10px 0; color: #1c2431; font-size: 18px; line-height: 1.35; font-weight: 650; letter-spacing: -.4px; }
+.onboarding-tour .onboarding-card h2:focus { outline: none; }
+.onboarding-tour .onboarding-description { margin: 0; color: #758196; font-size: 13px; line-height: 1.65; }
+.onboarding-tour .onboarding-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #e9edf3; }
+.onboarding-tour .onboarding-footer > span { flex-shrink: 0; color: #96a0b1; font-size: 11px; }
+.onboarding-tour .onboarding-actions { display: flex; align-items: center; gap: 6px; }
+.onboarding-tour .onboarding-next { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 9px 12px; border: 1px solid #de1e31; border-radius: 8px; background: #e92032; color: #fff; font-size: 12px; font-weight: 500; }
+.onboarding-tour .onboarding-next:hover { background: #cb1426; }
+.onboarding-tour .onboarding-next:disabled { opacity: .55; cursor: default; }
+.onboarding-tour .onboarding-back { display: grid; place-items: center; width: 30px; height: 34px; padding: 0; border: 1px solid #e4e9f1; border-radius: 7px; color: #8591a3; }
+.onboarding-tour .onboarding-back:hover { background: #f4f6fa; }
+.onboarding-tour .onboarding-skip { display: block; margin: 12px auto 0; padding: 3px 6px; color: #949eae; font-size: 11px; }
+.onboarding-tour .onboarding-skip:hover { color: #4d5b71; }
+.onboarding-tour button:focus-visible { outline: 2px solid #e92032; outline-offset: 3px; }
+.onboarding-tour .onboarding-spinner { animation: onboarding-spin 1s linear infinite; }
+@keyframes onboarding-spin { to { transform: rotate(360deg); } }
+@media (max-width: 480px) {
+  .onboarding-tour .onboarding-card { padding: 21px 18px 13px; }
+  .onboarding-tour .onboarding-card h2 { font-size: 17px; }
+  .onboarding-tour .onboarding-description { font-size: 12px; }
+  .onboarding-tour .onboarding-next { max-width: 190px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-tour .onboarding-spinner { animation: none; }
+}

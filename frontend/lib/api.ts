@@ -1,0 +1,317 @@
+import type {
+  AnalysisModelsDto, AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
+  ProjectFileDto, RuleDto, UploadDto, UserDto,
+} from './api-types';
+import type {
+  AnalysisMode, AnalysisModels, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
+  ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
+} from './types';
+import { reportFilename, saveDownload } from './report';
+
+export interface RequestOptions { signal?: AbortSignal }
+export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity; llmModel?: string }
+export interface ReportOptions extends RequestOptions { mode?: string; format?: string; includeDismissed?: boolean }
+export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
+export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '');
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number = 0) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Не удалось выполнить запрос. Попробуйте ещё раз.';
+}
+
+function apiUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  return `${API_BASE}${path}${query.size ? `?${query}` : ''}`;
+}
+const segment = encodeURIComponent;
+
+function serverMessage(body: unknown, status: number): string {
+  if (body && typeof body === 'object' && 'detail' in body) {
+    const { detail } = body;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string' && detail.message.trim()) return detail.message;
+    if (Array.isArray(detail)) {
+      const messages = detail.flatMap(item => {
+        if (!item || typeof item !== 'object' || typeof item.msg !== 'string') return [];
+        const path = Array.isArray(item.loc) ? item.loc.filter((part: unknown) => part !== 'body').join('.') : '';
+        return [path ? `${path}: ${item.msg}` : item.msg];
+      });
+      if (messages.length) return messages.join('; ');
+    }
+  }
+  if (status === 401) return 'Необходима авторизация.';
+  if (status === 403) return 'Недостаточно прав для этого действия.';
+  if (status === 404) return 'Запрошенные данные не найдены.';
+  if (status === 413) return 'Размер загружаемых файлов превышает ограничение сервера.';
+  if (status >= 500) return 'Сервер временно недоступен. Попробуйте ещё раз.';
+  return `Не удалось выполнить запрос (HTTP ${status}).`;
+}
+
+async function requestResponse(path: string, options: RequestInit = {}): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin', cache: 'no-store', ...options });
+  } catch (error) {
+    if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+    throw new ApiError('Не удалось связаться с сервером. Проверьте подключение и повторите попытку.');
+  }
+  if (!response.ok) {
+    let body: unknown;
+    try { body = await response.json(); } catch {                                                        }
+    throw new ApiError(serverMessage(body, response.status), response.status);
+  }
+  return response;
+}
+
+async function request<TDto, T>(path: string, adapt: (value: TDto) => T, options: RequestInit = {}): Promise<T> {
+  const response = await requestResponse(path, {
+    ...options,
+    headers: { Accept: 'application/json', ...options.headers },
+  });
+  let value: TDto;
+  try { value = await response.json() as TDto; } catch {
+    if (options.signal?.aborted) throw options.signal.reason;
+    throw new ApiError('Сервер вернул некорректный ответ. Попробуйте ещё раз.', response.status);
+  }
+  try { return adapt(value); } catch {
+    throw new ApiError('Формат данных сервера не соответствует приложению. Обновите страницу.', response.status);
+  }
+}
+
+function json(body: unknown): Pick<RequestInit, 'body' | 'headers'> {
+  return { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } };
+}
+
+function timestamp(value: string): number {
+  const time = typeof value === 'string' ? Date.parse(value) : NaN;
+  if (!Number.isFinite(time)) throw new Error('Invalid timestamp');
+  return time;
+}
+function nullableTime(value: string | null): number | null { return value === null ? null : timestamp(value); }
+function id(value: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Invalid identifier');
+  return value;
+}
+
+function mapCounts(value: SeverityCounts): SeverityCounts {
+  return { ...value, unknown: value.unknown ?? 0 };
+}
+
+const isAnalysisMode = (value: unknown): value is AnalysisMode => value === 'llm' || value === 'nli' || value === 'keyword';
+
+export function mapAnalysisModes(value: AnalysisModesDto): AnalysisModes {
+  if (!isAnalysisMode(value.default_mode) || !Array.isArray(value.modes) || !value.modes.length) throw new Error('Invalid analysis modes');
+  const ids = new Set<string>();
+  for (const mode of value.modes) {
+    if (!isAnalysisMode(mode.id) || ids.has(mode.id) || typeof mode.label !== 'string' || !mode.label.trim()
+      || typeof mode.available !== 'boolean' || typeof mode.description !== 'string') throw new Error('Invalid analysis mode');
+    ids.add(mode.id);
+  }
+  if (!ids.has(value.default_mode) || (value.configured_model != null && typeof value.configured_model !== 'string')) throw new Error('Invalid analysis default');
+  return { defaultMode: value.default_mode, modes: value.modes, configuredModel: value.configured_model ?? null };
+}
+
+export function mapAnalysisModels(value: AnalysisModelsDto): AnalysisModels {
+  if (!Array.isArray(value.models) || !['provider', 'fallback'].includes(value.source)
+    || (value.default_model != null && typeof value.default_model !== 'string')
+    || (value.warning != null && typeof value.warning !== 'string')) throw new Error('Invalid model catalogue');
+  const ids = new Set<string>();
+  const models = value.models.map(model => {
+    if (!model || ['id', 'label', 'provider', 'provider_id', 'description'].some(key => typeof model[key as keyof typeof model] !== 'string')
+      || !model.id.trim() || !model.label.trim() || ids.has(model.id)
+      || typeof model.available !== 'boolean' || typeof model.recommended !== 'boolean') throw new Error('Invalid model');
+    ids.add(model.id);
+    return { id: model.id, label: model.label, provider: model.provider, providerId: model.provider_id,
+      description: model.description, available: model.available, recommended: model.recommended };
+  });
+  return { defaultModel: value.default_model ?? null, models, source: value.source, warning: value.warning ?? null };
+}
+
+export function mapDocument(value: DocumentDto): DocumentInfo {
+  if (value.analysis_mode != null && !isAnalysisMode(value.analysis_mode)) throw new Error('Invalid document analysis mode');
+  return {
+    id: id(value.id), analysisId: id(value.analysis_id), name: value.file_name,
+    analysisMode: value.analysis_mode ?? null,
+    analysisSensitivity: value.analysis_sensitivity ?? null,
+    llmModel: value.llm_model ?? null,
+    chatRevision: value.chat_revision ?? null,
+    relativePath: value.relative_path, type: value.file_type, size: value.file_size,
+    status: value.status, phase: value.phase, label: value.label, progress: value.progress,
+    totalPages: value.total_pages, isScanned: value.is_scanned, ocrPages: value.ocr_pages,
+    ocrConfidence: value.ocr_confidence, lawType: value.law_type, riskScore: value.risk_score,
+    trafficLight: value.traffic_light, counts: mapCounts(value.counts), rulesChecked: value.rules_checked,
+    errorMessage: value.error_message, processingMs: value.processing_ms, hasPreview: value.has_preview,
+    createdAt: timestamp(value.created_at), updatedAt: nullableTime(value.updated_at),
+  };
+}
+export function mapProjectFile(value: ProjectFileDto): ProjectFile {
+  return {
+    id: id(value.id), name: value.name, type: value.type, size: value.size, addedAt: timestamp(value.added_at),
+    status: value.status, phase: value.phase, label: value.label, progress: value.progress,
+    errorMessage: value.error_message, riskScore: value.risk_score, trafficLight: value.traffic_light,
+    counts: mapCounts(value.counts), rulesChecked: value.rules_checked, documents: value.documents.map(mapDocument),
+  };
+}
+export function mapProject(value: ProjectDto): Project {
+  return {
+    id: id(value.id), title: value.title, description: value.description, files: value.files.map(mapProjectFile),
+    createdAt: timestamp(value.created_at), updatedAt: timestamp(value.updated_at), processingCount: value.processing_count,
+    counts: mapCounts(value.counts), trafficLight: value.traffic_light,
+  };
+}
+export function mapFinding(value: FindingDto): Finding {
+  return {
+    id: id(value.id), number: value.number, documentId: id(value.document_id), ruleId: value.rule_id,
+    title: value.title, description: value.description, severity: value.severity, category: value.category,
+    clause: value.clause, page: value.page, quote: value.quote, recommendation: value.recommendation,
+    comment: value.comment, legalReference: value.legal_reference, highlights: value.highlights,
+    quoteVerified: value.quote_verified, confidence: value.confidence, source: value.source,
+    status: value.status, reviewerComment: value.reviewer_comment, reviewedAt: nullableTime(value.reviewed_at),
+    createdAt: timestamp(value.created_at),
+  };
+}
+export function mapRule(value: RuleDto): CheckRule {
+  return {
+    id: id(value.id), title: value.title, description: value.description, category: value.category,
+    severity: value.severity, enabled: value.enabled, lawType: value.law_type,
+    semanticQuery: value.semantic_query, llmPrompt: value.llm_prompt, legalReference: value.legal_reference,
+    sortOrder: value.sort_order, createdAt: timestamp(value.created_at), updatedAt: nullableTime(value.updated_at),
+  };
+}
+export function mapPage(value: PageDto): PageContent {
+  if (!Number.isInteger(value.page) || value.page < 1) throw new Error('Invalid page');
+  return {
+    page: value.page, totalPages: value.total_pages, width: value.width, height: value.height,
+    isOcr: value.is_ocr, ocrConfidence: value.ocr_confidence,
+    sections: value.sections.map(section => ({
+      title: section.title,
+      paragraphs: section.paragraphs.map(paragraph => ({ clause: paragraph.clause, text: paragraph.text, findingIds: paragraph.finding_ids.map(id) })),
+    })),
+  };
+}
+export function mapUser(value: UserDto): User {
+  return { id: id(value.id), email: value.email, fullName: value.full_name, companyName: value.company_name, role: value.role, initials: value.initials };
+}
+export function mapHistory(value: HistoryDto): HistoryEntry {
+  timestamp(value.time);
+  return { id: id(value.id), action: value.action, title: value.title, detail: value.detail, time: value.time, entityType: value.entity_type, entityId: value.entity_id };
+}
+
+export function mapChatMessage(value: ChatMessageDto): ChatMessage {
+  if (!['user', 'assistant'].includes(value.role) || typeof value.content !== 'string'
+    || !value.content.trim() || !Array.isArray(value.sources)
+    || (value.draft_title !== null && typeof value.draft_title !== 'string')
+    || (value.draft_content !== null && typeof value.draft_content !== 'string')) throw new Error('Invalid chat message');
+  return {
+    id: id(value.id), role: value.role, content: value.content,
+    findingId: value.finding_id === null ? null : id(value.finding_id),
+    draftTitle: value.draft_title, draftContent: value.draft_content, createdAt: timestamp(value.created_at),
+    sources: value.sources.map(source => {
+      if (typeof source.label !== 'string' || typeof source.quote !== 'string'
+        || (source.page !== null && (!Number.isInteger(source.page) || source.page < 1))) throw new Error('Invalid chat source');
+      return { id: id(source.id), label: source.label, page: source.page,
+        findingId: source.finding_id === null ? null : id(source.finding_id), quote: source.quote };
+    }),
+  };
+}
+
+export function rulePayload(draft: Partial<RuleDraft>) {
+  return {
+    title: draft.title, description: draft.description, category: draft.category, severity: draft.severity,
+    enabled: draft.enabled, law_type: draft.lawType, semantic_query: draft.semanticQuery, llm_prompt: draft.llmPrompt,
+    legal_reference: draft.legalReference, sort_order: draft.sortOrder,
+  };
+}
+
+export function thumbnailUrl(documentId: string, page: number, width = 160): string {
+  return apiUrl(`/documents/${segment(documentId)}/pages/${page}/thumbnail`, { width });
+}
+export function documentFileUrl(documentId: string): string { return apiUrl(`/documents/${segment(documentId)}/file`); }
+export function documentOriginalUrl(documentId: string): string { return apiUrl(`/documents/${segment(documentId)}/original`); }
+
+export const api = {
+  getDocumentChat: (documentId: string, options: RequestOptions = {}): Promise<ChatHistory> => request<ChatHistoryDto, ChatHistory>(`/documents/${segment(documentId)}/chat`, value => {
+    if (typeof value.available !== 'boolean' || (value.unavailable_reason !== null && typeof value.unavailable_reason !== 'string')) throw new Error('Invalid chat availability');
+    return { available: value.available, unavailableReason: value.unavailable_reason, messages: value.messages.map(mapChatMessage) };
+  }, options),
+  sendDocumentMessage: (documentId: string, message: string, options: RequestOptions & { findingId?: string; mode?: ChatMode } = {}): Promise<ChatMessage[]> => request<{ messages: ChatMessageDto[] }, ChatMessage[]>(`/documents/${segment(documentId)}/chat`, value => value.messages.map(mapChatMessage), {
+    signal: options.signal, method: 'POST', ...json({ message: message.trim(), finding_id: options.findingId ?? null, mode: options.mode ?? 'question' }),
+  }),
+  downloadChatDraft: async (documentId: string, messageId: string, options: RequestOptions = {}): Promise<void> => {
+    const response = await requestResponse(`/documents/${segment(documentId)}/chat/${segment(messageId)}/draft`, options);
+    saveDownload(await response.blob(), reportFilename(response.headers.get('Content-Disposition'), 'Черновик_ИИ.docx'));
+  },
+  getAnalysisModes: (options: RequestOptions = {}): Promise<AnalysisModes> => request('/analysis-modes', mapAnalysisModes, options),
+  getAnalysisModels: (options: RequestOptions = {}): Promise<AnalysisModels> => request('/analysis-models', mapAnalysisModels, options),
+  getProjects: (options: RequestOptions = {}): Promise<Project[]> => request<ProjectDto[], Project[]>('/projects', values => values.map(mapProject), options),
+  getProject: (projectId: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, options),
+  createProject: (draft: ProjectDraft, options: RequestOptions = {}): Promise<Project> => request('/projects', mapProject, { ...options, method: 'POST', ...json(draft) }),
+  renameProject: (projectId: string, title: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, { ...options, method: 'PATCH', ...json({ title: title.trim() }) }),
+  deleteProject: async (projectId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/projects/${segment(projectId)}`, { ...options, method: 'DELETE' }); },
+  deleteProjectFile: async (projectId: string, fileId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/projects/${segment(projectId)}/files/${segment(fileId)}`, { ...options, method: 'DELETE' }); },
+  uploadFiles: (projectId: string, files: File[], options: RequestOptions & { lawType?: 'AUTO' | '44-FZ' | '223-FZ' } = {}): Promise<UploadResult> => {
+    const body = new FormData();
+    for (const file of files) body.append('files', file);
+    body.append('law_type', options.lawType ?? 'AUTO');
+    return request<UploadDto, UploadResult>(`/projects/${segment(projectId)}/files`, value => ({ files: value.files.map(mapProjectFile), errors: value.errors }), { signal: options.signal, method: 'POST', body });
+  },
+  getDocument: (documentId: string, options: RequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}`, mapDocument, options),
+  getPage: (documentId: string, page: number, options: RequestOptions = {}): Promise<PageContent> => request(`/documents/${segment(documentId)}/pages/${page}`, mapPage, options),
+  getFindings: (documentId: string, options: RequestOptions = {}): Promise<Finding[]> => request<FindingsDto, Finding[]>(`/documents/${segment(documentId)}/findings`, value => value.groups.flatMap(group => group.items.map(mapFinding)), options),
+  getOutline: (documentId: string, options: RequestOptions = {}): Promise<OutlineSection[]> => request<OutlineSection[], OutlineSection[]>(`/documents/${segment(documentId)}/outline`, values => values.map(value => ({ title: value.title, page: value.page, clauses: value.clauses })), options),
+  searchDocument: (documentId: string, query: string, options: RequestOptions = {}): Promise<SearchResponse> => request<SearchResponse, SearchResponse>(`/documents/${segment(documentId)}/search?${new URLSearchParams({ q: query })}`, value => {
+    if (!Array.isArray(value.hits) || typeof value.query !== 'string' || !Number.isInteger(value.total)) throw new Error('Invalid search response');
+    return value;
+  }, options),
+  updateFinding: (findingId: string, update: FindingUpdate, options: RequestOptions = {}): Promise<Finding> => request(`/findings/${segment(findingId)}`, mapFinding, { ...options, method: 'PATCH', ...json({ status: update.status, reviewer_comment: update.reviewerComment }) }),
+  renameDocument: (documentId: string, name: string, options: RequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}`, mapDocument, { ...options, method: 'PATCH', ...json({ file_name: name }) }),
+  getRules: (options: RequestOptions = {}): Promise<CheckRule[]> => request<RuleDto[], CheckRule[]>('/rules', values => values.map(mapRule), options),
+  createRule: (draft: RuleDraft, options: RequestOptions = {}): Promise<CheckRule> => request('/rules', mapRule, { ...options, method: 'POST', ...json(rulePayload(draft)) }),
+  updateRule: (ruleId: string, draft: Partial<RuleDraft>, options: RequestOptions = {}): Promise<CheckRule> => request(`/rules/${segment(ruleId)}`, mapRule, { ...options, method: 'PATCH', ...json(rulePayload(draft)) }),
+  deleteRule: async (ruleId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/rules/${segment(ruleId)}`, { ...options, method: 'DELETE' }); },
+  getHistory: (options: HistoryOptions = {}): Promise<HistoryEntry[]> => {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 100), offset: String(options.offset ?? 0) });
+    if (options.actions) query.set('actions', Array.isArray(options.actions) ? options.actions.join(',') : options.actions);
+    return request<HistoryDto[], HistoryEntry[]>(`/history?${query}`, values => values.map(mapHistory), { signal: options.signal });
+  },
+  getUser: (options: RequestOptions = {}): Promise<User> => request('/users/me', mapUser, options),
+  updateUser: (draft: UserProfileDraft, options: RequestOptions = {}): Promise<User> => request('/users/me', mapUser, {
+    ...options, method: 'PATCH', ...json({ full_name: draft.fullName.trim(), company_name: draft.companyName.trim() || null }),
+  }),
+  getReportModes: (options: RequestOptions = {}): Promise<ReportMode[]> => request<ReportMode[], ReportMode[]>('/reports/modes', values => values.map(value => {
+    if (typeof value.id !== 'string' || typeof value.title !== 'string' || !Array.isArray(value.formats)) throw new Error('Invalid report mode');
+    return value;
+  }), options),
+  downloadReport: async (documentId: string, options: ReportOptions = {}): Promise<void> => {
+    const mode = options.mode ?? 'detailed';
+    const format = mode === 'annotated' ? 'pdf' : options.format ?? 'docx';
+    const query = new URLSearchParams({ mode, format, include_dismissed: String(options.includeDismissed ?? false) });
+    const response = await requestResponse(`/documents/${segment(documentId)}/report?${query}`, { signal: options.signal });
+    const blob = await response.blob();
+    saveDownload(blob, reportFilename(response.headers.get('Content-Disposition'), `report.${format}`));
+  },
+  startProjectAnalysis: (projectId: string, options: AnalysisRequestOptions = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/start`, value => {
+    if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid analysis start response');
+    return value;
+  }, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
+  rerunProject: (projectId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<{ documents: number }> => request<{ documents: number }, { documents: number }>(`/projects/${segment(projectId)}/rerun`, value => {
+    if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
+    return value;
+  }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
+  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
+  deleteDocument: async (documentId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/documents/${segment(documentId)}`, { ...options, method: 'DELETE' }); },
+  thumbnailUrl,
+  documentFileUrl,
+  documentOriginalUrl,
+};

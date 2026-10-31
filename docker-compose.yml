@@ -1,3 +1,30 @@
+name: b2b-antirisk
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg://postgres:secret_password@db:5432/b2b_procurement
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_DIR: /data/storage
+  CORS_ORIGINS: ${CORS_ORIGINS:-*}
+  ANALYSIS_ENGINE: ${ANALYSIS_ENGINE:-auto}
+  LLM_BASE_URL: ${LLM_BASE_URL-https://api.proxyapi.ru/v1}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_CONCURRENCY: ${LLM_CONCURRENCY:-6}
+  LLM_JSON_MODE: ${LLM_JSON_MODE:-true}
+  LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-120}
+  LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1500}
+  RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-4}
+  RETRIEVAL_MAX_DISTANCE: ${RETRIEVAL_MAX_DISTANCE:-0.58}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+  EMBEDDING_SEND_DIMENSIONS: ${EMBEDDING_SEND_DIMENSIONS:-false}
+  OCR_THREADS: ${OCR_THREADS:-4}
+  HEURISTIC_ENGINE: ${HEURISTIC_ENGINE:-keyword}
+
+x-backend-build: &backend-build
+  context: .
+  dockerfile: backend/Dockerfile
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -5,17 +32,75 @@ services:
     restart: always
     environment:
       POSTGRES_DB: b2b_procurement
-      POSTGRES_USER: postgres 
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret_password
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d b2b_procurement"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: b2b_redis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: *backend-build
+    image: b2b-antirisk-backend
+    container_name: b2b_backend
+    restart: always
+    environment: *backend-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage:/data/storage
+      - ./database/migrations:/app/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build: *backend-build
+    image: b2b-antirisk-backend
+    container_name: b2b_worker
+    restart: always
+    command: celery -A app.celery_app:celery_app worker --loglevel=INFO --concurrency=${WORKER_CONCURRENCY:-2}
+    environment: *backend-env
+    volumes:
+      - storage:/data/storage
+      - ./database/migrations:/app/migrations:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: b2b_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  storage:
