@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class PageContent:
-    page_number: int  # с 1
+    page_number: int
     width: float
     height: float
     text: str = ""
@@ -35,7 +35,7 @@ class PageContent:
 
 
 _CLEAN = str.maketrans({
-    "\u00ad": "-",  # мягкий перенос: MuPDF часто отдаёт так и обычный дефис («44-ФЗ»)
+    "\u00ad": "-",
     "\u00a0": " ", "\u202f": " ", "\ufb01": "fi", "\ufb02": "fl", "\t": " ",
 })
 
@@ -57,7 +57,7 @@ def _words_to_text(words: list[list]) -> str:
 
 
 def _native_page(page: fitz.Page, page_number: int) -> PageContent:
-    raw = page.get_text("words", sort=True)  # (x0, y0, x1, y1, word, block, line, word_no)
+    raw = page.get_text("words", sort=True)
     words: list[list] = []
     line_ids: dict[tuple[int, int], int] = {}
     for x0, y0, x1, y1, word, block, line, _ in raw:
@@ -80,7 +80,7 @@ def _needs_ocr(page: fitz.Page, native: PageContent) -> bool:
         return False
     if len(native.text.strip()) >= settings.ocr_min_text_chars:
         return False
-    # Пустая страница без картинок — просто пустая страница
+
     return bool(page.get_images(full=False)) or bool(page.get_drawings())
 
 
@@ -147,13 +147,13 @@ def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = N
                 page = doc[index]
                 native = _native_page(page, index + 1)
                 if _needs_ocr(page, native):
-                    # Ограничиваем число отрендеренных страниц в памяти (~9 МБ на страницу A4)
+
                     while len(pending) >= settings.ocr_threads * 2:
                         done += _collect_one(pending, results)
                         report()
                     image = _render(page)
                     pending[index] = pool.submit(ocr_image, image, index + 1, native.width, native.height)
-                    results[index] = native  # запасной вариант, если OCR упадёт
+                    results[index] = native
                 else:
                     results[index] = native
                     done += 1

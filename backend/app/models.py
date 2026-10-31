@@ -80,7 +80,7 @@ class Document(Base):
     total_pages: Mapped[int] = mapped_column(Integer, default=1)
     is_scanned: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(50), default="QUEUED")
-    # Последний выбранный режим; source отдельного замечания описывает его фактический источник.
+
     analysis_mode: Mapped[str | None] = mapped_column(String(20))
     llm_model: Mapped[str | None] = mapped_column(String(200))
     analysis_sensitivity: Mapped[str] = mapped_column(String(20), default="balanced", server_default="balanced")

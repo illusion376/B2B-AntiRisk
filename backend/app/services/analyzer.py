@@ -134,7 +134,7 @@ class LLMResult(_StrictResult):
 @dataclass
 class FindingDraft:
     rule: RiskRule
-    severity: str  # RED / YELLOW / LOW / GREEN / UNKNOWN
+    severity: str
     title: str
     short_description: str | None
     comment: str
@@ -172,7 +172,7 @@ def _clause_label(match_clause: str | None, chunk: RetrievedChunk | None) -> str
         label = chunk.clause_title.split(" › ")[-1]
         if label.startswith("п"):
             return re.sub(r"^пп?\. ", "", label)[:255]
-        section = re.match(r"^(\d{1,2})\.", label)  # только раздел: «6. Ответственность сторон» -> «6»
+        section = re.match(r"^(\d{1,2})\.", label)
         return section.group(1) if section else None
     return None
 
@@ -203,7 +203,7 @@ def _unknown(rule: RiskRule, explanation: str, source: str = "LLM") -> FindingDr
 
 
 def _resolve_quote(pages: list[dict], quote: str, chunk: RetrievedChunk | None) -> QuoteMatch:
-    # An isolated word, heading or number is not meaningful evidence of a clause.
+
     if chunk and len(quote.strip()) >= 20 and len(re.findall(r"[^\W\d_]+", quote, re.UNICODE)) >= 3:
         return locate_quote(pages, quote, _page_hint(chunk), candidate_text=chunk.content, strict=True)
     return QuoteMatch(False, None, None, None)
@@ -213,13 +213,13 @@ def _build_drafts(rule: RiskRule, ctx: RuleContext, answer: dict, pages: list[di
     try:
         result = LLMResult.model_validate(answer)
     except ValidationError as exc:
-        # Do not persist the untrusted response or treat parser failures as successful checks.
+
         error_types = ", ".join(sorted({error["type"] for error in exc.errors()}))
         log.warning("Rule %s: invalid LLM result (%d errors: %s). Details: %s", rule.id, exc.error_count(), error_types, exc.errors())
         return [_unknown(rule, "Ответ ИИ не соответствует схеме проверки. Автоматический вывод не подтверждён.", source="ERROR")]
 
     if result.verdict == "NOT_FOUND":
-        # Omit absent conditions without treating them as errors or confirmed safe results.
+
         return []
     if not ctx.chunks:
         return [_unknown(rule, "ИИ вернул вывод без исходных фрагментов. Проверьте документ вручную.", source="ERROR")]
@@ -259,7 +259,7 @@ def _build_drafts(rule: RiskRule, ctx: RuleContext, answer: dict, pages: list[di
             continue
         seen_quotes.add(match.text)
 
-        # Уровень задаёт правило; модель может только понизить критичность
+
         severity = weaker(rule.severity, issue.severity)
         if severity not in ("RED", "YELLOW", "LOW"):
             drafts.append(_unknown(rule, "В правиле задан неизвестный уровень риска. Проверьте настройки правила.", source="ERROR"))
@@ -433,20 +433,20 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
     return _verify_and_deduplicate_drafts(drafts)
 
 
-# ---------- Эвристический режим (LLM не настроена) ----------
+
 
 _WORD = re.compile(r"\w{4,}", re.UNICODE)
 _SENTENCE = re.compile(r"(?<=[.;!?])\s+")
 
-# Части шаблонов. Число в договоре часто продублировано прописью: «1 (одного) дня», «30 (тридцати) процентов»,
-# а между числом и «%» может стоять пробел: «10 % от цены».
+
+
 _NUM_WORDS = r"\s*(?:\([^)]*\)\s*)?"
 _DAYS = r"(?:рабоч\w*\s+|календарн\w*\s+)?(?:дн[еяйи]\w*|день)\b"
 _PERCENT = r"(?:[.,]\d+)?\s*(?:\([^)]*\)\s*)?(?:%|процент)"
 _SHORT_TERM = rf"(?:в\s+течение|по\s+истечении|через)\s+[1-5]{_NUM_WORDS}{_DAYS}"
 
-# Критические маркеры для правил уровня RED: если формулировка найдена в одном предложении,
-# эвристический режим фиксирует критический риск (RED), а не понижает до YELLOW.
+
+
 _CRITICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     "rnp_short_cure_period": re.compile(
         rf"односторонн\w*\s+отказ[^.]{{0,250}}{_SHORT_TERM}"
@@ -490,14 +490,14 @@ _CRITICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     ),
 }
 
-# Формулировки, снимающие критический маркер в том же предложении:
-# «Lenovo ThinkPad E16 или эквивалент» — товарный знак с допуском эквивалента, это не нарушение.
+
+
 _MARKER_EXCEPTIONS: dict[str, re.Pattern[str]] = {
     "brand_without_equivalent": re.compile(r"или\s+эквивалент|эквивалент\w*\s+допуска", re.IGNORECASE),
 }
 
-# Тематические фильтры: отсекают ложные срабатывания, если фрагмент вообще
-# не относится к предметной области правила (преамбулы, общие положения).
+
+
 _DOMAIN_GUARDS: dict[str, re.Pattern[str]] = {
     "ip_rights_transfer": re.compile(
         r"(?:исключительн\w*\s+прав|интеллектуальн\w*|авторск\w*\s+прав|патент\w*|ноу-хау)",
@@ -574,7 +574,7 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
         if not relevant:
             continue
 
-        # Отсекаем ложные срабатывания по специфическим предметным областям
+
         guard = _DOMAIN_GUARDS.get(rule.id)
         if guard:
             guarded = [c for c in relevant if guard.search(c.content)]
@@ -583,7 +583,7 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             if guarded:
                 relevant = guarded
 
-        # Если для правила задан критический маркер — цитатой становится предложение с маркером
+
         marker = _CRITICAL_PATTERNS.get(rule.id)
         marked = _marked_sentence(relevant, marker, _MARKER_EXCEPTIONS.get(rule.id)) if marker else None
         if marked:
@@ -617,13 +617,13 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             exact_quote=match.text if match.verified else sentence[:400],
             highlights=match.highlights,
             quote_verified=match.verified,
-            confidence=0.7 if is_red else 0.35,  # совпадение по шаблону, а не вывод модели
+            confidence=0.7 if is_red else 0.35,
             source="HEURISTIC",
         ))
     return _verify_and_deduplicate_drafts(drafts)
 
 
-# ---------- NLI режим (анализ противоречий без внешней LLM) ----------
+
 
 def _rule_hypothesis(rule: RiskRule) -> str:
     """Формулирует гипотезу риска для NLI модели из описания правила."""
@@ -651,7 +651,7 @@ def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[Finding
         log.warning("Не удалось инициализировать NLI модель: %s", type(exc).__name__)
         return [_unknown(ctx.rule, "NLI-модель недоступна. Проверка не выполнена; выбранный режим не заменён другим.", source="ERROR") for ctx in contexts]
 
-    # Собираем пары (фрагмент, гипотеза) для пакетного инференса
+
     pair_meta: list[tuple[RuleContext, RetrievedChunk, str]] = []
     pairs_to_predict: list[tuple[str, str]] = []
 

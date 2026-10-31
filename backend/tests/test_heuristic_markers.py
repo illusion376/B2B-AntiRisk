@@ -97,7 +97,7 @@ def test_marker_found_in_less_relevant_chunk():
 
 
 def test_marker_split_across_sentences_is_not_critical():
-    # «13 рабочих дней» не маркер, а «1» и «дня» в разных предложениях не должны склеиваться
+
     text = "Недостатки устраняются в течение 13 рабочих дней с даты уведомления. Срок продлевается по соглашению Сторон."
     [draft] = evaluate_heuristic([_context(_rule("defect_fix_deadline"), text)], [])
     assert draft.severity == "YELLOW"

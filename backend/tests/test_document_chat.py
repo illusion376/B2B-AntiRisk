@@ -170,15 +170,15 @@ def test_turn_uses_server_document_findings_and_preserves_history(chat):
     assert messages[1]["sources"][0]["finding_id"] == str(chat.finding_id)
     context = chat.state["prompts"][0]["server_context"]
     assert context["selected_finding"] == str(chat.finding_id)
-    assert context["report"]["risk_score"] is None  # UNKNOWN is not a successful check
+    assert context["report"]["risk_score"] is None
     assert context["report"]["assessed"] is False
     assert context["report"]["counts"]["UNKNOWN"] == 1
-    assert len(context["findings"]) == 2  # disabled and dismissed excluded
+    assert len(context["findings"]) == 2
     assert "НАШ_ДОКУМЕНТ" in json.dumps(context, ensure_ascii=False)
     assert "ЧУЖОЙ_ДОКУМЕНТ" not in json.dumps(context, ensure_ascii=False)
     assert "not-exposed" not in json.dumps(context)
     saved = chat.client.get(chat.url).json()["messages"]
-    # SQLite drops timezone offsets; PostgreSQL retains timestamptz.
+
     assert [{k: v for k, v in m.items() if k != "created_at"} for m in saved] == [
         {k: v for k, v in m.items() if k != "created_at"} for m in messages]
     assert chat.client.post(chat.url, json={"message": "Как его исправить?"}).status_code == 200

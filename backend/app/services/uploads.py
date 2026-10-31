@@ -59,7 +59,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     Возвращает анализ и id поддерживаемых документов. При defer_processing они
     остаются UPLOADED до явного запуска пользователем, иначе готовы к постановке в очередь.
     """
-    # Отложенная загрузка не требует настройки движка: пользователь выберет его при запуске.
+
     mode = resolve_analysis_mode(analysis_mode) if not defer_processing or analysis_mode is not None else None
     model = (llm_model or settings.llm_model.strip()) if mode == "llm" else None
     original_name = storage.safe_filename(upload.filename or "document")

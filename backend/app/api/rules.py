@@ -123,13 +123,13 @@ def update_rule(rule_id: str, body: RuleUpdate, db: Session = Depends(get_db), u
     for key, value in changes.items():
         if value is not None or key in ("legal_reference",):
             setattr(rule, key, value)
-    # Автоматически построенные запрос и задание следуют за названием и описанием
+
     if auto_query and "semantic_query" not in changes:
         rule.semantic_query = default_query(rule.title, rule.description)
     if auto_prompt and "llm_prompt" not in changes:
         rule.llm_prompt = default_prompt(rule.title, rule.description)
     if rule.semantic_query != old_query:
-        rule.query_embedding = None  # пересчитается при следующей проверке
+        rule.query_embedding = None
         rule.embedding_model = None
     action = "RULE_TOGGLED" if set(body.model_dump(exclude_unset=True)) == {"enabled"} else "RULE_UPDATED"
     log_action(db, user.id, action, "rule", None, {"rule_id": rule_id, "title": rule.title, "enabled": rule.is_active})
@@ -142,7 +142,7 @@ def update_rule(rule_id: str, body: RuleUpdate, db: Session = Depends(get_db), u
 def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _require_editor(user)
     rule = _get(db, rule_id)
-    # Во фронтенде замечания удалённого правила перестают отображаться
+
     db.execute(delete(RiskFinding).where(RiskFinding.rule_id == rule_id))
     db.delete(rule)
     log_action(db, user.id, "RULE_DELETED", "rule", None, {"rule_id": rule_id, "title": rule.title})
@@ -183,7 +183,7 @@ def test_rule(rule_id: str, body: RuleTestRequest, db: Session = Depends(get_db)
     if doc.status != "COMPLETED":
         raise HTTPException(409, "Документ ещё не обработан")
     result = _run_rule(db, _get(db, rule_id), doc.id)
-    db.commit()  # кэш эмбеддинга правила
+    db.commit()
     return result
 
 

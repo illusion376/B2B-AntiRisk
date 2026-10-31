@@ -59,22 +59,22 @@ def test_llm_answer_to_drafts(contract_pdf):
     }, pages)
     assert no_evidence[0].severity == "UNKNOWN"
 
-    # Модель может понизить критичность, но не повысить жёлтое правило до красного
+
     yellow_rule = _rule("YELLOW")
     answer["issues"][0]["severity"] = "RED"
     raised = _build_drafts(yellow_rule, RuleContext(yellow_rule, [chunk]), answer, pages)
     assert raised[0].severity == "YELLOW"
 
-    # Правило с низким риском: даже «RED» от модели остаётся низким риском
+
     low_rule = _rule("LOW")
     lowered = _build_drafts(low_rule, RuleContext(low_rule, [chunk]), answer, pages)
     assert lowered[0].severity == "LOW"
-    # Модель понижает критическое правило до низкого риска
+
     answer["issues"][0]["severity"] = "LOW"
     assert _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)[0].severity == "LOW"
     answer["issues"][0]["severity"] = "RED"
 
-    # Отсутствующая цитата не может подтверждать риск.
+
     answer["issues"][0]["quote"] = "Совершенно другой текст, которого нет"
     unverified = _build_drafts(rule, RuleContext(rule, [chunk]), answer, pages)
     assert unverified[0].severity == "UNKNOWN" and not unverified[0].quote_verified
@@ -158,8 +158,8 @@ def test_evaluate_with_llm_handles_errors(contract_pdf, monkeypatch):
     drafts = asyncio.run(analyzer.evaluate_with_llm(
         [RuleContext(good, [chunk]), RuleContext(broken, [chunk]), RuleContext(_rule(), [])], pages, "doc.pdf", "44-FZ"))
     assert [d.severity for d in drafts] == ["GREEN", "UNKNOWN"]
-    assert drafts[1].source == "ERROR"  # сбой одного правила не роняет весь документ
-    assert len(calls) == 2  # правило без релевантных фрагментов в LLM не отправляется
+    assert drafts[1].source == "ERROR"
+    assert len(calls) == 2
     assert "44-ФЗ" in calls[0] and "[F1] (стр. 1" in calls[0]
 
 
@@ -173,7 +173,7 @@ def test_nli_evaluation_risk_detected(contract_pdf, monkeypatch):
                    "просрочки исполнения обязательств, но не ограниченной общей суммой Контракта.")
 
     fake_classifier = MagicMock()
-    # Возвращаем высокий entailment для рискованного чанка
+
     fake_classifier.predict.return_value = [{"entailment": 0.88, "neutral": 0.08, "contradiction": 0.04}]
     monkeypatch.setattr(nli, "get_nli_classifier", lambda: fake_classifier)
 
@@ -198,7 +198,7 @@ def test_nli_evaluation_contradiction_ok(contract_pdf, monkeypatch):
     chunk = _chunk("6.2. Размер штрафа ограничен ценой контракта в строгом соответствии с 44-ФЗ.")
 
     fake_classifier = MagicMock()
-    # Возвращаем высокий contradiction (риск опровергнут текстом)
+
     fake_classifier.predict.return_value = [{"entailment": 0.05, "neutral": 0.15, "contradiction": 0.80}]
     monkeypatch.setattr(nli, "get_nli_classifier", lambda: fake_classifier)
 

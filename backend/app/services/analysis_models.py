@@ -11,8 +11,8 @@ from app.schemas import AnalysisModelOut, AnalysisModelsOut
 PROVIDERS = {
     "openai": "OpenAI", "anthropic": "Anthropic", "deepseek": "DeepSeek",
 }
-# Only these three models can be selected for a new analysis.
-# IDs are from https://proxyapi.ru/models/browse/text, not display names sent to the API.
+
+
 FEATURED = {
     "openai/gpt-6-luna": ("GPT-6 Luna", "Сбалансированная проверка договоров"),
     "anthropic/claude-haiku-5-5": ("Claude Haiku 5.5", "Более точная проверка договоров"),
@@ -63,7 +63,7 @@ def model_catalog() -> AnalysisModelsOut:
         models = [_option(value, available=enabled and (available_ids is None or value in available_ids))
                   for value in FEATURED]
         result = AnalysisModelsOut(default_model=default or None, models=models, source=source, warning=warning)
-        # Short negative caching permits recovery without delaying every page or launch.
+
         _cache.clear()
         _cache[key] = (time.monotonic() + (300 if source == "provider" else 30), result)
         return result.model_copy(deep=True)

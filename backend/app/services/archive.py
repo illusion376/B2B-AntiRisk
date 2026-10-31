@@ -15,7 +15,7 @@ class ArchiveError(ValueError):
 
 @dataclass
 class ExtractedFile:
-    relative_path: str  # путь внутри архива, как его увидит пользователь
+    relative_path: str
     stored_path: Path
     size: int
     ext: str
@@ -28,7 +28,7 @@ def decode_zip_name(info: zipfile.ZipInfo) -> str:
     Python в этом случае декодирует их как CP437 — получаем «кракозябры». Перекодируем обратно.
     """
     name = info.filename
-    if info.flag_bits & 0x800:  # имя уже в UTF-8
+    if info.flag_bits & 0x800:
         return name
     try:
         raw = name.encode("cp437")
@@ -112,7 +112,7 @@ def _extract(source, target_dir: Path, prefix: PurePosixPath, budget: _Budget, d
             if ext in ARCHIVES:
                 if depth <= 0:
                     continue
-                # Вложенный архив распаковываем «в папку» с его именем
+
                 with zf.open(info) as src:
                     nested = io.BytesIO(src.read())
                 _extract(nested, target_dir, rel, budget, depth - 1, result)
@@ -121,8 +121,8 @@ def _extract(source, target_dir: Path, prefix: PurePosixPath, budget: _Budget, d
             stored = target_dir / f"{uuid.uuid4().hex}{ext}"
             with zf.open(info) as src, open(stored, "wb") as dst:
                 shutil.copyfileobj(src, dst, length=1024 * 1024)
-            # zipfile не отдаёт больше file_size из заголовка и сверяет CRC,
-            # поэтому бюджет, учтённый выше, честный
+
+
             result.append(ExtractedFile(
                 relative_path=str(rel),
                 stored_path=stored,

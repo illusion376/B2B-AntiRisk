@@ -87,7 +87,7 @@ export interface DocumentInfo extends ProcessingState {
   updatedAt: number | null;
 }
 export interface ProjectFile extends ProcessingState {
-  /** Analysis identifier. Use a child document id to open a document. */
+
   id: string;
   name: string;
   type: string;
@@ -158,7 +158,7 @@ export interface HistoryEntry {
   action: string;
   title: string;
   detail: string;
-  /** ISO timestamp supplied by the server. */
+
   time: string;
   entityType: string;
   entityId: string | null;

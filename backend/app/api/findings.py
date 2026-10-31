@@ -47,7 +47,7 @@ def update_finding(finding_id: uuid.UUID, body: FindingUpdate, db: Session = Dep
     })
     db.flush()
 
-    # Отклонённые замечания не учитываются в индексе риска документа и файла
+
     severities = db.scalars(select(RiskFinding.severity).where(
         RiskFinding.document_id == finding.document_id, RiskFinding.review_status != "DISMISSED")).all()
     db.execute(update(Document).where(Document.id == finding.document_id)

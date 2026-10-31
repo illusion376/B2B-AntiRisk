@@ -139,7 +139,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     && (status === 'all' || (statuses[finding.id] ?? finding.status) === status)
     && `${finding.title} ${finding.description} ${finding.quote}`.toLocaleLowerCase('ru').includes(filterText.trim().toLocaleLowerCase('ru'))
   ).sort((a, b) => {
-    // Findings without a display number remain after numbered findings.
+
     if (a.number === null) return b.number === null ? 0 : 1;
     if (b.number === null) return -1;
     return order === 'asc' ? a.number - b.number : b.number - a.number;
@@ -185,8 +185,8 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     if (selectedFinding) setCollapsed(previous => previous.filter(level => level !== selectedFinding.severity));
   }, [selectedFinding]);
 
-  // Text paragraphs are available after their request completes. PDF highlights
-  // scroll themselves into view once the image has loaded below.
+
+
   useEffect(() => { scrollToSelected(); }, [page, selected, currentPage, viewerMode]);
 
   function scrollToSelected() {

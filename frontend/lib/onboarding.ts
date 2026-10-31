@@ -29,7 +29,7 @@ export function parseOnboarding(raw: string | null): OnboardingProgress {
 
 export type ProjectTourStage = 'upload' | 'start' | 'waiting' | 'open' | 'failed' | 'unavailable';
 
-/** Only server state can advance the project guide; an elapsed timer is never a result. */
+
 export function projectTourStage(project: Project): ProjectTourStage {
   if (!project.files.length) return 'upload';
   const items = project.files.flatMap(file => [file, ...file.documents]);

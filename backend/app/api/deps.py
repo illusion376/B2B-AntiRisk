@@ -13,7 +13,7 @@ from app.schemas import AnalysisOut, DocumentOut, FindingOut, ProjectFileOut, Pr
 from app.services.scoring import risk_score, traffic_light
 from app.vocab import REVIEW_TO_API, SEVERITY_TO_API
 
-# Стадии пайплайна -> стадия и подпись для интерфейса
+
 _STAGE_LABELS = {
     "UPLOADED": ("uploaded", "Ожидает запуска"),
     "QUEUED": ("queued", "В очереди"),
@@ -72,7 +72,7 @@ def get_document_or_404(db: Session, document_id: uuid.UUID, user: User) -> Docu
     return document
 
 
-# ---------- подсчёты ----------
+
 
 def _counts(db: Session, group_column, filter_clause) -> dict:
     active = RiskFinding.review_status != "DISMISSED"
@@ -108,7 +108,7 @@ def _sum(counts: list[SeverityCounts]) -> SeverityCounts:
 
 
 def _has_results(counts: SeverityCounts, rules_checked: int) -> bool:
-    # После отклонения всех замечаний счётчики рисков обнуляются, но проверки остаются.
+
     return rules_checked > 0 or any((counts.critical, counts.warning, counts.low, counts.unknown, counts.ok))
 
 
@@ -119,7 +119,7 @@ def light(counts: SeverityCounts, finished: bool, rules_checked: int) -> str | N
                                        + ["LOW"] * counts.low + ["UNKNOWN"] * counts.unknown)]
 
 
-# ---------- сборка ответов ----------
+
 
 def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None) -> DocumentOut:
     severity_counts, rules_checked = counts or (SeverityCounts(), 0)
@@ -128,8 +128,8 @@ def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None
     out.counts = severity_counts
     out.rules_checked = rules_checked
     out.traffic_light = light(severity_counts, doc.status == "COMPLETED", rules_checked)
-    # Считаем по тем же видимым замечаниям, что и светофор: выключенные правила
-    # и отклонённые замечания не должны оставлять устаревший индекс риска.
+
+
     out.risk_score = risk_score(
         ["RED"] * severity_counts.critical + ["YELLOW"] * severity_counts.warning + ["LOW"] * severity_counts.low
         + ["UNKNOWN"] * severity_counts.unknown

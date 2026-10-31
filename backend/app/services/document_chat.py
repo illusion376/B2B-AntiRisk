@@ -73,8 +73,8 @@ class ChatContext:
 
 
 def context_version(document: Document) -> str:
-    # Меняется только при сохранении нового результата проверки, включая
-    # частичную перепроверку. Переименование/рассмотрение не теряют историю.
+
+
     return str(document.chat_revision)
 
 
@@ -149,7 +149,7 @@ def build_context(db: Session, document: Document, user: User, findings: list[Ri
     eligible.sort(key=lambda f: (f is not selected, priority.get(f.severity, 5), f.sort_index))
     for finding in eligible:
         item = result_data(finding)
-        # Не позволяем одному повреждённому/аномально длинному полю вытеснить весь контекст.
+
         for key, value in item.items():
             if isinstance(value, str) and len(value) > 3000:
                 item[key] = value[:3000] + "… [фрагмент сокращён]"
@@ -213,15 +213,15 @@ async def answer(context: ChatContext, request: ChatRequest, messages: list[Docu
         except (TimeoutError, httpx.TimeoutException):
             raise
         except Exception as exc:
-            # LLMClient также может исчерпать повторы HTTP 429/5xx с внутренним
-            # исключением retry. Детали провайдера не должны попадать в API.
+
+
             raise LLMError("Не удалось получить ответ модели") from exc
     reply = AssistantReply.model_validate(result)
     if any(source_id not in context.sources for source_id in reply.source_ids):
         raise LLMError("Ответ содержит неизвестные источники")
     if bool(reply.draft_title and reply.draft_title.strip()) != bool(reply.draft_content and reply.draft_content.strip()):
         raise LLMError("Неполный черновик документа")
-    # Отказ допустим и при запросе черновика; не превращаем его в ошибку API.
+
     if reply.answer.strip() == OFF_TOPIC_ANSWER:
         return AssistantReply(answer=OFF_TOPIC_ANSWER, source_ids=[], draft_title=None, draft_content=None), []
     if request.mode != "question" and not (reply.draft_content and reply.draft_content.strip()):

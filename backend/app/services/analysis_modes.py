@@ -48,7 +48,7 @@ def analysis_mode_or_422(requested: str | None = None) -> AnalysisMode:
 
 
 def capabilities() -> AnalysisModesOut:
-    # available означает наличие конфигурации, не результат запроса к провайдеру.
+
     modes = [
         AnalysisModeOut(id="llm", label="LLM · ProxyAPI", available=_llm_available(),
                         description=("Анализ условий документа языковой моделью через серверный API."
@@ -57,7 +57,7 @@ def capabilities() -> AnalysisModesOut:
         AnalysisModeOut(id="keyword", label="Ключевые слова", available=True,
                         description="Предварительный поиск совпадений по словам. Не определяет наличие нарушения."),
     ]
-    # Недоступный default старой установки остаётся видимым: нужен явный новый выбор.
+
     if default_analysis_mode() == "nli":
         modes.append(AnalysisModeOut(id="nli", label="NLI (отключён)", available=False,
                                     description="Локальные модели исключены из сборки. Выберите LLM или ключевые слова."))

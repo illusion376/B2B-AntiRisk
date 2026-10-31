@@ -131,7 +131,7 @@ def test_saved_profile_is_used_by_new_reports(profile_workspace, endpoint, mode,
         with pymupdf.open(stream=response.content, filetype="pdf") as document:
             if mode == "annotated":
                 assert document.metadata["author"] == name
-                first_page = document[0].get_text()  # данные профиля напечатаны на поле первой страницы
+                first_page = document[0].get_text()
                 assert name in first_page and company in first_page
                 assert document.page_count == 2
             else:

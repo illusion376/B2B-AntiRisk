@@ -15,8 +15,8 @@ def _load_migration_rules() -> list[dict]:
     assert migration_path is not None, "Файл миграции 005_tz_and_qualification_rules.sql должен существовать"
     sql = migration_path.read_text(encoding="utf-8")
 
-    # Регулярка для извлечения кортежей значений из INSERT INTO risk_rules
-    # ('id', 'law', 'cat', 'sev', 'title', 'desc', 'query', 'prompt', 'legal', sort)
+
+
     pattern = re.compile(
         r"\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*(\d+)\s*\)",
         re.MULTILINE | re.DOTALL,
@@ -54,7 +54,7 @@ def test_migration_005_rules_exist():
 def test_migration_005_rules_structure():
     rules = _load_migration_rules()
     for rule in rules:
-        # Проверка создания ORM модели RiskRule
+
         orm_rule = RiskRule(**rule)
         assert orm_rule.id in ("brand_without_equivalent", "experience_restricted_44_223", "excessive_application_demands")
         assert orm_rule.law_type in ("ALL", "44-FZ", "223-FZ")

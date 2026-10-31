@@ -45,7 +45,7 @@ def _check_pdf(path: Path) -> None:
 
 
 def _image_to_pdf(source: Path, target: Path) -> Path:
-    # Многостраничный TIFF тоже поддерживается: каждый кадр -> страница
+
     with fitz.open(source) as img, fitz.open() as out:
         for page_index in range(img.page_count):
             pdf_bytes = img.convert_to_pdf(page_index, page_index)
@@ -62,7 +62,7 @@ def _office_to_pdf(source: Path, target: Path) -> Path:
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        # Отдельный профиль на каждый вызов: иначе параллельные конвертации блокируют друг друга
+
         profile = (tmp_path / "profile").as_uri()
         cmd = [
             soffice, f"-env:UserInstallation={profile}", "--headless", "--norestore",

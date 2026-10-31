@@ -1,7 +1,7 @@
--- Миграция 010: правило уровня «Низкий риск».
--- Среди базовых правил не было ни одного с уровнем LOW, поэтому зелёные замечания появлялись,
--- только если ИИ сам понижал оценку. Уровень правила — верхняя граница: замечание по нему
--- всегда «Низкий риск». ON CONFLICT DO NOTHING — правки пользователя в разделе «Правила» сохраняются.
+
+
+
+
 INSERT INTO risk_rules (
     id, law_type, category, severity, title, description,
     semantic_query, llm_prompt, legal_reference, sort_order, is_active

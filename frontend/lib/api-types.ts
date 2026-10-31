@@ -1,4 +1,4 @@
-/** HTTP payloads from backend/app/schemas.py. Keep snake_case at this boundary. */
+
 import type { AnalysisMode, AnalysisModeOption, AnalysisSensitivity, Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
 
 export interface AnalysisModesDto {

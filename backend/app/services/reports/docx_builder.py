@@ -30,7 +30,7 @@ DISCLAIMER = ("Отчёт сформирован автоматически и �
               "Замечания необходимо проверить специалисту.")
 
 
-# ---------- примитивы ----------
+
 
 def _shade(cell, fill: str) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
@@ -225,7 +225,7 @@ def _footer(doc) -> None:
     run.font.size = Pt(8.5)
 
 
-# ---------- режимы ----------
+
 
 def build_brief(data: ReportData, target: Path) -> Path:
     doc = _new_document(author=data.author)

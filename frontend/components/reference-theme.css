@@ -1,4 +1,4 @@
-/* Workspace layout matched to the supplied 1280 × 720 reference. */
+
 .dashboard-canvas { background: #f7f9fc; min-height: 600px; }
 .dashboard-canvas::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -10,7 +10,7 @@
 .dashboard-canvas::after { content: ''; position: absolute; inset: auto 0 0; height: clamp(180px,33.333%,420px); background: url('/workspace-waves.svg') center bottom / 100% 100% no-repeat; pointer-events: none; }
 .dashboard-canvas .dashboard-shell.app-shell { --nav-width: 264px; --dash-line: #e8ecf2; --line: #e8ecf2; --surface: #fff; grid-template-columns: var(--nav-width) minmax(0,1fr); grid-template-rows: auto minmax(0,1fr); background: transparent; color: #171b23; }
 
-/* The navigation floats above the background, including its compact footer. */
+
 .dashboard-shell .dashboard-sidebar {
   position: relative; min-width: 0; align-self: stretch; margin: 14px 6px 44px 22px; padding: 18px 14px 8px;
   border: 1px solid #ffffffe6; border-radius: 22px;
@@ -62,13 +62,13 @@
 .dashboard-shell .view-title h1 { color: #11151d; font-size: clamp(30px,3.2vw,46px); font-weight: 750; letter-spacing: -1.6px; line-height: 1.15; }
 .dashboard-shell .view-title p { color: #64748b; font-size: 14px; font-weight: 400; line-height: 1.6; }
 .dashboard-shell .view-title .eyebrow { color: #64748b; letter-spacing: 1.6px; font-size: 10px; font-weight: 600; }
-/* Keep the gradient in place while its opaque base color transitions on hover. */
+
 .dashboard-shell .primary-button { min-height: 40px; gap: 8px; padding: 10px 16px; background: #ed0030 linear-gradient(145deg,#ff173c,#ff173c00); border: 1px solid #f20c34; border-radius: 10px; box-shadow: 0 5px 13px #f3153917; font-size: 12px; font-weight: 500; }
 .dashboard-shell .primary-button:hover { background-color: #de0c31; border-color: #de0c31; }
 .dashboard-shell .secondary-button { min-height: 38px; gap: 8px; padding: 9px 13px; background: #ffffffd9; border: 1px solid #dce3ec; border-radius: 9px; color: #334155; font-size: 12px; font-weight: 500; }
 .dashboard-shell .secondary-button:hover { background: #f2f4f8; border-color: #cbd2df; }
 
-/* Projects retain their real counts, filters and row actions. */
+
 .dashboard-shell .projects-view { padding-top: 10px; }
 .dashboard-shell .projects-hero { position: relative; display: flex; align-items: flex-start; min-height: 152px; padding: 0 0 32px; }
 .dashboard-shell .projects-hero-copy { position: relative; z-index: 1; max-width: calc(100% - 250px); }

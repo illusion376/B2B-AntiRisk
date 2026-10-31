@@ -55,7 +55,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), user: Use
     db.add(project)
     try:
         db.flush()
-    except IntegrityError as exc:  # параллельное создание с тем же названием
+    except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, DUPLICATE_TITLE) from exc
     log_action(db, user.id, "PROJECT_CREATED", "project", project.id, {"title": project.title})
@@ -137,8 +137,8 @@ def upload_files(
 def delete_project_file(project_id: uuid.UUID, analysis_id: uuid.UUID, db: Session = Depends(get_db),
                         user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
-    # Тот же порядок блокировок, что при запуске: файл, затем его документы.
-    # Если другая вкладка уже запустила анализ, проверяем статус после блокировки.
+
+
     analysis = db.scalar(select(Analysis).where(
         Analysis.id == analysis_id, Analysis.project_id == project.id).with_for_update())
     if analysis is None:
@@ -165,8 +165,8 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
     model = analysis_model_or_422(body.llm_model if body else None, mode)
     sensitivity = body.analysis_sensitivity if body else "balanced"
-    # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
-    # или одновременном запуске из нескольких вкладок.
+
+
     analyses = list(db.scalars(select(Analysis).where(
         Analysis.project_id == project.id, Analysis.analysis_status == "UPLOADED")
         .order_by(Analysis.id).with_for_update()))

@@ -29,7 +29,7 @@ def _build(db: Session, user: User, analysis_id: uuid.UUID, document_id: uuid.UU
            include_dismissed: bool) -> FileResponse:
     analysis = get_analysis_or_404(db, analysis_id, user)
     if mode == "annotated":
-        fmt = "pdf"  # единственный формат для документа с пометками
+        fmt = "pdf"
     if analysis.analysis_status not in ("COMPLETED", "FAILED"):
         raise HTTPException(409, "Проверка ещё не завершена")
     data = collect(db, analysis, user, document_id, include_dismissed)

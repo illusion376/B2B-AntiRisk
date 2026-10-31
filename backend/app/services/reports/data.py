@@ -141,8 +141,8 @@ def collect(db: Session, analysis: Analysis, user: User, document_id: uuid.UUID 
             )
             for f in findings
         ]
-        # Отклонённые замечания можно включить в отчёт для истории, но они не
-        # повышают риск и не отменяют сам факт выполненной проверки.
+
+
         severities = [f.severity for f in checked_findings if f.review_status != "DISMISSED"]
         assessed = doc.status == "COMPLETED" and bool(checked_findings)
         result_docs.append(ReportDocument(

@@ -59,7 +59,7 @@ def test_document_score_uses_visible_findings_after_rule_disabled():
 
     assert result.traffic_light == "warning"
     assert result.risk_score == 13
-    assert document.risk_score == 99  # сборка ответа не изменяет сохранённый результат
+    assert document.risk_score == 99
 
 
 @pytest.mark.parametrize("counts,expected_score,expected_light", [
@@ -151,7 +151,7 @@ def test_analysis_and_project_file_share_filtered_counts_and_max_document_score(
     file = deps.project_files_out(db, [analysis])[0]
     result = deps.analyses_out(db, [analysis])[0]
 
-    assert file.risk_score == result.risk_score == 10  # max(10, 10), а не сумма рисков двух документов
+    assert file.risk_score == result.risk_score == 10
     assert file.traffic_light == result.traffic_light == "warning"
     assert file.counts == result.counts == SeverityCounts(warning=2)
     assert file.rules_checked == result.rules_checked == 1

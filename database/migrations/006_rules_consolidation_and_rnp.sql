@@ -1,4 +1,4 @@
--- Миграция 006: Консолидация базовых правил и добавление критических маркеров РНП и кабальных условий
+
 INSERT INTO risk_rules (
     id, law_type, category, severity, title, description,
     semantic_query, llm_prompt, legal_reference, sort_order, is_active

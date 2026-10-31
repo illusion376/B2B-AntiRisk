@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS document_chunks(
 
 CREATE INDEX IF NOT EXISTS idx_chunks_analysis_id ON document_chunks(analysis_id);
 
-CREATE INDEX IF NOT EXISTS idx_chunks_embedding 
-ON document_chunks 
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+ON document_chunks
 USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS risk_rules(
@@ -144,7 +144,7 @@ $$;
 
 
 INSERT INTO users (id, email, full_name, company_name, role)
-VALUES 
+VALUES
 (
     '00000000-0000-0000-0000-000000000001',
     'demo_analyst@b2b-center.ru',

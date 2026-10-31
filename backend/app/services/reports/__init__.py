@@ -106,7 +106,7 @@ def _json_payload(data: ReportData, mode: str) -> dict:
     return payload
 
 
-# Начало ячейки, которое Excel воспримет как формулу (в т. ч. за пробелами и управляющими символами)
+
 _FORMULA_LIKE = re.compile(r"^(?:[\s\x00-\x1f\ufeff]*[=+\-@]|[\t\r\n])")
 
 

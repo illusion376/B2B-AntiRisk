@@ -34,7 +34,7 @@ export function useAnalysisNotifications(projects: Project[], ready: boolean, pr
     if (preferences.notifications.desktop && browserPermission() === 'granted') {
       for (const notice of fresh) {
         try { new Notification(notice.title, { body: notice.body, icon: '/antirisk-logo.png', tag: notice.id }); }
-        catch { /* Уведомление остаётся доступным на сайте, включая мобильные браузеры. */ }
+        catch {                                                                                                                                       }
       }
     }
   }, [projects, ready, preferences.notifications]);

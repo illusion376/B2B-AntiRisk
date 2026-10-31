@@ -57,12 +57,12 @@ def rename_document(document_id: uuid.UUID, body: DocumentUpdate, db: Session = 
     new_name = body.file_name
     suffix = Path(old_name).suffix
     if suffix and not new_name.lower().endswith(suffix.lower()):
-        new_name += suffix  # расширение сохраняем, как фронтенд («.pdf» вне поля ввода)
+        new_name += suffix
     doc.file_name = new_name[:255]
     if doc.relative_path:
         parent = str(Path(doc.relative_path).parent)
         doc.relative_path = doc.file_name if parent in ("", ".") else f"{parent}/{doc.file_name}"
-    if doc.analysis.file_type != "zip":  # одиночный файл: имя файла в проекте = имя документа
+    if doc.analysis.file_type != "zip":
         doc.analysis.original_filename = doc.file_name
     log_action(db, user.id, "DOCUMENT_RENAMED", "document", doc.id, {"from": old_name, "to": doc.file_name})
     db.commit()
@@ -128,7 +128,7 @@ def get_page(document_id: uuid.UUID, page_number: int, db: Session = Depends(get
                        .order_by(DocumentPage.page_number)).all()
     sections = page_sections([(n, t) for n, t in texts], page_number)
 
-    # Привязка замечаний к абзацам: по номеру пункта, иначе по началу цитаты
+
     findings = db.scalars(select(RiskFinding).where(
         RiskFinding.document_id == document_id, RiskFinding.page_number == page_number,
         RiskFinding.severity != "GREEN", RiskFinding.quote_verified.is_(True), visible_findings())).all()

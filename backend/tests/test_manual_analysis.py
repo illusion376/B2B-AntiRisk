@@ -35,7 +35,7 @@ def workspace(tmp_path, monkeypatch):
     @event.listens_for(engine, "connect")
     def enable_foreign_keys(connection, _record):
         connection.execute("PRAGMA foreign_keys=ON")
-        # SQLite lower() only handles ASCII; production PostgreSQL also folds Cyrillic.
+
         connection.create_function("lower", 1, lambda value: value.lower() if value is not None else None, deterministic=True)
 
     Base.metadata.create_all(engine)
@@ -69,7 +69,7 @@ def test_upload_persists_until_explicit_start_and_repeated_start_does_not_duplic
     assert uploaded["progress"] == 0 and uploaded["traffic_light"] is None
     queue.assert_not_called()
 
-    # Новый HTTP-запрос/сессия БД, как после перезагрузки страницы.
+
     saved = client.get(f"/api/projects/{pid}").json()
     assert saved["files"][0]["phase"] == "uploaded" and saved["processing_count"] == 0
 

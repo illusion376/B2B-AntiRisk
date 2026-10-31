@@ -62,7 +62,7 @@ def test_strict_accepts_alphabetic_line_wrap_and_soft_hyphen(candidate):
 ])
 def test_strict_rejects_changed_negation_numbers_signs_and_punctuation(actual, quote):
     assert not _strict([_page(1, actual)], quote, actual).verified
-    # An incorrect candidate cannot make an altered quote match the real page.
+
     assert not _strict([_page(1, actual)], quote, quote).verified
 
 
@@ -111,7 +111,7 @@ def test_default_fuzzy_match_never_verifies_an_altered_number():
 
 
 def test_default_fuzzy_substring_with_perfect_score_is_not_verified():
-    # Partial ratio may be 100 for a substring inside a larger word.
+
     match = locate_quote([_page(1, "неограничена общая ответственность поставщика")],
                          "ограничена общая ответственность поставщика", (1, 1))
     assert not match.verified and match.score == 100

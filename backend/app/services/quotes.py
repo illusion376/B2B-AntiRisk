@@ -14,9 +14,9 @@ FUZZY_THRESHOLD = 82.0
 
 _STRIP = "«»\"'“”„()[]{}.,;:!?…"
 _CLAUSE_TOKEN = re.compile(r"^\d{1,2}(?:\.\d{1,3}){1,3}\.?$")
-_SECTION_TOKEN = re.compile(r"^\d{1,2}$")  # «6.» в начале строки -> «6» после нормализации
-# Число со знаком и десятичной частью — один токен: «1» не совпадёт с «11»,
-# «0.1» или «-1». Остальная пунктуация тоже участвует в строгом сравнении.
+_SECTION_TOKEN = re.compile(r"^\d{1,2}$")
+
+
 _STRICT_LEXEME = re.compile(r"[+\-−]?\d+(?:[.,:/]\d+)*(?:[%‰])?|[^\W\d_]+|[^\w\s]|[\w]", re.UNICODE)
 _WRAP = re.compile(r"([^\W\d_]{3,})[-\u00ad][ \t]*\r?\n[ \t]*([^\W\d_])", re.UNICODE)
 _NEGATIONS = {"не", "ни", "без"}
@@ -49,8 +49,8 @@ def _exact_span(haystack: list[str], needle: list[str], *, strict: bool = False)
     for first in range(len(haystack) - len(needle) + 1):
         if haystack[first:first + len(needle)] != needle:
             continue
-        # Начало цитаты сразу после «не» превращает отрицание в утверждение.
-        # Отдельно записанный знак числа также нельзя отбросить с края цитаты.
+
+
         if strict and first and (
             haystack[first - 1].casefold() in _NEGATIONS
             or (needle[0][:1].isdigit() and haystack[first - 1] in {"-", "+", "−", "±", "<", ">", "≤", "≥", "="})
@@ -66,8 +66,8 @@ def normalize_token(token: str) -> str:
 
 @dataclass
 class _Token:
-    page: int  # номер страницы, с 1
-    words: list[int]  # индексы слов страницы (несколько при склейке переноса)
+    page: int
+    words: list[int]
     norm: str
 
 
@@ -75,8 +75,8 @@ class _Token:
 class QuoteMatch:
     verified: bool
     page_number: int | None
-    text: str | None  # фрагмент документа, соответствующий цитате
-    clause: str | None  # «6.2»
+    text: str | None
+    clause: str | None
     highlights: list[dict] = field(default_factory=list)
     score: float = 0.0
 
@@ -90,7 +90,7 @@ def tokenize_pages(pages: list[dict]) -> list[_Token]:
         while i < len(words):
             text = words[i][4]
             idx = [i]
-            # «исполне-» + «ния» на следующей строке -> «исполнения»
+
             if (text.endswith("-") and len(text) > 2 and i + 1 < len(words)
                     and words[i + 1][5] != words[i][5] and words[i + 1][4][:1].islower()):
                 text = text[:-1] + words[i + 1][4]
@@ -222,12 +222,12 @@ def _original_text(pages_by_number: dict[int, dict], tokens: list[_Token], *, ke
 def _strict_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | None,
                   candidate_text: str | None) -> QuoteMatch:
     empty = QuoteMatch(False, page_hint[0] if page_hint else None, None, None)
-    # Без границ фрагмента невозможно подтвердить принадлежность доказательства.
+
     if candidate_text is None or not page_hint or page_hint[0] > page_hint[1]:
         return empty
     scoped_pages = [p for p in pages if page_hint[0] <= p["page_number"] <= page_hint[1]]
-    # Сначала сохраняем буквальный дефис (включая составные слова на переносе),
-    # затем допускаем склейку буквенного переноса. Пунктуация цитаты не удаляется.
+
+
     for join_hard_wraps in (False, True):
         needle = _strict_text_tokens(quote, join_hard_wraps=join_hard_wraps)
         if not any(any(char.isalpha() or char.isdigit() for char in part) for part in needle):
@@ -244,7 +244,7 @@ def _strict_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | No
     first, last = found
     matched = tokens[first:last + 1]
     pages_by_number = {p["page_number"]: p for p in scoped_pages}
-    # Нумерация пунктов использует прежнюю нормализацию, независимо от сравнения цитат.
+
     clause_tokens = tokenize_pages(scoped_pages)
     offset = next((i for i, t in enumerate(clause_tokens)
                    if (t.page, t.words[-1]) >= (matched[0].page, matched[0].words[0])), 0)
@@ -284,7 +284,7 @@ def locate_quote(pages: list[dict], quote: str, page_hint: tuple[int, int] | Non
     candidates.append(all_tokens)
 
     for scope_index, scope in enumerate(candidates):
-        # По всему документу после локального поиска — только точное совпадение.
+
         found = _find(scope, quote_norm, fuzzy=scope_index == 0)
         if not found:
             continue

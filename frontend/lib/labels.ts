@@ -1,6 +1,6 @@
 import type { AnalysisMode, RiskLevel, Severity } from './types';
 
-// Labels describe results, not the existence of a verified legal violation.
+
 export const statusLabels = { unseen: 'Не просмотрено', accepted: 'Принято', dismissed: 'Отклонено' } as const;
 export const severityLabels: Record<Severity, string> = {
   critical: 'Критические замечания', warning: 'Требуют внимания', low: 'Низкий риск',

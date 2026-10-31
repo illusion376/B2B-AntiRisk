@@ -59,10 +59,10 @@ class NLIClassifier:
         model.eval()
         self.model = model
 
-        # Определение индексов классов из конфига модели
+
         id2label = getattr(model.config, "id2label", {}) or {}
 
-        # Нормализация имён меток
+
         self.idx_entailment = 0
         self.idx_neutral = 1
         self.idx_contradiction = 2
@@ -104,7 +104,7 @@ class NLIClassifier:
                 premises,
                 hypotheses,
                 padding=True,
-                truncation="only_first",  # обрезаем длинную посылку, гипотезу сохраняем
+                truncation="only_first",
                 max_length=512,
                 return_tensors="pt",
             ).to(self.device)

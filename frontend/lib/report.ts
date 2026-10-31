@@ -1,9 +1,9 @@
-/** Decode a server-supplied attachment name without trusting path components. */
+
 export function reportFilename(disposition: string | null, fallback = 'report.docx'): string {
   let name: string | undefined;
   const encoded = disposition?.match(/(?:^|;)\s*filename\*\s*=\s*(?:"?UTF-8'[^']*')([^;\"]+)/i);
   if (encoded) {
-    try { name = decodeURIComponent(encoded[1].trim()); } catch { /* Try the ordinary filename. */ }
+    try { name = decodeURIComponent(encoded[1].trim()); } catch {                                  }
   }
   if (!name) {
     const quoted = disposition?.match(/(?:^|;)\s*filename\s*=\s*"((?:\\.|[^"\\])*)"/i);
@@ -22,7 +22,7 @@ export function saveDownload(blob: Blob, filename: string): void {
   document.body.appendChild(link);
   try { link.click(); } finally {
     link.remove();
-    // Keep the URL alive while the browser starts consuming the download.
+
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }

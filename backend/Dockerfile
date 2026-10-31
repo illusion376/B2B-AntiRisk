@@ -1,4 +1,4 @@
-# Контекст сборки — корень репозитория (нужны database/migrations)
+
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
 
-# tesseract (rus+eng) — OCR сканов; libreoffice-writer — docx/doc/rtf -> pdf; шрифты с кириллицей
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr tesseract-ocr-rus tesseract-ocr-eng \
         libreoffice-writer-nogui \

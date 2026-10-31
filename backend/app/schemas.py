@@ -11,7 +11,7 @@ LawType = Literal["ALL", "44-FZ", "223-FZ"]
 TrafficLight = Literal["critical", "warning", "ok", "unknown"]
 AnalysisMode = Literal["llm", "nli", "keyword"]
 AnalysisSensitivity = Literal["strict", "balanced", "sensitive"]
-# Стадия обработки файла для интерфейса (как getProcessing() во фронтенде) + ошибки
+
 Phase = Literal["uploaded", "queued", "processing", "ready", "failed", "unsupported"]
 
 
@@ -19,7 +19,7 @@ class ORM(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Строки с обрезкой пробелов по краям; длины — как валидирует фронтенд
+
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 Category = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
@@ -47,19 +47,19 @@ class SeverityCounts(BaseModel):
     low: int = 0
     ok: int = 0
     unknown: int = 0
-    unseen: int = 0  # замечания (не «ok») со статусом «Не просмотрено»
+    unseen: int = 0
 
 
-# ---------- Документы и файлы ----------
+
 
 class DocumentOut(ORM):
     id: uuid.UUID
     analysis_id: uuid.UUID
     file_name: str
-    relative_path: str | None  # путь внутри ZIP — для дерева содержимого архива
+    relative_path: str | None
     file_type: str | None
     file_size: int | None
-    status: str  # UPLOADED, QUEUED, CONVERTING, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED, UNSUPPORTED
+    status: str
     analysis_mode: AnalysisMode | None = Field(default=None, description=(
         "Последний выбранный режим. При частичной или неудачной повторной проверке могут сохраняться "
         "предыдущие результаты; источник каждого замечания указан в source. NULL — старый запуск без записи режима."
@@ -68,7 +68,7 @@ class DocumentOut(ORM):
     phase: Phase = "queued"
     analysis_sensitivity: AnalysisSensitivity | None = None
     chat_revision: uuid.UUID | None = None
-    label: str = ""  # «В очереди», «Распознавание текста», «Обработано»...
+    label: str = ""
     progress: int
     total_pages: int
     is_scanned: bool
@@ -92,15 +92,15 @@ class DocumentUpdate(BaseModel):
 
 class ProjectFileOut(BaseModel):
     """Загруженный файл проекта (ProjectFile во фронтенде). Для ZIP — documents содержит файлы архива."""
-    id: uuid.UUID  # = id анализа
+    id: uuid.UUID
     name: str
-    type: str  # pdf, txt, zip, docx...
+    type: str
     size: int | None
     added_at: datetime
     phase: Phase
     label: str
     progress: int
-    status: str  # UPLOADED, QUEUED, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED
+    status: str
     error_message: str | None
     risk_score: int | None
     traffic_light: TrafficLight | None
@@ -126,8 +126,8 @@ class ProjectOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     files: list[ProjectFileOut]
-    processing_count: int  # файлов в обработке («В обработке: N»)
-    counts: SeverityCounts  # замечания по всем файлам («Замечаний: N»)
+    processing_count: int
+    counts: SeverityCounts
     traffic_light: TrafficLight | None
 
 
@@ -141,7 +141,7 @@ class UploadResult(BaseModel):
     errors: list[UploadError]
 
 
-# ---------- Анализы (низкоуровневый API, без проектов) ----------
+
 
 class AnalysisOut(ORM):
     id: uuid.UUID
@@ -174,33 +174,33 @@ class AnalysisPage(BaseModel):
     total: int
 
 
-# ---------- Замечания ----------
+
 
 class Highlight(BaseModel):
     page: int
-    rects: list[list[float]]  # [x0, y0, x1, y1] в PDF-пунктах, начало координат — левый верхний угол
+    rects: list[list[float]]
 
 
 class FindingOut(BaseModel):
     """Finding во фронтенде + доказательная база (цитата, норма, подсветка)."""
     id: uuid.UUID
-    number: int | None  # номер в списке замечаний документа; у «ok» — None
+    number: int | None
     document_id: uuid.UUID
     rule_id: str | None
     title: str
-    description: str  # краткая суть («Размер штрафа не ограничен суммой контракта»)
+    description: str
     severity: Severity
     category: str
-    clause: str  # «6.2» — без «п.», как во фронтенде
+    clause: str
     page: int | None
     quote: str
     recommendation: str
-    comment: str  # подробное обоснование риска
+    comment: str
     legal_reference: str | None
     highlights: list[Highlight]
-    quote_verified: bool  # цитата найдена в тексте документа
+    quote_verified: bool
     confidence: float | None
-    source: str  # LLM, HEURISTIC, ERROR
+    source: str
     status: ReviewStatus
     reviewer_comment: str | None
     reviewed_at: datetime | None
@@ -218,8 +218,8 @@ class FindingsResponse(BaseModel):
     document_id: uuid.UUID | None
     total: int
     groups: list[FindingGroup]
-    categories: list[str]  # для фильтра «Все категории»
-    statuses: dict[str, int]  # прогресс просмотра: {"unseen": 5, "accepted": 2, "dismissed": 1}
+    categories: list[str]
+    statuses: dict[str, int]
 
 
 class FindingUpdate(BaseModel):
@@ -227,7 +227,7 @@ class FindingUpdate(BaseModel):
     reviewer_comment: str | None = Field(default=None, max_length=5000)
 
 
-# ---------- Текст документа ----------
+
 
 class OutlineClause(BaseModel):
     clause: str
@@ -276,7 +276,7 @@ class SearchResponse(BaseModel):
     hits: list[SearchHit]
 
 
-# ---------- Правила ----------
+
 
 class RuleFields(BaseModel):
     title: Title
@@ -284,7 +284,7 @@ class RuleFields(BaseModel):
     category: Category
     severity: RiskLevel
     enabled: bool = True
-    # Расширенные настройки ИИ. Если не заданы — строятся из названия и описания
+
     law_type: LawType = "ALL"
     semantic_query: str | None = Field(default=None, description="Ключевые слова для поиска фрагментов")
     llm_prompt: str | None = Field(default=None, description="Что именно проверить ИИ")
@@ -377,7 +377,7 @@ class AnalysisModelsOut(BaseModel):
     warning: str | None = None
 
 
-# ---------- Отчёты и история ----------
+
 
 class ReportMode(BaseModel):
     id: str

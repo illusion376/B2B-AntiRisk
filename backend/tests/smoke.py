@@ -66,7 +66,7 @@ def build_contract_pdf() -> bytes:
         page = doc.new_page()
         page.insert_textbox(pymupdf.Rect(60, 60, 540, 780), text, fontsize=11, fontname="cyr", fontfile=FONT)
 
-    # Страница-скан: рендерим текст в картинку и вставляем только изображение (без текстового слоя)
+
     tmp = pymupdf.open()
     tmp_page = tmp.new_page()
     tmp_page.insert_textbox(pymupdf.Rect(60, 60, 540, 780), SCANNED_PAGE, fontsize=12, fontname="cyr", fontfile=FONT)

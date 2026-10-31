@@ -59,19 +59,19 @@ def _make_draft(
     )
 
 
-# ============================================================================
-# Тесты Уровня 1.А: Кросс-правиловая дедупликация (Cross-Rule Merging)
-# ============================================================================
+
+
+
 
 def test_quote_overlap_ratio():
     q1 = "Поставщик уплачивает Заказчику штраф в размере 10% от цены Контракта за каждый день просрочки"
     q2 = "Поставщик уплачивает Заказчику штраф в размере 10% от цены Контракта за каждый день нарушения"
-    # Почти одинаковые цитаты: пересечение > 80%
+
     ratio = quote_overlap_ratio(q1, q2)
     assert ratio >= 0.70
 
     q3 = "Срок оплаты товаров составляет не более 7 рабочих дней с даты подписания документа о приемке"
-    # Совершенно разные цитаты
+
     assert quote_overlap_ratio(q1, q3) < 0.20
 
 
@@ -89,7 +89,7 @@ def test_are_duplicate_by_overlapping_quote():
     rule1 = _make_rule("uncapped_liability", "Неограниченная ответственность", "YELLOW")
     rule2 = _make_rule("unreasonable_penalty", "Несоразмерный штраф", "RED")
 
-    # Пункты не указаны или слегка различаются, но цитата одна и та же
+
     q = "Заказчик удерживает неустойку из обеспечения исполнения контракта в безусловном порядке"
     d1 = _make_draft(rule1, "YELLOW", None, q, "Риск удержания", page=4)
     d2 = _make_draft(rule2, "RED", "раздел 8", q + " без согласия поставщика", "Штраф", page=4)
@@ -127,21 +127,21 @@ def test_merge_two_drafts_combines_attributes():
 
     merged = merge_two_drafts(d1, d2)
 
-    # Максимальная критичность RED выбрана
+
     assert merged.severity == "RED"
-    # Более точный пункт договора (с точкой) выбран
+
     assert merged.clause == "6.2"
-    # Более длинная цитата выбрана
+
     assert "от полной цены контракта" in merged.exact_quote
-    # Подсветки объединены
+
     assert len(merged.highlights) == 2
-    # Комментарии содержат информацию об обоих рисках
+
     assert "Размер штрафа превышает пределы" in merged.comment
     assert "Неограниченная ответственность" in merged.comment
-    # Рекомендации объединены
+
     assert "Снизить размер штрафа" in merged.counter_proposal
     assert "Установить предел ответственности" in merged.counter_proposal
-    # Максимальная уверенность выбрана
+
     assert merged.confidence == 0.92
 
 
@@ -166,18 +166,18 @@ def test_merge_duplicate_drafts_in_list():
     drafts = [d1, d2, d3, green_draft]
     merged = merge_duplicate_drafts(drafts)
 
-    # d1 и d2 объединились в одну карточку, d3 и green остались
+
     assert len(merged) == 3
-    # Первая карточка стала RED
+
     assert merged[0].severity == "RED"
     assert merged[0].clause == "5.1"
-    # Третья карточка осталась GREEN
+
     assert merged[2].severity == "GREEN"
 
 
-# ============================================================================
-# Тесты Уровня 1.Б: MMR (Maximal Marginal Relevance) при отборе чанков
-# ============================================================================
+
+
+
 
 def test_compute_chunk_similarity_embeddings():
     v1 = [1.0, 0.0, 0.0]
@@ -193,7 +193,7 @@ def test_compute_chunk_similarity_embeddings():
 
 
 def test_compute_chunk_similarity_text_fallback():
-    # Без эмбеддингов: оценивается сходство текста
+
     t1 = "Форма заявки на участие в открытом конкурсе в электронной форме Приложение № 1 к Контракту"
     t2 = "Форма заявки на участие в открытом конкурсе в электронной форме Приложение № 2 к Контракту"
     t3 = "Ответственность сторон: при нарушении сроков поставщик выплачивает неустойку 0.1%"
@@ -207,25 +207,25 @@ def test_compute_chunk_similarity_text_fallback():
 
 
 def test_apply_mmr_selects_diverse_chunks():
-    # Ситуация из sammary.md: 3 повторяющихся приложения (дубли) и 1 другой раздел
+
     boilerplate1 = "Приложение № 1: Спецификация оборудования. Наименование товара, количество, единицы измерения."
     boilerplate2 = "Приложение № 2: Спецификация оборудования. Наименование товара, количество, единицы измерения повторно."
     boilerplate3 = "Приложение № 3: Спецификация оборудования. Наименование товара, количество, единицы измерения повторно."
     warranty_clause = "Раздел 7: Гарантийные обязательства. Поставщик гарантирует устранение дефектов в течение 24 часов."
 
-    # Первые три имеют более высокий поисковый скор (0.035, 0.034, 0.033),
-    # но являются почти полными дублями (сходство > 0.85)
+
+
     c1 = RetrievedChunk(uuid.uuid4(), 1, 10, 10, "Прил. 1", boilerplate1, score=0.035, fts_hit=True)
     c2 = RetrievedChunk(uuid.uuid4(), 2, 11, 11, "Прил. 2", boilerplate2, score=0.034, fts_hit=True)
     c3 = RetrievedChunk(uuid.uuid4(), 3, 12, 12, "Прил. 3", boilerplate3, score=0.033, fts_hit=True)
     c4 = RetrievedChunk(uuid.uuid4(), 4, 5, 5, "Раздел 7", warranty_clause, score=0.028, fts_hit=True)
 
     candidates = [c1, c2, c3, c4]
-    # Отбираем top_k=2 с помощью MMR
+
     selected = apply_mmr(candidates, top_k=2, lambda_param=0.65, sim_threshold=0.80)
 
     assert len(selected) == 2
-    # c1 выбран первым (наивысший скор)
+
     assert selected[0].id == c1.id
-    # Второй выбран c4 (разнообразный раздел), а не дубликаты c2/c3
+
     assert selected[1].id == c4.id

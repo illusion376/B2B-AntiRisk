@@ -17,7 +17,7 @@ def proxy_key(monkeypatch):
         raise AssertionError("Test must supply a mock provider response")
 
     def mock_client(**kwargs):
-        # No real transports or machine proxy settings are needed in these unit tests.
+
         kwargs.setdefault("transport", httpx.MockTransport(unexpected_request))
         return client_type(**kwargs)
 

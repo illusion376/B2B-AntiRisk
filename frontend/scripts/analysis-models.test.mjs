@@ -51,7 +51,7 @@ test('every launch sends the selected model and keyword mode omits it', async t 
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, body: JSON.parse(options.body) });
-    // Document response is deliberately invalid; payload validation runs after sending.
+
     return response({ documents: 1 });
   });
   await api.startProjectAnalysis('project', { analysisMode: 'llm', llmModel: 'anthropic/claude-sonnet-4-5' });

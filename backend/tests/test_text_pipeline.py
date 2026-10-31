@@ -17,7 +17,7 @@ def test_extract_and_structure(contract_pdf):
     segments = split_segments(pages)
     clauses = [s.clause for s in segments if s.clause]
     assert clauses == ["6.1", "6.2", "7.1", "7.2"]
-    # Дата 31.12.2025 не должна приниматься за номер пункта
+
     assert all(not c.startswith("31") for c in clauses)
 
     outline = build_outline(segments)
@@ -28,7 +28,7 @@ def test_extract_and_structure(contract_pdf):
     chunks = build_chunks(segments)
     assert chunks and all(c.content for c in chunks)
     joined = " ".join(c.content for c in chunks)
-    assert "ограниченной общей суммой" in joined  # перенос «огра-/ниченной» склеен
+    assert "ограниченной общей суммой" in joined
     assert detect_law_type(joined) == "44-FZ"
 
 
@@ -38,9 +38,9 @@ def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     exact = locate_quote(pages, "штраф в размере 0,1% от стоимости Контракта", (1, 1))
     assert exact.verified and exact.page_number == 1 and exact.clause == "6.2"
     assert exact.highlights and exact.highlights[0]["page"] == 1
-    assert len(exact.highlights[0]["rects"]) == 2  # цитата на двух строках -> два прямоугольника
+    assert len(exact.highlights[0]["rects"]) == 2
 
-    # LLM склеила перенос и поменяла кавычки/регистр — всё равно находим
+
     hyphen = locate_quote(pages, "НЕ ОГРАНИЧЕННОЙ общей суммой «Контракта»", (1, 1))
     assert hyphen.verified and hyphen.clause == "6.2"
 
@@ -48,7 +48,7 @@ def test_locate_quote_exact_fuzzy_and_hyphenated(contract_pdf):
     assert not fuzzy.verified and fuzzy.page_number == 2 and fuzzy.clause == "7.2"
     assert "60 календарных дней" in fuzzy.text
 
-    # Цитата начинается с заголовка раздела 7 — пункт не должен «утечь» из раздела 6
+
     heading = locate_quote(pages, "СРОК ДЕЙСТВИЯ КОНТРАКТА 7.1. Настоящий Контракт вступает в силу", (2, 2))
     assert heading.verified and heading.clause == "7.1"
 
@@ -71,7 +71,7 @@ def test_page_sections_for_html_viewer(contract_pdf):
     first = page_sections(pages, 1)
     assert first[0]["title"] == "6. ОТВЕТСТВЕННОСТЬ СТОРОН"
     assert [p["clause"] for p in first[0]["paragraphs"]] == ["6.1", "6.2"]
-    # Строки пункта склеены в абзац, перенос «огра-/ниченной» убран
+
     assert "не ограниченной общей суммой Контракта." in first[0]["paragraphs"][1]["text"]
 
     second = page_sections(pages, 2)

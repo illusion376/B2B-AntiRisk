@@ -32,8 +32,8 @@ def thumbnail(pdf_path: Path, analysis_id: uuid.UUID, document_id: uuid.UUID, pa
     return target
 
 
-# Комментарии печатаются на поле справа, а не всплывающими заметками: просмотрщик PDF в Chrome рисует
-# заметки своим шрифтом без кириллицы. Встроенный шрифт MuPDF (Nimbus Sans) кириллицу содержит и встраивается.
+
+
 _MARGIN = 190
 _NOTE_CSS = "* {font-family: sans-serif; font-size: 7.5pt; line-height: 1.25;} .meta {color: #555555;}"
 _PAGE_BOTTOM = 12
@@ -73,7 +73,7 @@ def _put_html(page, rect: fitz.Rect, html: str, scale_low: float = 1) -> float |
     spare, scale = page.insert_htmlbox(rect, html, css=_NOTE_CSS, scale_low=scale_low)
     if spare < 0:
         return None
-    return rect.height - spare if scale >= 1 else rect.height  # уменьшенный текст занимает весь прямоугольник
+    return rect.height - spare if scale >= 1 else rect.height
 
 
 def _widen(page, width: float) -> None:
@@ -103,7 +103,7 @@ def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
     leftovers: list[_Note] = []
     by_page: dict[int, list[_Note]] = defaultdict(list)
     for n in notes:
-        if n.page_index is None or doc[n.page_index].rotation:  # у повёрнутой страницы поле было бы сбоку
+        if n.page_index is None or doc[n.page_index].rotation:
             leftovers.append(n)
         else:
             by_page[n.page_index].append(n)
@@ -157,7 +157,7 @@ def _notes_appendix(doc, notes: list[_Note]) -> None:
             page, cursor = _appendix_page(doc)
             box = fitz.Rect(58, cursor, 545, 802)
             used = _put_html(page, box, html)
-            if used is None:  # длиннее страницы — уменьшаем шрифт
+            if used is None:
                 used = _put_html(page, box, html, scale_low=0.3) or box.height
         color = _COLORS.get(n.finding["severity"], _COLORS["YELLOW"])
         page.draw_rect(fitz.Rect(50, cursor, 52.5, cursor + used), color=None, fill=color)
@@ -184,7 +184,7 @@ def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author:
                 rects = [fitz.Rect(r) for r in block["rects"]]
                 if not rects:
                     continue
-                # Без текста заметки: Chrome показывает его при наведении во всплывающем окне без кириллицы
+
                 annot = page.add_highlight_annot(quads=[r.quad for r in rects])
                 annot.set_colors(stroke=color)
                 annot.update(opacity=0.45)
@@ -196,6 +196,6 @@ def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author:
         leftovers = _margin_notes(doc, notes, profile)
         if leftovers:
             _notes_appendix(doc, leftovers)
-        # garbage=4 объединяет одинаковые объекты: каждый блок комментария встраивает свою копию шрифта
+
         doc.save(target, garbage=4, deflate=True)
     return target

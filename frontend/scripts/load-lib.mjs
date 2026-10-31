@@ -1,5 +1,5 @@
-// Загружает модули из lib/*.ts в тестах node --test без дополнительных зависимостей:
-// исходники транспилируются уже установленным typescript во временную папку как .mjs.
+
+
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -17,7 +17,7 @@ function compileLib() {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: false },
       fileName: file,
     });
-    // ESM в Node требует расширения: './labels' -> './labels.mjs'
+
     const code = outputText.replace(/(from\s+|import\s+)(['"])(\.\/[^'"]+)\2/g, '$1$2$3.mjs$2');
     writeFileSync(path.join(outDir, file.replace(/\.ts$/, '.mjs')), code);
   }

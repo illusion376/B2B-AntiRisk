@@ -62,7 +62,7 @@ def test_partial_queue_failure_preserves_accepted_jobs_and_continues(queue):
     assert docs[1].risk_score == 37
     assert docs[1].error_message == analyses.QUEUE_UNAVAILABLE
     assert repeated.call_args_list == [call(str(doc.id), ["payment_delay"]) for doc in docs]
-    db.delete.assert_not_called()  # прежние результаты остаются доступными
+    db.delete.assert_not_called()
 
 
 def test_rerun_reprocesses_failed_files_and_only_reanalyzes_completed_files(queue):

@@ -63,7 +63,7 @@ def test_docx_modes(contract_pdf, tmp_path, mode):
         assert "ПРОТОКОЛ РАЗНОГЛАСИЙ" in text
         assert "Новая редакция" in cells and "штраф в размере 0,1%" in cells
     if mode == "detailed":
-        assert "Срок оплаты 7 рабочих дней" in text  # пройденные проверки
+        assert "Срок оплаты 7 рабочих дней" in text
     assert "Светофор рисков" not in text + cells
     assert text.rstrip().endswith("проверить специалисту.")
 
@@ -85,7 +85,7 @@ def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode, only_low)
     cells = "\n".join(c.text for t in docx.tables for r in t.rows for c in r.cells)
     assert "Светофор" not in text + cells and "Индекс риска" not in text + cells
     assert text.rstrip().endswith("проверить специалисту.")
-    assert "без LLM" not in text  # все замечания найдены LLM
+    assert "без LLM" not in text
 
 
 @pytest.mark.parametrize("mode", ["brief", "detailed"])
@@ -112,10 +112,10 @@ def test_json_and_annotated(contract_pdf):
     assert payload["traffic_light"] == "RED" and len(payload["documents"][0]["findings"]) == 3
 
     table = reports.generate(data, "brief", "csv").path.read_bytes()
-    assert table.startswith(codecs.BOM_UTF8)  # BOM для Excel
+    assert table.startswith(codecs.BOM_UTF8)
     rows = table.decode("utf-8-sig").splitlines()
     assert any('"Критические замечания";"Неограниченная ответственность"' in r for r in rows)
-    assert not any("Срок оплаты" in r for r in rows)  # краткий режим — без пройденных проверок
+    assert not any("Срок оплаты" in r for r in rows)
 
     annotated = reports.generate(data, "annotated", "pdf")
     with pymupdf.open(contract_pdf) as source:
@@ -123,17 +123,17 @@ def test_json_and_annotated(contract_pdf):
     with pymupdf.open(annotated.path) as pdf:
         page = pdf[0]
         types = [a.type[1] for a in page.annots()]
-        # Всплывающих заметок нет: Chrome показывает их без кириллицы. Комментарии напечатаны на поле справа.
+
         assert "Highlight" in types and "Text" not in types and "Popup" not in types
-        # и у подсветки нет текста заметки — Chrome показывал бы его при наведении
+
         assert all(not a.info["content"] and not a.info["title"] for a in page.annots())
         assert page.rect.width > width
         margin = page.get_text("text", clip=pymupdf.Rect(width, 0, page.rect.width, page.rect.height))
         assert "Неограниченная ответственность" in margin and "Критично" in margin
         assert "Подготовил: Кирилл Иванов" in margin
         quote = next(w for w in page.get_text("words") if w[4] == "штраф")
-        assert quote[2] < width  # содержимое страницы не сдвинулось
-        # замечание без точной цитаты — на поле своей страницы; всё уместилось, лишних страниц нет
+        assert quote[2] < width
+
         assert "Срок поставки" in pdf[1].get_text() and pdf.page_count == pages
 
     with pytest.raises(reports.ReportError):
@@ -153,7 +153,7 @@ def test_annotated_pdf_moves_notes_without_place_to_appendix(contract_pdf, tmp_p
     with pymupdf.open(annotated_pdf(contract_pdf, findings, tmp_path / "a.pdf")) as pdf:
         appendix = "\n".join(pdf[i].get_text() for i in range(pages, pdf.page_count))
         assert pdf.page_count > pages and "Замечания к документу" in appendix
-        assert "Без страницы" in appendix and "стр. 1" in appendix  # у не уместившихся на поле — место в тексте
+        assert "Без страницы" in appendix and "стр. 1" in appendix
         everywhere = "\n".join(p.get_text() for p in pdf)
         assert all(f"Замечание {n}" in everywhere for n in range(1, 4))
 

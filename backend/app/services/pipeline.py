@@ -31,7 +31,7 @@ from app.vocab import SEVERITY_ORDER
 log = logging.getLogger(__name__)
 
 TERMINAL = {"COMPLETED", "FAILED", "UNSUPPORTED"}
-# Статус анализа в целом = самый «ранний» этап среди документов в работе
+
 _STAGE_RANK = {"UPLOADED": -1, "QUEUED": 0, "CONVERTING": 1, "OCR": 1, "VECTORIZING": 2, "ANALYZING": 3}
 _ANALYSIS_STAGE = {-1: "UPLOADED", 0: "QUEUED", 1: "OCR", 2: "VECTORIZING", 3: "ANALYZING"}
 _SEVERITY_ORDER = {severity: i for i, severity in enumerate(SEVERITY_ORDER)}
@@ -41,7 +41,7 @@ class ProcessingError(RuntimeError):
     """Ошибка с понятным пользователю сообщением."""
 
 
-# ---------- статусы ----------
+
 
 def set_document(document_id: uuid.UUID, **fields) -> None:
     with session_scope() as db:
@@ -127,7 +127,7 @@ def _log_completion(db: Session, analysis: Analysis) -> None:
     ))
 
 
-# ---------- этапы ----------
+
 
 def _extract(document_id: uuid.UUID, pdf_path: Path) -> list[PageContent]:
     last_update = 0.0
@@ -193,8 +193,8 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         doc = db.get(Document, document_id)
         if doc is None:
             raise ProcessingError("Документ не найден")
-        # Старые строки без режима получают текущий default ровно при новом запуске.
-        # Для поставленных API задач всегда используем сохранённый выбор пользователя.
+
+
         mode = resolve_analysis_mode(doc.analysis_mode)
         doc.analysis_mode = mode
         if mode == "llm" and not doc.llm_model:
@@ -298,7 +298,7 @@ def process_document(document_id: uuid.UUID) -> None:
         source, analysis_id, analysis_law = Path(doc.file_path), doc.analysis_id, analysis.law_type
 
     try:
-        # Проверяем и сохраняем режим до длительных конвертации/OCR (включая старые задания).
+
         with session_scope() as db:
             doc = db.get(Document, document_id)
             doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)

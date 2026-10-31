@@ -25,9 +25,9 @@ def test_rule_embedding_is_recomputed_when_query_text_changes(monkeypatch):
 
     pipeline.ensure_rule_embeddings(db, [rule])
     pipeline.ensure_rule_embeddings(db, [rule])
-    assert len(calls) == 1  # текст не менялся — эмбеддинг из кэша
+    assert len(calls) == 1
 
-    # SQL-миграция меняет semantic_query, не трогая кэш эмбеддинга
+
     rule.semantic_query = "обеспечение заявки на участие в аукционе процент НМЦК"
     pipeline.ensure_rule_embeddings(db, [rule])
     assert calls[-1] == [rule.semantic_query]
@@ -39,7 +39,7 @@ def test_rule_embedding_cached_before_text_hash_is_refreshed(monkeypatch):
     monkeypatch.setattr(pipeline, "embed_texts", lambda texts: calls.append(list(texts)) or [[0.1] * 3 for _ in texts])
     rule = _rule("unreasonable_penalty")
     rule.query_embedding = [0.0] * 3
-    rule.embedding_model = pipeline.settings.embedding_model_id  # формат ключа до хэша текста
+    rule.embedding_model = pipeline.settings.embedding_model_id
     pipeline.ensure_rule_embeddings(MagicMock(), [rule])
     assert calls == [[rule.semantic_query]]
 
@@ -84,6 +84,6 @@ def test_detailed_report_hides_passed_check_that_contradicts_an_issue(contract_p
     ])
     docx = DocxDocument(build_detailed(data, tmp_path / "detailed.docx"))
     text = "\n".join(p.text for p in docx.paragraphs)
-    assert "Размер обеспечения в пределах нормы" not in text  # пункт уже в замечаниях — не «нарушений нет»
+    assert "Размер обеспечения в пределах нормы" not in text
     assert "Срок оплаты 7 рабочих дней" in text
     assert text.rstrip().endswith(DISCLAIMER)

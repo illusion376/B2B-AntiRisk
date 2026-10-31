@@ -1,4 +1,4 @@
-/* Analysis shares the workspace theme. This pass targets desktop screens. */
+
 .dashboard-shell.analysis-shell .main-content { display: flex; }
 
 @media (min-width: 961px) {

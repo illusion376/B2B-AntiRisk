@@ -27,7 +27,7 @@ _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 def _hash_embedding(text: str, dim: int) -> list[float]:
     vec = np.zeros(dim, dtype=np.float32)
     for token in _TOKEN_RE.findall(text.lower()):
-        # Грубая «основа» слова: первые 6 букв, чтобы «штраф/штрафа/штрафов» совпадали
+
         stem = token[:6]
         features = [f"w:{stem}"]
         padded = f"#{token}#"

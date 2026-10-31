@@ -36,7 +36,7 @@ def test_rule_from_frontend_form():
     assert fields["llm_prompt"] == default_prompt(body.title, body.description)
     assert "Срок оплаты" in fields["llm_prompt"]
     with pytest.raises(ValidationError):
-        RuleCreate(title="x", category="y", severity="RED")  # только critical / warning / low
+        RuleCreate(title="x", category="y", severity="RED")
 
 
 def test_history_wording():

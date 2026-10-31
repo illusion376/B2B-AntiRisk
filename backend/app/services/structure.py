@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from app.config import settings
 from app.services.extraction import PageContent, dehyphenate
 
-# «6. ОТВЕТСТВЕННОСТЬ СТОРОН», «Раздел 6. Ответственность сторон», «Статья 6»
+
 _SECTION_RE = re.compile(
     r"^\s*(?:(?:раздел|статья|глава)\s+)?(?P<num>\d{1,2}|[IVXLC]{1,6})\.?\s+(?P<title>[^\d\W][^\n]{2,120})$",
     re.IGNORECASE,
 )
-# «6.2.», «6.2», «8.1.1.» в начале строки
+
 _CLAUSE_RE = re.compile(r"^\s*(?P<num>\d{1,2}(?:\.\d{1,3}){1,3})\.?\s+(?P<rest>\S.*)$")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.;:!?])\s+(?=[А-ЯЁA-Z0-9«\"(])")
 
@@ -19,8 +19,8 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.;:!?])\s+(?=[А-ЯЁA-Z0-9«\"(])")
 class Segment:
     page_start: int
     page_end: int
-    clause: str | None  # «6.2»
-    section: str | None  # «6. Ответственность сторон»
+    clause: str | None
+    section: str | None
     text: str
 
 
@@ -47,7 +47,7 @@ def _is_section_heading(line: str) -> re.Match | None:
         return None
     is_upper = sum(c.isupper() for c in letters) / len(letters) > 0.7
     explicit = line.strip().lower().startswith(("раздел", "статья", "глава"))
-    # Заголовок: КАПСОМ, явное «Раздел N» или короткая фраза с заглавной буквы без точки в конце
+
     short_title = len(title) <= 60 and len(title.split()) <= 6 and title[0].isupper() and not title.endswith(".")
     if is_upper or explicit or short_title:
         return m
@@ -130,7 +130,7 @@ def _split_long(text: str, max_chars: int) -> list[str]:
     parts: list[str] = []
     buf = ""
     for sentence in sentences:
-        while len(sentence) > max_chars:  # очень длинное «предложение» (таблица, перечень)
+        while len(sentence) > max_chars:
             if buf:
                 parts.append(buf)
                 buf = ""
@@ -201,7 +201,7 @@ def page_sections(pages: list[tuple[int, str]], page_number: int) -> list[dict]:
     sections: list[dict] = []
     section_heading = ""
     clause = ""
-    paragraph_open = False  # следующая строка без номера продолжает текущий абзац
+    paragraph_open = False
 
     for number, text in pages:
         if number > page_number:
@@ -232,7 +232,7 @@ def page_sections(pages: list[tuple[int, str]], page_number: int) -> list[dict]:
             elif paragraph_open and paragraphs:
                 paragraphs[-1]["text"] = _join_line(paragraphs[-1]["text"], line)
             else:
-                # Начало страницы — продолжение пункта с прошлой страницы, либо текст без нумерации
+
                 paragraphs.append({"clause": clause, "text": line})
                 paragraph_open = True
     return sections

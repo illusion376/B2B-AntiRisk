@@ -47,7 +47,7 @@ export function useAnalysisModes() {
     } catch { setStorageError(true); }
   }
 
-  // Сохранённый, но теперь недоступный режим требует явного нового выбора.
+
   return { config, loading, error, refresh, selectMode, storageError,
     selectedMode: preference ?? config?.defaultMode ?? null };
 }

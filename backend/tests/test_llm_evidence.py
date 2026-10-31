@@ -138,7 +138,7 @@ def test_keyword_mode_omits_vector_only_candidates():
 @pytest.mark.parametrize("verdict", ["RISK", "OK"])
 def test_quote_real_elsewhere_does_not_validate_wrong_fragment(verdict):
     answer = risk_answer(SAFE_TEXT) if verdict == "RISK" else ok_answer()
-    # Both texts exist on the same page, but F1 contains only the risk text.
+
     finding = evaluate(answer, candidates=[chunk(RISK_TEXT), chunk(SAFE_TEXT)],
                        document_pages=pages(f"{RISK_TEXT} {SAFE_TEXT}"))[0]
     assert finding.severity == "UNKNOWN" and not finding.quote_verified

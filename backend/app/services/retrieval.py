@@ -44,7 +44,7 @@ def _parse_embedding(val) -> list[float] | None:
 
 def compute_chunk_similarity(c1: RetrievedChunk, c2: RetrievedChunk) -> float:
     """Оценивает семантическое/текстовое сходство двух чанков в диапазоне [0.0, 1.0]."""
-    # 1. Косинусное сходство векторных представлений (если доступны)
+
     if c1.embedding and c2.embedding and len(c1.embedding) == len(c2.embedding):
         v1 = np.asarray(c1.embedding, dtype=np.float32)
         v2 = np.asarray(c2.embedding, dtype=np.float32)
@@ -54,7 +54,7 @@ def compute_chunk_similarity(c1: RetrievedChunk, c2: RetrievedChunk) -> float:
             cos_sim = float(np.dot(v1, v2) / (norm1 * norm2))
             return max(0.0, min(1.0, cos_sim))
 
-    # 2. Текстовое сходство по токенам через rapidfuzz
+
     from rapidfuzz import fuzz
     ratio = fuzz.token_set_ratio(c1.content, c2.content) / 100.0
     return max(0.0, min(1.0, float(ratio)))
@@ -88,13 +88,13 @@ def apply_mmr(
         best_idx = -1
 
         for idx, candidate in enumerate(remaining):
-            # Нормализованный скор релевантности [0, 1]
+
             rel_score = candidate.score / max_score
 
-            # Максимальное сходство с уже отобранными фрагментами
+
             max_sim = max(compute_chunk_similarity(candidate, sel) for sel in selected)
 
-            # Штраф за дублирование при превышении порога (0.80)
+
             redundancy_penalty = 2.0 if max_sim >= sim_threshold else 0.0
 
             mmr_val = (lambda_param * rel_score) - ((1.0 - lambda_param) * max_sim) - redundancy_penalty
@@ -113,9 +113,9 @@ def apply_mmr(
     return selected
 
 
-# «+ 0» в ORDER BY отключает HNSW-индекс: он глобальный по всем чанкам, и фильтр по документу
-# после приблизительного поиска может отрезать нужные фрагменты. Внутри одного документа
-# точный перебор быстрый (сотни чанков).
+
+
+
 _HYBRID_SQL = text("""
 WITH q AS (
     SELECT CAST(:embedding AS vector) AS emb,
@@ -186,6 +186,6 @@ def hybrid_search(
         for row in rows
     ]
     selected_chunks = apply_mmr(candidate_chunks, top_k=top_k)
-    # В контекст LLM — в порядке следования в документе: так модели проще понять структуру
+
     return sorted(selected_chunks, key=lambda c: (c.chunk_index is None, c.chunk_index or 0))
 
