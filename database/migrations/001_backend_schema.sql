@@ -1,32 +1,24 @@
--- Расширение базовой схемы (database/init-db.sql) под нужды backend.
--- Применяется backend'ом автоматически при старте (app/migrations.py), один раз,
--- поэтому работает и на уже существующем volume с данными.
-
--- ============ analyses ============
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE analyses ADD COLUMN IF NOT EXISTS law_type VARCHAR(20) NOT NULL DEFAULT 'AUTO'; -- AUTO, 44-FZ, 223-FZ
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS law_type VARCHAR(20) NOT NULL DEFAULT 'AUTO';
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS file_size BIGINT;
-ALTER TABLE analyses ADD COLUMN IF NOT EXISTS stored_path TEXT; -- где лежит исходный загруженный файл
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS stored_path TEXT;
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS rules_checked INT NOT NULL DEFAULT 0;
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_analyses_user_id ON analyses(user_id, created_at DESC);
 
--- ============ documents ============
--- Статус обработки каждого документа отдельно: в архиве их может быть много,
--- и пользователь открывает любой из них, не дожидаясь остальных.
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_name VARCHAR(255) NOT NULL DEFAULT '';
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS relative_path TEXT; -- путь внутри архива (для дерева файлов)
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS relative_path TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_type VARCHAR(20);
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size BIGINT;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS preview_path TEXT; -- PDF для просмотра (docx -> pdf)
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS preview_path TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'QUEUED';
--- QUEUED, CONVERTING, OCR, VECTORIZING, ANALYZING, COMPLETED, FAILED, UNSUPPORTED
+
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS progress INT NOT NULL DEFAULT 0;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS risk_score INT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS law_type VARCHAR(20);
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS ocr_pages INT NOT NULL DEFAULT 0;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS ocr_confidence REAL;
-ALTER TABLE documents ADD COLUMN IF NOT EXISTS outline JSONB NOT NULL DEFAULT '[]'::jsonb; -- вкладка «Навигация»
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS outline JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS error_message TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_ms INT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
@@ -37,23 +29,19 @@ CREATE TRIGGER trigger_documents_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- ============ document_pages ============
--- Текст и координаты слов каждой страницы: нужны для подсветки цитат в просмотрщике,
--- поиска по документу и проверки, что цитата LLM действительно есть в документе.
 CREATE TABLE IF NOT EXISTS document_pages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    page_number INT NOT NULL, -- с 1
-    width REAL NOT NULL,      -- размер страницы в PDF-пунктах
+    page_number INT NOT NULL,
+    width REAL NOT NULL,
     height REAL NOT NULL,
     text TEXT NOT NULL DEFAULT '',
-    words JSONB NOT NULL DEFAULT '[]'::jsonb, -- [[x0, y0, x1, y1, "слово"], ...]
+    words JSONB NOT NULL DEFAULT '[]'::jsonb,
     is_ocr BOOLEAN NOT NULL DEFAULT FALSE,
     ocr_confidence REAL,
     UNIQUE (document_id, page_number)
 );
 
--- ============ document_chunks ============
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS chunk_index INT;
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS page_end INT;
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS tsv tsvector
@@ -61,10 +49,9 @@ ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS tsv tsvector
 CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON document_chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_tsv ON document_chunks USING gin (tsv);
 
--- ============ risk_rules ============
-ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS legal_reference TEXT; -- норма права для отчёта
+ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS legal_reference TEXT;
 ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 100;
-ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS query_embedding vector(1024); -- кэш эмбеддинга semantic_query
+ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS query_embedding vector(1024);
 ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS embedding_model VARCHAR(255);
 ALTER TABLE risk_rules ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
 
@@ -74,27 +61,24 @@ CREATE TRIGGER trigger_risk_rules_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- ============ risk_findings ============
--- GREEN-записи (правило проверено, нарушений нет) не имеют цитаты и страницы.
 ALTER TABLE risk_findings ALTER COLUMN page_number DROP NOT NULL;
 ALTER TABLE risk_findings ALTER COLUMN exact_quote DROP NOT NULL;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS category VARCHAR(100);
-ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS short_description TEXT; -- подзаголовок в списке замечаний
+ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS short_description TEXT;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS legal_reference TEXT;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS highlights JSONB NOT NULL DEFAULT '[]'::jsonb;
--- [{"page": 18, "rects": [[x0, y0, x1, y1], ...]}] — в PDF-пунктах, начало координат слева сверху
+
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS quote_verified BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS confidence REAL;
-ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'LLM'; -- LLM, HEURISTIC
+ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'LLM';
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS sort_index INT NOT NULL DEFAULT 0;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS review_status VARCHAR(20) NOT NULL DEFAULT 'NEW';
--- NEW (не просмотрено), CONFIRMED (подтверждено), DISMISSED (ложное срабатывание), RESOLVED (устранено)
+
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewer_comment TEXT;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE risk_findings ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE;
 CREATE INDEX IF NOT EXISTS idx_findings_document_id ON risk_findings(document_id);
 
--- ============ Правила ============
 UPDATE risk_rules SET legal_reference = 'ч. 4–8 ст. 34 44-ФЗ; Правила, утв. ПП РФ от 30.08.2017 № 1042', sort_order = 10
 WHERE id = 'unreasonable_penalty' AND legal_reference IS NULL;
 UPDATE risk_rules SET legal_reference = 'ст. 104 44-ФЗ (РНП); ст. 457, 521 ГК РФ', sort_order = 40

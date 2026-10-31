@@ -64,25 +64,20 @@ selected_finding помогает понять тематический вопр
 (полный текст черновика либо оба null). Пиши обычным текстом с абзацами и списками, без HTML,
 Markdown-таблиц и ссылок. При нехватке данных объясни это, не заполняй пробелы догадками.""".replace("__OFF_TOPIC_ANSWER__", OFF_TOPIC_ANSWER)
 
-
 @dataclass
 class ChatContext:
     data: dict
     sources: dict[str, ChatSource]
     model: str | None = None
 
-
 def context_version(document: Document) -> str:
-    # Меняется только при сохранении нового результата проверки, включая
-    # частичную перепроверку. Переименование/рассмотрение не теряют историю.
-    return str(document.chat_revision)
 
+    return str(document.chat_revision)
 
 def visible_results(db: Session, document: Document) -> list[RiskFinding]:
     return list(db.scalars(select(RiskFinding).where(
         RiskFinding.document_id == document.id, visible_findings(),
     ).order_by(RiskFinding.sort_index, RiskFinding.id)))
-
 
 def result_data(finding: RiskFinding) -> dict:
     return {
@@ -96,11 +91,9 @@ def result_data(finding: RiskFinding) -> dict:
         "reviewer_comment": finding.reviewer_comment,
     }
 
-
 def results_version(findings: list[RiskFinding]) -> str:
     return hashlib.sha256(json.dumps([result_data(f) for f in findings], ensure_ascii=False,
                                     sort_keys=True).encode()).hexdigest()
-
 
 def select_passages(pages: Iterable[tuple[int, str]], query: str, selected_page: int | None,
                     budget: int = DOCUMENT_BUDGET) -> tuple[list[dict], bool]:
@@ -137,7 +130,6 @@ def select_passages(pages: Iterable[tuple[int, str]], query: str, selected_page:
     chosen.sort(key=lambda p: (p["page"], p["part"]))
     return chosen, total_chars > budget - remaining
 
-
 def build_context(db: Session, document: Document, user: User, findings: list[RiskFinding],
                   selected: RiskFinding | None, question: str) -> ChatContext:
     report = collect(db, document.analysis, user, document.id).documents[0]
@@ -149,7 +141,7 @@ def build_context(db: Session, document: Document, user: User, findings: list[Ri
     eligible.sort(key=lambda f: (f is not selected, priority.get(f.severity, 5), f.sort_index))
     for finding in eligible:
         item = result_data(finding)
-        # Не позволяем одному повреждённому/аномально длинному полю вытеснить весь контекст.
+
         for key, value in item.items():
             if isinstance(value, str) and len(value) > 3000:
                 item[key] = value[:3000] + "… [фрагмент сокращён]"
@@ -188,7 +180,6 @@ def build_context(db: Session, document: Document, user: User, findings: list[Ri
         "sources": [s.model_dump(mode="json") for s in sources.values()],
     }, sources=sources, model=document.llm_model)
 
-
 def history_data(messages: list[DocumentChatMessage]) -> tuple[list[dict], dict | None]:
     history = []
     remaining = HISTORY_BUDGET
@@ -202,7 +193,6 @@ def history_data(messages: list[DocumentChatMessage]) -> tuple[list[dict], dict 
                             "finding_id": str(message.finding_id) if message.finding_id else None})
     return list(reversed(history)), latest_draft
 
-
 async def answer(context: ChatContext, request: ChatRequest, messages: list[DocumentChatMessage]) -> tuple[AssistantReply, list[dict]]:
     history, latest_draft = history_data(messages)
     payload = {"server_context": context.data, "history": history, "latest_draft": latest_draft,
@@ -213,15 +203,14 @@ async def answer(context: ChatContext, request: ChatRequest, messages: list[Docu
         except (TimeoutError, httpx.TimeoutException):
             raise
         except Exception as exc:
-            # LLMClient также может исчерпать повторы HTTP 429/5xx с внутренним
-            # исключением retry. Детали провайдера не должны попадать в API.
+
             raise LLMError("Не удалось получить ответ модели") from exc
     reply = AssistantReply.model_validate(result)
     if any(source_id not in context.sources for source_id in reply.source_ids):
         raise LLMError("Ответ содержит неизвестные источники")
     if bool(reply.draft_title and reply.draft_title.strip()) != bool(reply.draft_content and reply.draft_content.strip()):
         raise LLMError("Неполный черновик документа")
-    # Отказ допустим и при запросе черновика; не превращаем его в ошибку API.
+
     if reply.answer.strip() == OFF_TOPIC_ANSWER:
         return AssistantReply(answer=OFF_TOPIC_ANSWER, source_ids=[], draft_title=None, draft_content=None), []
     if request.mode != "question" and not (reply.draft_content and reply.draft_content.strip()):

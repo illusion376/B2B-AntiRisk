@@ -18,13 +18,11 @@ log = logging.getLogger(__name__)
 
 _MAGIC = {".pdf": b"%PDF", ".zip": b"PK", ".docx": b"PK", ".odt": b"PK", ".doc": b"\xd0\xcf\x11\xe0", ".rtf": b"{\\rtf"}
 
-
 class UploadRejected(Exception):
     def __init__(self, status_code: int, detail: str):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
-
 
 def _save(upload: UploadFile, target: Path) -> int:
     size = 0
@@ -38,7 +36,6 @@ def _save(upload: UploadFile, target: Path) -> int:
         raise UploadRejected(400, "Файл пустой. Выберите файл с содержимым")
     return size
 
-
 def _check_magic(path: Path, ext: str) -> None:
     magic = _MAGIC.get(ext)
     if magic is None:
@@ -49,7 +46,6 @@ def _check_magic(path: Path, ext: str) -> None:
     if magic not in window:
         raise UploadRejected(400, f"Содержимое файла не соответствует расширению {ext}")
 
-
 def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str = "AUTO",
                     project: Project | None = None, title: str | None = None,
                     *, defer_processing: bool = False, analysis_mode: str | None = None,
@@ -59,7 +55,7 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     Возвращает анализ и id поддерживаемых документов. При defer_processing они
     остаются UPLOADED до явного запуска пользователем, иначе готовы к постановке в очередь.
     """
-    # Отложенная загрузка не требует настройки движка: пользователь выберет его при запуске.
+
     mode = resolve_analysis_mode(analysis_mode) if not defer_processing or analysis_mode is not None else None
     model = (llm_model or settings.llm_model.strip()) if mode == "llm" else None
     original_name = storage.safe_filename(upload.filename or "document")
@@ -141,13 +137,11 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     })
     return analysis, to_process
 
-
 def enqueue(document_ids: list[uuid.UUID]) -> None:
     from app.tasks import process_document
 
     for document_id in document_ids:
         process_document.delay(str(document_id))
-
 
 def remove_files(analysis_id: uuid.UUID) -> None:
     shutil.rmtree(settings.storage_dir / str(analysis_id), ignore_errors=True)

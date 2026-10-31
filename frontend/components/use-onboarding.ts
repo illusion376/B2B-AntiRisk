@@ -15,7 +15,7 @@ export function useOnboarding(userId: string | null, ready: boolean, view: View,
     setWorkspaceStep(null);
     if (!key) { setLoadedKey(null); return; }
     let saved = { ...emptyOnboarding };
-    try { saved = parseOnboarding(window.localStorage.getItem(key)); } catch { /* Keep the guide usable without storage. */ }
+    try { saved = parseOnboarding(window.localStorage.getItem(key)); } catch {                                              }
     setProgress(saved);
     setLoadedKey(key);
     const sync = (event: StorageEvent) => {
@@ -30,7 +30,7 @@ export function useOnboarding(userId: string | null, ready: boolean, view: View,
 
   useEffect(() => {
     if (!key || loadedKey !== key) return;
-    try { window.localStorage.setItem(key, JSON.stringify(progress)); } catch { /* Progress lasts for this visit. */ }
+    try { window.localStorage.setItem(key, JSON.stringify(progress)); } catch {                                      }
   }, [key, loadedKey, progress]);
 
   useEffect(() => {

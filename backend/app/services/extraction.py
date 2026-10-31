@@ -22,10 +22,9 @@ from app.config import settings
 
 log = logging.getLogger(__name__)
 
-
 @dataclass
 class PageContent:
-    page_number: int  # с 1
+    page_number: int
     width: float
     height: float
     text: str = ""
@@ -33,16 +32,13 @@ class PageContent:
     is_ocr: bool = False
     ocr_confidence: float | None = None
 
-
 _CLEAN = str.maketrans({
-    "\u00ad": "-",  # мягкий перенос: MuPDF часто отдаёт так и обычный дефис («44-ФЗ»)
+    "\u00ad": "-",
     "\u00a0": " ", "\u202f": " ", "\ufb01": "fi", "\ufb02": "fl", "\t": " ",
 })
 
-
 def clean_text(text: str) -> str:
     return text.translate(_CLEAN)
-
 
 def _words_to_text(words: list[list]) -> str:
     lines: list[str] = []
@@ -55,9 +51,8 @@ def _words_to_text(words: list[list]) -> str:
             lines[-1] += " " + w[4]
     return "\n".join(lines)
 
-
 def _native_page(page: fitz.Page, page_number: int) -> PageContent:
-    raw = page.get_text("words", sort=True)  # (x0, y0, x1, y1, word, block, line, word_no)
+    raw = page.get_text("words", sort=True)
     words: list[list] = []
     line_ids: dict[tuple[int, int], int] = {}
     for x0, y0, x1, y1, word, block, line, _ in raw:
@@ -74,20 +69,17 @@ def _native_page(page: fitz.Page, page_number: int) -> PageContent:
         words=words,
     )
 
-
 def _needs_ocr(page: fitz.Page, native: PageContent) -> bool:
     if not settings.ocr_enabled:
         return False
     if len(native.text.strip()) >= settings.ocr_min_text_chars:
         return False
-    # Пустая страница без картинок — просто пустая страница
-    return bool(page.get_images(full=False)) or bool(page.get_drawings())
 
+    return bool(page.get_images(full=False)) or bool(page.get_drawings())
 
 def _render(page: fitz.Page) -> Image.Image:
     pix = page.get_pixmap(dpi=settings.ocr_dpi, colorspace=fitz.csGRAY, alpha=False)
     return Image.frombytes("L", (pix.width, pix.height), pix.samples)
-
 
 def ocr_image(image: Image.Image, page_number: int, width: float, height: float) -> PageContent:
     import pytesseract
@@ -129,7 +121,6 @@ def ocr_image(image: Image.Image, page_number: int, width: float, height: float)
         ocr_confidence=round(sum(confidences) / len(confidences), 1) if confidences else None,
     )
 
-
 def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = None) -> list[PageContent]:
     """Возвращает содержимое всех страниц по порядку. on_page(done, total) — для прогресса."""
     with fitz.open(pdf_path) as doc:
@@ -147,13 +138,13 @@ def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = N
                 page = doc[index]
                 native = _native_page(page, index + 1)
                 if _needs_ocr(page, native):
-                    # Ограничиваем число отрендеренных страниц в памяти (~9 МБ на страницу A4)
+
                     while len(pending) >= settings.ocr_threads * 2:
                         done += _collect_one(pending, results)
                         report()
                     image = _render(page)
                     pending[index] = pool.submit(ocr_image, image, index + 1, native.width, native.height)
-                    results[index] = native  # запасной вариант, если OCR упадёт
+                    results[index] = native
                 else:
                     results[index] = native
                     done += 1
@@ -164,7 +155,6 @@ def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = N
 
     return [r for r in results if r is not None]
 
-
 def _collect_one(pending: dict[int, Future], results: list) -> int:
     index = next(iter(pending))
     future = pending.pop(index)
@@ -174,16 +164,13 @@ def _collect_one(pending: dict[int, Future], results: list) -> int:
         log.exception("OCR failed on page %s", index + 1)
     return 1
 
-
 def iter_lines(pages: list[PageContent]) -> Iterator[tuple[int, str]]:
     for page in pages:
         for line in page.text.splitlines():
             if line.strip():
                 yield page.page_number, line
 
-
 _HYPHEN_BREAK = re.compile(r"(\w)-\n(\w)")
-
 
 def dehyphenate(text: str) -> str:
     return _HYPHEN_BREAK.sub(r"\1\2", text)

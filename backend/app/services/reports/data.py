@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.models import Analysis, Document, RiskFinding, RiskRule, User, visible_findings
 from app.services.scoring import risk_score, traffic_light
 
-
 @dataclass
 class ReportFinding:
     number: int | None
@@ -28,7 +27,6 @@ class ReportFinding:
     quote_verified: bool
     source: str
     highlights: list
-
 
 @dataclass
 class ReportDocument:
@@ -71,7 +69,6 @@ class ReportDocument:
     def green(self) -> list[ReportFinding]:
         return [f for f in self.findings if f.severity == "GREEN"]
 
-
 @dataclass
 class ReportData:
     analysis_id: uuid.UUID
@@ -113,7 +110,6 @@ class ReportData:
             return "UNKNOWN"
         return traffic_light(f.severity for f in self.all_findings if f.review_status != "DISMISSED")
 
-
 def collect(db: Session, analysis: Analysis, user: User, document_id: uuid.UUID | None = None,
             include_dismissed: bool = False) -> ReportData:
     doc_query = select(Document).where(Document.analysis_id == analysis.id, Document.status != "UNSUPPORTED")
@@ -141,8 +137,7 @@ def collect(db: Session, analysis: Analysis, user: User, document_id: uuid.UUID 
             )
             for f in findings
         ]
-        # Отклонённые замечания можно включить в отчёт для истории, но они не
-        # повышают риск и не отменяют сам факт выполненной проверки.
+
         severities = [f.severity for f in checked_findings if f.review_status != "DISMISSED"]
         assessed = doc.status == "COMPLETED" and bool(checked_findings)
         result_docs.append(ReportDocument(

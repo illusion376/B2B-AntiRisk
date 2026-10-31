@@ -15,14 +15,12 @@ log = logging.getLogger(__name__)
 
 _LOCK_KEY = 873_215_001
 
-
 def _migrations_dir() -> Path | None:
     candidates = [
         settings.migrations_dir,
-        Path(__file__).resolve().parents[2] / "database" / "migrations",  # локальный запуск из репозитория
+        Path(__file__).resolve().parents[2] / "database" / "migrations",
     ]
     return next((p for p in candidates if p.is_dir()), None)
-
 
 def run_migrations() -> None:
     directory = _migrations_dir()
@@ -45,7 +43,7 @@ def run_migrations() -> None:
                 if path.name in applied:
                     continue
                 log.info("Применяю миграцию %s", path.name)
-                # Курсор драйвера без параметров: в файле несколько выражений и символы «%»
+
                 with conn.connection.dbapi_connection.cursor() as cur:
                     cur.execute(path.read_text(encoding="utf-8"))
                 conn.execute(text("INSERT INTO schema_migrations (filename) VALUES (:f)"), {"f": path.name})

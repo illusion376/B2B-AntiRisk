@@ -14,7 +14,6 @@ export interface ReportOptions extends RequestOptions { mode?: string; format?: 
 export interface FindingUpdate { status?: ReviewStatus; reviewerComment?: string | null }
 export interface HistoryOptions extends RequestOptions { limit?: number; offset?: number; actions?: string | string[] }
 
-/** The default same-origin URL works through Next.js rewrites and Docker nginx. */
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '');
 
 export class ApiError extends Error {
@@ -69,7 +68,7 @@ async function requestResponse(path: string, options: RequestInit = {}): Promise
   }
   if (!response.ok) {
     let body: unknown;
-    try { body = await response.json(); } catch { /* Proxy error pages must not be shown as messages. */ }
+    try { body = await response.json(); } catch {                                                        }
     throw new ApiError(serverMessage(body, response.status), response.status);
   }
   return response;
@@ -227,7 +226,6 @@ export function mapChatMessage(value: ChatMessageDto): ChatMessage {
   };
 }
 
-/** Omitted fields must stay omitted: the backend updates generated prompts after a basic edit. */
 export function rulePayload(draft: Partial<RuleDraft>) {
   return {
     title: draft.title, description: draft.description, category: draft.category, severity: draft.severity,

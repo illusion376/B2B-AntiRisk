@@ -18,7 +18,6 @@ export function validateUpload(file: Pick<File, 'name' | 'size'>, existing: Proj
   return null;
 }
 
-/** Processing state always comes from the server; time cannot complete an analysis. */
 export function getProcessing(file: ProcessingState, _now?: number) {
   return { phase: file.phase, progress: file.progress, label: file.label };
 }

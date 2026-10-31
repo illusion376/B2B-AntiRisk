@@ -25,13 +25,11 @@ from app.services.llm import LLMError, failure_code
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/documents/{document_id}/chat", tags=["ИИ-помощник"])
 
-
 def _ready(db: Session, document_id: uuid.UUID, user: User) -> Document:
     document = get_document_or_404(db, document_id, user)
     if document.status != "COMPLETED":
         raise HTTPException(409, "Помощник доступен после завершения анализа документа")
     return document
-
 
 def _history(db: Session, document: Document, user: User) -> list[DocumentChatMessage]:
     messages = list(db.scalars(select(DocumentChatMessage).where(
@@ -40,7 +38,6 @@ def _history(db: Session, document: Document, user: User) -> list[DocumentChatMe
         DocumentChatMessage.context_version == document_chat.context_version(document),
     ).order_by(DocumentChatMessage.created_at.desc(), DocumentChatMessage.id.desc()).limit(80)))
     return list(reversed(messages))
-
 
 @router.get("", response_model=ChatHistory)
 def history(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -51,15 +48,13 @@ def history(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = 
         messages=[ChatMessageOut.model_validate(m) for m in _history(db, document, user)],
     )
 
-
 @router.post("", response_model=ChatTurn)
 async def send(document_id: uuid.UUID, body: ChatRequest, db: Session = Depends(get_db),
                user: User = Depends(current_user)):
     document = _ready(db, document_id, user)
     if not settings.llm_enabled:
         raise HTTPException(503, "ИИ-помощник не настроен. Обратитесь к администратору.")
-    # Межпроцессная блокировка одного диалога: второй запрос не тратит деньги
-    # на параллельный ответ с неполной историей. Освобождается при commit/rollback.
+
     lock_key = int.from_bytes(hashlib.blake2b(f"chat:{document.id}:{user.id}".encode(), digest_size=8).digest(),
                               "big", signed=True)
     if not db.scalar(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}):
@@ -71,13 +66,13 @@ async def send(document_id: uuid.UUID, body: ChatRequest, db: Session = Depends(
         raise HTTPException(404, "Замечание не найдено в текущем документе или его правило отключено")
     findings_version = document_chat.results_version(findings)
     messages = _history(db, document, user)
-    # Предыдущий вопрос помогает найти фрагменты для «а что с этим сроком?».
+
     previous_question = next((m.content for m in reversed(messages) if m.role == "user"), "")
     context = document_chat.build_context(db, document, user, findings, selected,
                                          body.message + " " + previous_question)
     started_at = datetime.now(timezone.utc)
     try:
-        # Общий дедлайн меньше nginx proxy_read_timeout, включая повторы LLMClient.
+
         async with asyncio.timeout(170):
             reply, sources = await document_chat.answer(context, body, messages)
     except (TimeoutError, httpx.TimeoutException) as exc:
@@ -88,7 +83,6 @@ async def send(document_id: uuid.UUID, body: ChatRequest, db: Session = Depends(
         log.warning("Document assistant failed: %s", failure_code(exc))
         raise HTTPException(502, "Не удалось получить корректный ответ помощника. Попробуйте ещё раз.") from exc
 
-    # Анализ/статус замечаний мог измениться, пока провайдер готовил ответ.
     db.expire_all()
     document = _ready(db, document_id, user)
     if version != document_chat.context_version(document) or findings_version != document_chat.results_version(
@@ -109,7 +103,6 @@ async def send(document_id: uuid.UUID, body: ChatRequest, db: Session = Depends(
     db.add_all([question, response])
     db.commit()
     return ChatTurn(messages=[ChatMessageOut.model_validate(m) for m in (question, response)])
-
 
 @router.get("/{message_id}/draft", summary="Скачать подготовленный помощником черновик Word")
 def download_draft(document_id: uuid.UUID, message_id: uuid.UUID, db: Session = Depends(get_db),

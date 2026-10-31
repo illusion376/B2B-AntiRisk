@@ -197,8 +197,7 @@ const defaultCategories = [
 
 export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProps) {
   const availableCategories = Array.from(new Set([...categories, ...defaultCategories]));
-  // Omit advanced settings from PATCH so the server preserves custom settings and
-  // can update automatically generated prompts when the title or description changes.
+
   const [draft, setDraft] = useState<RuleDraft>(() => rule ? {
     title: rule.title,
     description: rule.description,

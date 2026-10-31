@@ -29,9 +29,6 @@ VERDICT = {
 DISCLAIMER = ("Отчёт сформирован автоматически и не является юридическим заключением. "
               "Замечания необходимо проверить специалисту.")
 
-
-# ---------- примитивы ----------
-
 def _shade(cell, fill: str) -> None:
     tc_pr = cell._tc.get_or_add_tcPr()
     shd = OxmlElement("w:shd")
@@ -40,13 +37,11 @@ def _shade(cell, fill: str) -> None:
     shd.set(qn("w:fill"), fill)
     tc_pr.append(shd)
 
-
 def _repeat_header(row) -> None:
     tr_pr = row._tr.get_or_add_trPr()
     el = OxmlElement("w:tblHeader")
     el.set(qn("w:val"), "true")
     tr_pr.append(el)
-
 
 def _new_document(landscape: bool = False, author: str | None = None) -> DocxDocument:
     doc = DocxDocument()
@@ -64,7 +59,6 @@ def _new_document(landscape: bool = False, author: str | None = None) -> DocxDoc
     section.top_margin = section.bottom_margin = Cm(1.8)
     return doc
 
-
 def _cell_text(cell, text: str, bold: bool = False, size: int | None = None, color: RGBColor | None = None,
                italic: bool = False) -> None:
     cell.text = ""
@@ -75,7 +69,6 @@ def _cell_text(cell, text: str, bold: bool = False, size: int | None = None, col
         run.font.size = Pt(size)
     if color:
         run.font.color.rgb = color
-
 
 def _table(doc, headers: list[str], widths: list[float]):
     table = doc.add_table(rows=1, cols=len(headers))
@@ -91,7 +84,6 @@ def _table(doc, headers: list[str], widths: list[float]):
             row.cells[i].width = Cm(w)
     return table
 
-
 def _add_row(table, values: list[str], widths: list[float], size: int = 10):
     row = table.add_row()
     for i, value in enumerate(values):
@@ -99,18 +91,15 @@ def _add_row(table, values: list[str], widths: list[float], size: int = 10):
         row.cells[i].width = Cm(widths[i])
     return row
 
-
 def clause_label(clause: str | None) -> str | None:
     """«6.2» -> «п. 6.2»; ненумерованные значения — как есть."""
     if not clause:
         return None
     return f"п. {clause}" if clause[0].isdigit() else clause
 
-
 def _location(f: ReportFinding) -> str:
     parts = [p for p in (clause_label(f.clause), f"стр. {f.page_number}" if f.page_number else None) if p]
     return ", ".join(parts) or "—"
-
 
 def _header(doc, data: ReportData, title: str) -> None:
     heading = doc.add_heading(title, level=1)
@@ -157,7 +146,6 @@ def _header(doc, data: ReportData, title: str) -> None:
         row.cells[1].width = Cm(12.8)
     doc.add_paragraph()
 
-
 def _heuristic_note(issues: list[ReportFinding]) -> str | None:
     """Одно примечание на весь отчёт вместо пометки у каждого замечания, найденного без LLM."""
     heuristic = [f for f in issues if f.source == "HEURISTIC"]
@@ -167,7 +155,6 @@ def _heuristic_note(issues: list[ReportFinding]) -> str | None:
         return "Замечания найдены без LLM (по ключевым словам) — требуется ручная проверка каждого замечания."
     numbers = ", ".join(f"№{f.number}" for f in heuristic if f.number)
     return f"Замечания {numbers} найдены без LLM (по ключевым словам) — требуется их ручная проверка."
-
 
 def _summary(doc, data: ReportData) -> None:
     """Итог проверки: количество замечаний по уровням, без светофора и индекса риска."""
@@ -193,7 +180,6 @@ def _summary(doc, data: ReportData) -> None:
         p.add_run("Примечание: ").bold = True
         p.add_run(note)
 
-
 def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
     if not multi:
         return
@@ -207,14 +193,12 @@ def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
         info += f" · не обработан: {rd.error_message or rd.status}"
     doc.add_paragraph(info)
 
-
 def _assessment_note(rd: ReportDocument) -> str:
     if rd.status != "COMPLETED":
         return f"Документ не проверен: {rd.error_message or rd.status}."
     if any(f.severity == "UNKNOWN" and f.review_status != "DISMISSED" for f in rd.findings):
         return "Проверка выполнена частично: для части правил недостаточно подтверждённых данных."
     return "Нет результатов проверки по действующим правилам."
-
 
 def _footer(doc) -> None:
     p = doc.add_paragraph(DISCLAIMER)
@@ -223,9 +207,6 @@ def _footer(doc) -> None:
     run = p.runs[0]
     run.italic = True
     run.font.size = Pt(8.5)
-
-
-# ---------- режимы ----------
 
 def build_brief(data: ReportData, target: Path) -> Path:
     doc = _new_document(author=data.author)
@@ -253,7 +234,6 @@ def build_brief(data: ReportData, target: Path) -> Path:
     _footer(doc)
     doc.save(target)
     return target
-
 
 def build_detailed(data: ReportData, target: Path) -> Path:
     doc = _new_document(author=data.author)
@@ -320,12 +300,10 @@ def build_detailed(data: ReportData, target: Path) -> Path:
     doc.save(target)
     return target
 
-
 def _labeled(doc, label: str, text: str) -> None:
     p = doc.add_paragraph()
     p.add_run(f"{label}: ").bold = True
     p.add_run(text)
-
 
 def _labeled_comment(doc, label: str, text: str) -> None:
     parts = text.split("\n\n")
@@ -345,7 +323,6 @@ def _labeled_comment(doc, label: str, text: str) -> None:
             p.add_run(body if sep else header)
         else:
             p.add_run(part)
-
 
 def build_protocol(data: ReportData, target: Path) -> Path:
     """Протокол разногласий: редакция заказчика -> предлагаемая редакция -> обоснование."""
@@ -395,6 +372,5 @@ def build_protocol(data: ReportData, target: Path) -> Path:
     _footer(doc)
     doc.save(target)
     return target
-
 
 BUILDERS = {"brief": build_brief, "detailed": build_detailed, "protocol": build_protocol}

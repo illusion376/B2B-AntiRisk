@@ -8,19 +8,16 @@ from pathlib import Path, PurePosixPath
 
 from app.services.storage import ARCHIVES, SUPPORTED_DOCUMENTS, extension, safe_filename
 
-
 class ArchiveError(ValueError):
     pass
 
-
 @dataclass
 class ExtractedFile:
-    relative_path: str  # путь внутри архива, как его увидит пользователь
+    relative_path: str
     stored_path: Path
     size: int
     ext: str
     supported: bool
-
 
 def decode_zip_name(info: zipfile.ZipInfo) -> str:
     """Имена в архивах, созданных в Windows, часто в CP866 без UTF-8 флага.
@@ -28,7 +25,7 @@ def decode_zip_name(info: zipfile.ZipInfo) -> str:
     Python в этом случае декодирует их как CP437 — получаем «кракозябры». Перекодируем обратно.
     """
     name = info.filename
-    if info.flag_bits & 0x800:  # имя уже в UTF-8
+    if info.flag_bits & 0x800:
         return name
     try:
         raw = name.encode("cp437")
@@ -41,7 +38,6 @@ def decode_zip_name(info: zipfile.ZipInfo) -> str:
             continue
     return name
 
-
 def _normalize_member_path(name: str) -> PurePosixPath | None:
     """Отбрасывает абсолютные пути и «..» (zip slip)."""
     parts = [p for p in PurePosixPath(name.replace("\\", "/")).parts if p not in ("", ".", "/")]
@@ -49,14 +45,12 @@ def _normalize_member_path(name: str) -> PurePosixPath | None:
         return None
     return PurePosixPath(*[safe_filename(p) for p in parts])
 
-
 def _is_junk(path: PurePosixPath) -> bool:
     return (
         any(part == "__MACOSX" for part in path.parts)
         or path.name.startswith(("~$", "._"))
         or path.name in {".DS_Store", "Thumbs.db", "desktop.ini"}
     )
-
 
 class _Budget:
     def __init__(self, max_files: int, max_bytes: int):
@@ -70,7 +64,6 @@ class _Budget:
             raise ArchiveError("В архиве слишком много файлов")
         if self.bytes_left < 0:
             raise ArchiveError("Распакованный размер архива превышает допустимый")
-
 
 def extract_zip(
     source: Path | io.BytesIO,
@@ -86,7 +79,6 @@ def extract_zip(
     _extract(source, target_dir, PurePosixPath(), budget, max_depth, result)
     result.sort(key=lambda f: f.relative_path.lower())
     return result
-
 
 def _extract(source, target_dir: Path, prefix: PurePosixPath, budget: _Budget, depth: int,
              result: list[ExtractedFile]) -> None:
@@ -112,7 +104,7 @@ def _extract(source, target_dir: Path, prefix: PurePosixPath, budget: _Budget, d
             if ext in ARCHIVES:
                 if depth <= 0:
                     continue
-                # Вложенный архив распаковываем «в папку» с его именем
+
                 with zf.open(info) as src:
                     nested = io.BytesIO(src.read())
                 _extract(nested, target_dir, rel, budget, depth - 1, result)
@@ -121,8 +113,7 @@ def _extract(source, target_dir: Path, prefix: PurePosixPath, budget: _Budget, d
             stored = target_dir / f"{uuid.uuid4().hex}{ext}"
             with zf.open(info) as src, open(stored, "wb") as dst:
                 shutil.copyfileobj(src, dst, length=1024 * 1024)
-            # zipfile не отдаёт больше file_size из заголовка и сверяет CRC,
-            # поэтому бюджет, учтённый выше, честный
+
             result.append(ExtractedFile(
                 relative_path=str(rel),
                 stored_path=stored,

@@ -91,18 +91,14 @@ USER_TEMPLATE = """Документ: {document_name}
 "fragment" — существующий идентификатор F1, F2 и т. д. Цитата должна целиком находиться именно в нём.
 "confidence" — число от 0 до 1. Не добавляй полей за пределами указанной схемы."""
 
-
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-
 
 class _StrictResult(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
-
 class LLMEvidence(_StrictResult):
     fragment: Annotated[str, StringConstraints(pattern=r"^F[1-9][0-9]*$", max_length=12)]
     quote: str = Field(max_length=3000)
-
 
 class LLMIssue(LLMEvidence):
     severity: Literal["RED", "YELLOW", "LOW"]
@@ -110,7 +106,6 @@ class LLMIssue(LLMEvidence):
     comment: NonEmptyText = Field(max_length=5000)
     recommendation: NonEmptyText = Field(max_length=3000)
     confidence: float = Field(ge=0.0, le=1.0)
-
 
 class LLMResult(_StrictResult):
     verdict: Literal["RISK", "OK", "NOT_FOUND", "UNKNOWN"]
@@ -130,11 +125,10 @@ class LLMResult(_StrictResult):
             raise ValueError("Unconfirmed verdicts cannot claim supporting evidence")
         return self
 
-
 @dataclass
 class FindingDraft:
     rule: RiskRule
-    severity: str  # RED / YELLOW / LOW / GREEN / UNKNOWN
+    severity: str
     title: str
     short_description: str | None
     comment: str
@@ -147,12 +141,10 @@ class FindingDraft:
     confidence: float | None = None
     source: str = "LLM"
 
-
 @dataclass
 class RuleContext:
     rule: RiskRule
     chunks: list[RetrievedChunk]
-
 
 def _format_fragments(chunks: list[RetrievedChunk]) -> str:
     parts = []
@@ -163,7 +155,6 @@ def _format_fragments(chunks: list[RetrievedChunk]) -> str:
         parts.append(f"{header}\n{chunk.content}")
     return "\n\n".join(parts)
 
-
 def _clause_label(match_clause: str | None, chunk: RetrievedChunk | None) -> str | None:
     """Номер пункта без «п.» («6.2»), как его показывает фронтенд; иначе — пункты/раздел чанка."""
     if match_clause:
@@ -172,16 +163,14 @@ def _clause_label(match_clause: str | None, chunk: RetrievedChunk | None) -> str
         label = chunk.clause_title.split(" › ")[-1]
         if label.startswith("п"):
             return re.sub(r"^пп?\. ", "", label)[:255]
-        section = re.match(r"^(\d{1,2})\.", label)  # только раздел: «6. Ответственность сторон» -> «6»
+        section = re.match(r"^(\d{1,2})\.", label)
         return section.group(1) if section else None
     return None
-
 
 def _page_hint(chunk: RetrievedChunk | None) -> tuple[int, int] | None:
     if not chunk:
         return None
     return chunk.page_number, chunk.page_end or chunk.page_number
-
 
 def _green(rule: RiskRule, explanation: str | None, source: str = "LLM") -> FindingDraft:
     return FindingDraft(
@@ -193,7 +182,6 @@ def _green(rule: RiskRule, explanation: str | None, source: str = "LLM") -> Find
         source=source,
     )
 
-
 def _unknown(rule: RiskRule, explanation: str, source: str = "LLM") -> FindingDraft:
     return FindingDraft(
         rule=rule, severity="UNKNOWN", title=rule.title,
@@ -201,25 +189,23 @@ def _unknown(rule: RiskRule, explanation: str, source: str = "LLM") -> FindingDr
         comment=explanation, source=source,
     )
 
-
 def _resolve_quote(pages: list[dict], quote: str, chunk: RetrievedChunk | None) -> QuoteMatch:
-    # An isolated word, heading or number is not meaningful evidence of a clause.
+
     if chunk and len(quote.strip()) >= 20 and len(re.findall(r"[^\W\d_]+", quote, re.UNICODE)) >= 3:
         return locate_quote(pages, quote, _page_hint(chunk), candidate_text=chunk.content, strict=True)
     return QuoteMatch(False, None, None, None)
-
 
 def _build_drafts(rule: RiskRule, ctx: RuleContext, answer: dict, pages: list[dict]) -> list[FindingDraft]:
     try:
         result = LLMResult.model_validate(answer)
     except ValidationError as exc:
-        # Do not persist the untrusted response or treat parser failures as successful checks.
+
         error_types = ", ".join(sorted({error["type"] for error in exc.errors()}))
         log.warning("Rule %s: invalid LLM result (%d errors: %s). Details: %s", rule.id, exc.error_count(), error_types, exc.errors())
         return [_unknown(rule, "Ответ ИИ не соответствует схеме проверки. Автоматический вывод не подтверждён.", source="ERROR")]
 
     if result.verdict == "NOT_FOUND":
-        # Omit absent conditions without treating them as errors or confirmed safe results.
+
         return []
     if not ctx.chunks:
         return [_unknown(rule, "ИИ вернул вывод без исходных фрагментов. Проверьте документ вручную.", source="ERROR")]
@@ -259,7 +245,6 @@ def _build_drafts(rule: RiskRule, ctx: RuleContext, answer: dict, pages: list[di
             continue
         seen_quotes.add(match.text)
 
-        # Уровень задаёт правило; модель может только понизить критичность
         severity = weaker(rule.severity, issue.severity)
         if severity not in ("RED", "YELLOW", "LOW"):
             drafts.append(_unknown(rule, "В правиле задан неизвестный уровень риска. Проверьте настройки правила.", source="ERROR"))
@@ -281,20 +266,17 @@ def _build_drafts(rule: RiskRule, ctx: RuleContext, answer: dict, pages: list[di
         ))
     return drafts or [_unknown(rule, "ИИ не предоставил подтверждённых замечаний. Требуется ручная проверка.")]
 
-
 def _chunk_by_ref(chunks: list[RetrievedChunk], ref) -> RetrievedChunk | None:
     m = re.fullmatch(r"F([1-9][0-9]*)", ref) if isinstance(ref, str) else None
     if m and int(m.group(1)) <= len(chunks):
         return chunks[int(m.group(1)) - 1]
     return None
 
-
 def _short(value) -> str | None:
     if not value:
         return None
     text = str(value).strip()
     return text if len(text) <= 120 else text[:117].rstrip() + "…"
-
 
 async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: RuleContext,
                          pages: list[dict], document_name: str, law_type: str | None,
@@ -316,7 +298,6 @@ async def _evaluate_rule(client: LLMClient, semaphore: asyncio.Semaphore, ctx: R
                                             + SENSITIVITY_INSTRUCTIONS[sensitivity], prompt)
     return _build_drafts(rule, ctx, answer, pages)
 
-
 _CONTRADICTION_PATTERNS = (
     re.compile(r"нарушени[яйее]\s+(не\s+выявлен|отсутствуют|нет)", re.IGNORECASE),
     re.compile(r"риск[а-я]*\s+(не\s+выявлен|отсутствуют|нет|не\s+установлен)", re.IGNORECASE),
@@ -330,7 +311,6 @@ _TITLE_ONLY_RE = re.compile(
 )
 
 _SEVERITY_ORDER = {"RED": 4, "YELLOW": 3, "LOW": 2, "UNKNOWN": 1, "GREEN": 0}
-
 
 def _is_empty_or_heading_quote(quote: str | None) -> bool:
     if not quote or len(quote.strip()) < 15:
@@ -347,7 +327,6 @@ def _is_empty_or_heading_quote(quote: str | None) -> bool:
         return True
     return False
 
-
 def _extract_recommendation(llm_prompt: str | None) -> str | None:
     if not llm_prompt:
         return None
@@ -356,19 +335,16 @@ def _extract_recommendation(llm_prompt: str | None) -> str | None:
         return match.group(1).strip()
     return None
 
-
 def _has_self_contradiction(comment: str | None, summary: str | None) -> bool:
     text = f"{summary or ''} {comment or ''}"
     if not text.strip():
         return False
     return any(pattern.search(text) for pattern in _CONTRADICTION_PATTERNS)
 
-
 def _quote_words(text: str | None) -> set[str]:
     if not text:
         return set()
     return set(re.findall(r"[a-zа-яё0-9]{3,}", text.lower()))
-
 
 def _are_duplicate_drafts(d1: FindingDraft, d2: FindingDraft) -> bool:
     w1 = _quote_words(d1.exact_quote)
@@ -382,7 +358,6 @@ def _are_duplicate_drafts(d1: FindingDraft, d2: FindingDraft) -> bool:
         if d1.exact_quote and d2.exact_quote and d1.exact_quote == d2.exact_quote:
             return True
     return False
-
 
 def _verify_and_deduplicate_drafts(drafts: list[FindingDraft]) -> list[FindingDraft]:
     """Верифицирует замечания и объединяет межправиловые дубликаты."""
@@ -404,7 +379,6 @@ def _verify_and_deduplicate_drafts(drafts: list[FindingDraft]) -> list[FindingDr
         verified.append(d)
 
     return merge_duplicate_drafts(verified)
-
 
 async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], document_name: str,
                             law_type: str | None, sensitivity: str = "balanced", *, model: str | None = None) -> list[FindingDraft]:
@@ -432,21 +406,14 @@ async def evaluate_with_llm(contexts: list[RuleContext], pages: list[dict], docu
             drafts.extend(result)
     return _verify_and_deduplicate_drafts(drafts)
 
-
-# ---------- Эвристический режим (LLM не настроена) ----------
-
 _WORD = re.compile(r"\w{4,}", re.UNICODE)
 _SENTENCE = re.compile(r"(?<=[.;!?])\s+")
 
-# Части шаблонов. Число в договоре часто продублировано прописью: «1 (одного) дня», «30 (тридцати) процентов»,
-# а между числом и «%» может стоять пробел: «10 % от цены».
 _NUM_WORDS = r"\s*(?:\([^)]*\)\s*)?"
 _DAYS = r"(?:рабоч\w*\s+|календарн\w*\s+)?(?:дн[еяйи]\w*|день)\b"
 _PERCENT = r"(?:[.,]\d+)?\s*(?:\([^)]*\)\s*)?(?:%|процент)"
 _SHORT_TERM = rf"(?:в\s+течение|по\s+истечении|через)\s+[1-5]{_NUM_WORDS}{_DAYS}"
 
-# Критические маркеры для правил уровня RED: если формулировка найдена в одном предложении,
-# эвристический режим фиксирует критический риск (RED), а не понижает до YELLOW.
 _CRITICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     "rnp_short_cure_period": re.compile(
         rf"односторонн\w*\s+отказ[^.]{{0,250}}{_SHORT_TERM}"
@@ -490,14 +457,10 @@ _CRITICAL_PATTERNS: dict[str, re.Pattern[str]] = {
     ),
 }
 
-# Формулировки, снимающие критический маркер в том же предложении:
-# «Lenovo ThinkPad E16 или эквивалент» — товарный знак с допуском эквивалента, это не нарушение.
 _MARKER_EXCEPTIONS: dict[str, re.Pattern[str]] = {
     "brand_without_equivalent": re.compile(r"или\s+эквивалент|эквивалент\w*\s+допуска", re.IGNORECASE),
 }
 
-# Тематические фильтры: отсекают ложные срабатывания, если фрагмент вообще
-# не относится к предметной области правила (преамбулы, общие положения).
 _DOMAIN_GUARDS: dict[str, re.Pattern[str]] = {
     "ip_rights_transfer": re.compile(
         r"(?:исключительн\w*\s+прав|интеллектуальн\w*|авторск\w*\s+прав|патент\w*|ноу-хау)",
@@ -525,22 +488,18 @@ _DOMAIN_GUARDS: dict[str, re.Pattern[str]] = {
     ),
 }
 
-
 def _stems(text: str) -> set[str]:
     return {w[:6] for w in _WORD.findall(text.lower().replace("ё", "е"))}
-
 
 def _is_noise(sentence: str) -> bool:
     """Обрывки OCR и строки таблиц («322 486 |МАОУ СОШ № 34 г.»): букв меньше половины символов."""
     chars = [c for c in sentence if not c.isspace()]
     return not chars or sum(c.isalpha() for c in chars) / len(chars) < 0.55
 
-
 def _quote_candidates(chunk: RetrievedChunk) -> list[str]:
     sentences = [s for s in _SENTENCE.split(chunk.content.replace("\n", " ")) if len(s.strip()) > 20] or [chunk.content]
     substantive = [s for s in sentences if not _is_empty_or_heading_quote(s) and not _is_noise(s)]
     return substantive or sentences
-
 
 def _marked_sentence(chunks: list[RetrievedChunk], marker: re.Pattern[str],
                      exception: re.Pattern[str] | None) -> tuple[RetrievedChunk, str] | None:
@@ -553,7 +512,6 @@ def _marked_sentence(chunks: list[RetrievedChunk], marker: re.Pattern[str],
             if marker.search(sentence) and not (exception and exception.search(sentence)):
                 return chunk, sentence
     return None
-
 
 def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivity: str = "balanced") -> list[FindingDraft]:
     """Без LLM: показываем релевантные условия договора.
@@ -574,7 +532,6 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
         if not relevant:
             continue
 
-        # Отсекаем ложные срабатывания по специфическим предметным областям
         guard = _DOMAIN_GUARDS.get(rule.id)
         if guard:
             guarded = [c for c in relevant if guard.search(c.content)]
@@ -583,7 +540,6 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             if guarded:
                 relevant = guarded
 
-        # Если для правила задан критический маркер — цитатой становится предложение с маркером
         marker = _CRITICAL_PATTERNS.get(rule.id)
         marked = _marked_sentence(relevant, marker, _MARKER_EXCEPTIONS.get(rule.id)) if marker else None
         if marked:
@@ -617,19 +573,15 @@ def evaluate_heuristic(contexts: list[RuleContext], pages: list[dict], sensitivi
             exact_quote=match.text if match.verified else sentence[:400],
             highlights=match.highlights,
             quote_verified=match.verified,
-            confidence=0.7 if is_red else 0.35,  # совпадение по шаблону, а не вывод модели
+            confidence=0.7 if is_red else 0.35,
             source="HEURISTIC",
         ))
     return _verify_and_deduplicate_drafts(drafts)
-
-
-# ---------- NLI режим (анализ противоречий без внешней LLM) ----------
 
 def _rule_hypothesis(rule: RiskRule) -> str:
     """Формулирует гипотезу риска для NLI модели из описания правила."""
     desc = rule.description.strip().rstrip(".")
     return f"{desc}."
-
 
 def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[FindingDraft]:
     """Семантический NLI-анализ противоречий и рисков через модель (например, rubert-base-cased-nli-threeway).
@@ -651,7 +603,6 @@ def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[Finding
         log.warning("Не удалось инициализировать NLI модель: %s", type(exc).__name__)
         return [_unknown(ctx.rule, "NLI-модель недоступна. Проверка не выполнена; выбранный режим не заменён другим.", source="ERROR") for ctx in contexts]
 
-    # Собираем пары (фрагмент, гипотеза) для пакетного инференса
     pair_meta: list[tuple[RuleContext, RetrievedChunk, str]] = []
     pairs_to_predict: list[tuple[str, str]] = []
 
@@ -740,4 +691,3 @@ def evaluate_nli(contexts: list[RuleContext], pages: list[dict]) -> list[Finding
         drafts.extend(rule_drafts or [_green(rule, "Нарушений не выявлено.", source="NLI")])
 
     return drafts
-

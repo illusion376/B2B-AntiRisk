@@ -13,18 +13,14 @@ if TYPE_CHECKING:
 
 _SEVERITY_ORDER = {"RED": 0, "YELLOW": 1, "LOW": 2, "UNKNOWN": 3, "GREEN": 4}
 
-
 def _severity_rank(sev: str) -> int:
     return _SEVERITY_ORDER.get(sev.upper(), 99)
-
 
 def _stronger_severity(s1: str, s2: str) -> str:
     return s1 if _severity_rank(s1) <= _severity_rank(s2) else s2
 
-
 def _tokenize_words(text: str) -> set[str]:
     return {w for w in re.findall(r"[^\W\d_]{3,}", text.lower().replace("ё", "е"))}
-
 
 def quote_overlap_ratio(q1: str | None, q2: str | None) -> float:
     """Вычисляет коэффициент пересечения слов между двумя цитатами."""
@@ -42,7 +38,6 @@ def quote_overlap_ratio(q1: str | None, q2: str | None) -> float:
     overlap = intersection / min_len
     return max(overlap, jaccard)
 
-
 def _clean_clause(clause: str | None) -> str | None:
     if not clause:
         return None
@@ -50,44 +45,38 @@ def _clean_clause(clause: str | None) -> str | None:
     c = re.sub(r"^(?:пп?\.?|раздел|статья)\s*", "", c, flags=re.IGNORECASE)
     return c.strip() or None
 
-
 def are_duplicate_findings(d1: FindingDraft, d2: FindingDraft) -> bool:
     """Определяет, относятся ли два замечания к одному условию/фрагменту договора."""
-    # Объединяем только подтверждённые или потенциальные риски
+
     if d1.severity not in ("RED", "YELLOW", "LOW") or d2.severity not in ("RED", "YELLOW", "LOW"):
         return False
 
-    # 1. Проверка цитат: пересечение более чем на 70% слов
     overlap = quote_overlap_ratio(d1.exact_quote, d2.exact_quote)
     if overlap >= 0.70:
         return True
 
-    # 2. Если одинаковый номер пункта договора (например, 6.2)
     c1 = _clean_clause(d1.clause)
     c2 = _clean_clause(d2.clause)
     if c1 and c2 and c1 == c2:
-        # Если пункт детальный (содержит точку, например «6.2» или «4.1.3»)
+
         if "." in c1:
             if d1.page_number is None or d2.page_number is None or d1.page_number == d2.page_number:
                 return True
-        # Если пункт верхнего уровня (например, просто раздел «6»), требуем также частичного совпадения цитаты
+
         elif overlap >= 0.35:
             return True
 
     return False
 
-
 def merge_two_drafts(d1: FindingDraft, d2: FindingDraft) -> FindingDraft:
     """Объединяет два замечания в одно с сохранением максимальной строгости."""
-    # Выбираем первичный драфт (более строгий уровень риска, затем большая уверенность)
+
     rank1 = (_severity_rank(d1.severity), -(d1.confidence or 0.0))
     rank2 = (_severity_rank(d2.severity), -(d2.confidence or 0.0))
     primary, secondary = (d1, d2) if rank1 <= rank2 else (d2, d1)
 
-    # Итоговый уровень критичности: наивысший (RED > YELLOW > LOW)
     merged_severity = _stronger_severity(d1.severity, d2.severity)
 
-    # Объединение комментариев без дублирования
     merged_comment = primary.comment
     sec_rule_title = secondary.rule.title if secondary.rule else secondary.title
     sec_rule_law = f" ({secondary.rule.legal_reference})" if secondary.rule and secondary.rule.legal_reference else ""
@@ -95,14 +84,12 @@ def merge_two_drafts(d1: FindingDraft, d2: FindingDraft) -> FindingDraft:
     if secondary.comment and secondary.comment not in merged_comment:
         merged_comment = f"{merged_comment}\n\n{secondary_note}"
 
-    # Объединение рекомендаций
     merged_counter = primary.counter_proposal or secondary.counter_proposal
     if primary.counter_proposal and secondary.counter_proposal and secondary.counter_proposal not in primary.counter_proposal:
         p_clean = primary.counter_proposal.strip().rstrip(".;")
         s_clean = secondary.counter_proposal.strip().rstrip(".;")
         merged_counter = f"{p_clean}; {s_clean}."
 
-    # Подсветки: объединяем уникальные координаты
     merged_highlights = list(primary.highlights)
     existing_boxes = {str(h) for h in merged_highlights}
     for h in secondary.highlights:
@@ -110,12 +97,10 @@ def merge_two_drafts(d1: FindingDraft, d2: FindingDraft) -> FindingDraft:
             merged_highlights.append(h)
             existing_boxes.add(str(h))
 
-    # Выбираем более информативную/длинную цитату
     q1 = primary.exact_quote or ""
     q2 = secondary.exact_quote or ""
     merged_quote = q1 if len(q1) >= len(q2) else q2
 
-    # Пункт договора: предпочитаем более точный пункт с точкой («6.2» вместо «6»)
     c1 = primary.clause
     c2 = secondary.clause
     merged_clause = c1 or c2
@@ -137,7 +122,6 @@ def merge_two_drafts(d1: FindingDraft, d2: FindingDraft) -> FindingDraft:
         confidence=max(primary.confidence or 0.0, secondary.confidence or 0.0),
         source=primary.source,
     )
-
 
 def merge_duplicate_drafts(drafts: list[Any]) -> list[Any]:
     """Выполняет кросс-правиловую дедупликацию замечаний."""

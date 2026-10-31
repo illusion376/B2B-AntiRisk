@@ -39,7 +39,7 @@ export function analysisEvents(previous: AnalysisSnapshot, current: AnalysisSnap
   const notices: AnalysisNotice[] = [];
   for (const [fileId, file] of current) {
     const before = previous.get(fileId);
-    if (!before) continue; // Не сообщаем о старых результатах при открытии сайта.
+    if (!before) continue;
     const wasRunning = before.phase === 'uploaded' || before.phase === 'queued' || before.phase === 'processing';
     const finished = file.phase === 'ready' || file.phase === 'failed';
     const push = (kind: NoticeKind, title: string, body: string) => notices.push({

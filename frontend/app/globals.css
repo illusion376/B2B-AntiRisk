@@ -659,7 +659,7 @@
 }
 
 @layer components {
-  /* Shared readable secondary text and visible keyboard focus. */
+
   .view-title p, .rule-card p, .rule-card small, .timeline p,
   .timeline time, .timeline-label, .eyebrow,
   .info-content p, .info-tip, .detail-disclaimer, .finding-detail > p,

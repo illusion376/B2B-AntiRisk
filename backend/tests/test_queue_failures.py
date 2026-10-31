@@ -8,7 +8,6 @@ from fastapi import HTTPException
 from app.api import analyses, documents, projects
 from app.models import Analysis, Document, Project, User
 
-
 @pytest.fixture
 def queue(monkeypatch):
     from app.tasks import reanalyze_document
@@ -22,11 +21,9 @@ def queue(monkeypatch):
     monkeypatch.setattr(documents, "refresh_analysis", refresh)
     return initial, repeated, refresh
 
-
 def make_document(analysis_id, status, **kwargs):
     return Document(id=uuid.uuid4(), analysis_id=analysis_id, status=status,
                     file_name="contract.pdf", progress=70 if status == "ANALYZING" else 0, **kwargs)
-
 
 def test_initial_queue_failure_marks_documents_failed_and_attempts_every_job(queue):
     initial, _, refresh = queue
@@ -46,7 +43,6 @@ def test_initial_queue_failure_marks_documents_failed_and_attempts_every_job(que
     refresh.assert_called_once_with(db, analysis.id)
     db.commit.assert_called_once()
 
-
 def test_partial_queue_failure_preserves_accepted_jobs_and_continues(queue):
     _, repeated, _ = queue
     repeated.side_effect = [None, ConnectionError("broker unavailable"), None]
@@ -62,8 +58,7 @@ def test_partial_queue_failure_preserves_accepted_jobs_and_continues(queue):
     assert docs[1].risk_score == 37
     assert docs[1].error_message == analyses.QUEUE_UNAVAILABLE
     assert repeated.call_args_list == [call(str(doc.id), ["payment_delay"]) for doc in docs]
-    db.delete.assert_not_called()  # прежние результаты остаются доступными
-
+    db.delete.assert_not_called()
 
 def test_rerun_reprocesses_failed_files_and_only_reanalyzes_completed_files(queue):
     initial, repeated, _ = queue
@@ -81,7 +76,6 @@ def test_rerun_reprocesses_failed_files_and_only_reanalyzes_completed_files(queu
     initial.assert_called_once_with([failed.id])
     repeated.assert_called_once_with(str(completed.id), None)
 
-
 def test_rerun_rejects_in_progress_analysis_without_scheduling(queue):
     initial, repeated, _ = queue
     analysis = Analysis(id=uuid.uuid4(), analysis_status="ANALYZING")
@@ -92,7 +86,6 @@ def test_rerun_rejects_in_progress_analysis_without_scheduling(queue):
     assert error.value.status_code == 409
     initial.assert_not_called()
     repeated.assert_not_called()
-
 
 def test_document_reanalysis_failure_restores_completed_document(queue, monkeypatch):
     _, repeated, _ = queue
@@ -109,7 +102,6 @@ def test_document_reanalysis_failure_restores_completed_document(queue, monkeypa
     assert error.value.status_code == 503
     assert doc.status == "COMPLETED" and doc.progress == 100 and doc.risk_score == 37
     assert doc.error_message == analyses.QUEUE_UNAVAILABLE
-
 
 def test_batch_upload_saves_files_without_scheduling(monkeypatch):
     project = Project(id=uuid.uuid4(), title="Test")

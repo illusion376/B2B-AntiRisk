@@ -60,7 +60,7 @@ export function useWorkspaceTools(state: State) {
       },
     ];
     for (const tool of tools) {
-      try { void Promise.resolve(context.registerTool(tool, {signal:controller.signal})).catch(() => {}); } catch { /* Optional browser capability; the UI remains fully functional. */ }
+      try { void Promise.resolve(context.registerTool(tool, {signal:controller.signal})).catch(() => {}); } catch {                                                                     }
     }
     return () => controller.abort();
   }, []);

@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 from app.models import RiskRule
 
-
 def _load_migration_rules() -> list[dict]:
     candidate_paths = [
         Path(__file__).resolve().parents[2] / "database" / "migrations" / "005_tz_and_qualification_rules.sql",
@@ -15,8 +14,6 @@ def _load_migration_rules() -> list[dict]:
     assert migration_path is not None, "Файл миграции 005_tz_and_qualification_rules.sql должен существовать"
     sql = migration_path.read_text(encoding="utf-8")
 
-    # Регулярка для извлечения кортежей значений из INSERT INTO risk_rules
-    # ('id', 'law', 'cat', 'sev', 'title', 'desc', 'query', 'prompt', 'legal', sort)
     pattern = re.compile(
         r"\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*(\d+)\s*\)",
         re.MULTILINE | re.DOTALL,
@@ -38,7 +35,6 @@ def _load_migration_rules() -> list[dict]:
         })
     return rules
 
-
 def test_migration_005_rules_exist():
     rules = _load_migration_rules()
     rule_ids = {r["id"] for r in rules}
@@ -50,11 +46,10 @@ def test_migration_005_rules_exist():
     }
     assert expected_ids.issubset(rule_ids), f"Не все ожидаемые правила найдены в миграции: {expected_ids - rule_ids}"
 
-
 def test_migration_005_rules_structure():
     rules = _load_migration_rules()
     for rule in rules:
-        # Проверка создания ORM модели RiskRule
+
         orm_rule = RiskRule(**rule)
         assert orm_rule.id in ("brand_without_equivalent", "experience_restricted_44_223", "excessive_application_demands")
         assert orm_rule.law_type in ("ALL", "44-FZ", "223-FZ")
@@ -62,7 +57,6 @@ def test_migration_005_rules_structure():
         assert len(orm_rule.semantic_query.split()) >= 5, "Семантический запрос должен содержать минимум 5 ключевых слов"
         assert len(orm_rule.llm_prompt) >= 50, "Промпт правила должен быть подробным"
         assert orm_rule.legal_reference is not None and len(orm_rule.legal_reference) > 0
-
 
 def test_brand_without_equivalent_rule():
     rules = {r["id"]: r for r in _load_migration_rules()}
@@ -73,7 +67,6 @@ def test_brand_without_equivalent_rule():
     assert "33 44-ФЗ" in rule["legal_reference"]
     assert "эквивалент" in rule["semantic_query"]
 
-
 def test_experience_restricted_rule():
     rules = {r["id"]: r for r in _load_migration_rules()}
     rule = rules["experience_restricted_44_223"]
@@ -83,7 +76,6 @@ def test_experience_restricted_rule():
     assert "31 44-ФЗ" in rule["legal_reference"]
     assert "коммерческий" in rule["semantic_query"]
 
-
 def test_excessive_application_demands_rule():
     rules = {r["id"]: r for r in _load_migration_rules()}
     rule = rules["excessive_application_demands"]
@@ -92,7 +84,6 @@ def test_excessive_application_demands_rule():
     assert rule["category"] == "Требования к составу заявки"
     assert "43 44-ФЗ" in rule["legal_reference"]
     assert "сертификат" in rule["semantic_query"]
-
 
 def _load_migration_006_rules() -> list[dict]:
     candidate_paths = [
@@ -126,7 +117,6 @@ def _load_migration_006_rules() -> list[dict]:
         })
     return rules
 
-
 def test_migration_006_rules_exist():
     rules = _load_migration_006_rules()
     rule_ids = {r["id"] for r in rules}
@@ -143,7 +133,6 @@ def test_migration_006_rules_exist():
     }
     assert expected_ids.issubset(rule_ids), f"Не все ожидаемые правила найдены в миграции 006: {expected_ids - rule_ids}"
 
-
 def test_migration_006_rules_structure():
     rules = _load_migration_006_rules()
     for rule in rules:
@@ -153,7 +142,6 @@ def test_migration_006_rules_structure():
         assert len(orm_rule.llm_prompt) >= 50
         assert orm_rule.legal_reference is not None and len(orm_rule.legal_reference) > 0
 
-
 def test_rnp_short_cure_period_rule():
     rules = {r["id"]: r for r in _load_migration_006_rules()}
     rule = rules["rnp_short_cure_period"]
@@ -161,4 +149,3 @@ def test_rnp_short_cure_period_rule():
     assert rule["severity"] == "RED"
     assert "95" in rule["legal_reference"]
     assert "устранить нарушения" in rule["semantic_query"]
-

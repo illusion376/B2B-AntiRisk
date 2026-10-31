@@ -21,17 +21,14 @@ router = APIRouter(prefix="/api/projects", tags=["Проекты"])
 
 DUPLICATE_TITLE = "Проект с таким названием уже существует."
 
-
 def _title_taken(db: Session, user: User, title: str, exclude: uuid.UUID | None = None) -> bool:
     query = select(Project.id).where(Project.user_id == user.id, func.lower(Project.title) == title.lower())
     if exclude:
         query = query.where(Project.id != exclude)
     return db.scalar(query) is not None
 
-
 def _one(db: Session, project: Project) -> ProjectOut:
     return projects_out(db, [project])[0]
-
 
 @router.get("", response_model=list[ProjectOut], summary="Все проекты с файлами и статусами обработки")
 def list_projects(
@@ -46,7 +43,6 @@ def list_projects(
         query = query.where(Project.title.ilike(pattern) | Project.id.in_(in_files))
     return projects_out(db, list(db.scalars(query.order_by(Project.updated_at.desc()))))
 
-
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED, summary="Новый проект")
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if _title_taken(db, user, body.title):
@@ -55,7 +51,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), user: Use
     db.add(project)
     try:
         db.flush()
-    except IntegrityError as exc:  # параллельное создание с тем же названием
+    except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, DUPLICATE_TITLE) from exc
     log_action(db, user.id, "PROJECT_CREATED", "project", project.id, {"title": project.title})
@@ -63,11 +59,9 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), user: Use
     db.refresh(project)
     return _one(db, project)
 
-
 @router.get("/{project_id}", response_model=ProjectOut, summary="Проект и его файлы")
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return _one(db, get_project_or_404(db, project_id, user))
-
 
 @router.patch("/{project_id}", response_model=ProjectOut, summary="Переименовать проект / изменить описание")
 def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Depends(get_db),
@@ -83,7 +77,6 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
     db.refresh(project)
     return _one(db, project)
 
-
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Удалить проект со всеми файлами")
 def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
@@ -93,7 +86,6 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: U
     db.commit()
     for analysis_id in analysis_ids:
         uploads.remove_files(analysis_id)
-
 
 @router.post("/{project_id}/files", response_model=UploadResult, status_code=status.HTTP_202_ACCEPTED,
              summary="Загрузить один или несколько файлов в проект (PDF, TXT, ZIP, DOCX...)")
@@ -131,14 +123,12 @@ def upload_files(
     db.commit()
     return UploadResult(files=project_files_out(db, accepted), errors=errors)
 
-
 @router.delete("/{project_id}/files/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT,
                summary="Удалить загруженный файл до начала анализа")
 def delete_project_file(project_id: uuid.UUID, analysis_id: uuid.UUID, db: Session = Depends(get_db),
                         user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
-    # Тот же порядок блокировок, что при запуске: файл, затем его документы.
-    # Если другая вкладка уже запустила анализ, проверяем статус после блокировки.
+
     analysis = db.scalar(select(Analysis).where(
         Analysis.id == analysis_id, Analysis.project_id == project.id).with_for_update())
     if analysis is None:
@@ -156,7 +146,6 @@ def delete_project_file(project_id: uuid.UUID, analysis_id: uuid.UUID, db: Sessi
     db.commit()
     uploads.remove_files(analysis_id)
 
-
 @router.post("/{project_id}/start", status_code=status.HTTP_202_ACCEPTED,
              summary="Начать анализ загруженных, ещё не проверенных документов проекта")
 def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
@@ -165,8 +154,7 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
     model = analysis_model_or_422(body.llm_model if body else None, mode)
     sensitivity = body.analysis_sensitivity if body else "balanced"
-    # Блокировка и фильтр статуса защищают от повторной отправки при двойном клике
-    # или одновременном запуске из нескольких вкладок.
+
     analyses = list(db.scalars(select(Analysis).where(
         Analysis.project_id == project.id, Analysis.analysis_status == "UPLOADED")
         .order_by(Analysis.id).with_for_update()))
@@ -189,7 +177,6 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
     db.commit()
     enqueue_documents(db, docs)
     return {"documents": len(docs)}
-
 
 @router.post("/{project_id}/rerun", status_code=status.HTTP_202_ACCEPTED,
              summary="Перепроверить все файлы проекта (например, после изменения правил)")

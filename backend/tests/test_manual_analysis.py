@@ -18,16 +18,13 @@ from app.db import get_db
 from app.models import Analysis, Base, Document, DocumentPage, Project, RiskFinding, User
 from app.services import uploads
 
-
 @compiles(JSONB, "sqlite")
 def sqlite_jsonb(_type, _compiler, **_kwargs):
     return "JSON"
 
-
 @compiles(UUID, "sqlite")
 def sqlite_uuid(_type, _compiler, **_kwargs):
     return "CHAR(32)"
-
 
 @pytest.fixture
 def workspace(tmp_path, monkeypatch):
@@ -35,7 +32,7 @@ def workspace(tmp_path, monkeypatch):
     @event.listens_for(engine, "connect")
     def enable_foreign_keys(connection, _record):
         connection.execute("PRAGMA foreign_keys=ON")
-        # SQLite lower() only handles ASCII; production PostgreSQL also folds Cyrillic.
+
         connection.create_function("lower", 1, lambda value: value.lower() if value is not None else None, deterministic=True)
 
     Base.metadata.create_all(engine)
@@ -58,7 +55,6 @@ def workspace(tmp_path, monkeypatch):
         yield client, project["id"], queue, sessions
     engine.dispose()
 
-
 def test_upload_persists_until_explicit_start_and_repeated_start_does_not_duplicate_jobs(workspace):
     client, pid, queue, sessions = workspace
     response = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))])
@@ -69,7 +65,6 @@ def test_upload_persists_until_explicit_start_and_repeated_start_does_not_duplic
     assert uploaded["progress"] == 0 and uploaded["traffic_light"] is None
     queue.assert_not_called()
 
-    # Новый HTTP-запрос/сессия БД, как после перезагрузки страницы.
     saved = client.get(f"/api/projects/{pid}").json()
     assert saved["files"][0]["phase"] == "uploaded" and saved["processing_count"] == 0
 
@@ -83,7 +78,6 @@ def test_upload_persists_until_explicit_start_and_repeated_start_does_not_duplic
     assert client.get(f"/api/projects/{pid}").json()["processing_count"] == 1
     assert client.post(f"/api/projects/{pid}/start").status_code == 409
     queue.assert_called_once()
-
 
 def test_start_only_schedules_new_files_in_the_selected_project(workspace):
     client, pid, queue, sessions = workspace
@@ -100,7 +94,6 @@ def test_start_only_schedules_new_files_in_the_selected_project(workspace):
     assert client.get(f"/api/projects/{other}").json()["files"][0]["phase"] == "uploaded"
     with sessions() as db:
         assert db.get(Document, uuid.UUID(old["documents"][0]["id"])).status == "COMPLETED"
-
 
 def test_zip_waits_and_upload_errors_do_not_start_valid_documents(workspace):
     client, pid, queue, _ = workspace
@@ -121,7 +114,6 @@ def test_zip_waits_and_upload_errors_do_not_start_valid_documents(workspace):
     assert client.post(f"/api/projects/{pid}/start").json() == {"documents": 1}
     queue.assert_called_once_with([uuid.UUID(next(d["id"] for d in docs if d["phase"] == "uploaded"))])
 
-
 def test_empty_project_cannot_start_and_queue_failure_can_be_retried(workspace):
     client, pid, queue, sessions = workspace
     assert client.post(f"/api/projects/{pid}/start").status_code == 409
@@ -136,7 +128,6 @@ def test_empty_project_cannot_start_and_queue_failure_can_be_retried(workspace):
     with sessions() as db:
         assert db.scalar(select(Document.status)) == "QUEUED"
 
-
 def test_start_checks_project_ownership(workspace):
     client, pid, queue, sessions = workspace
     user_id = uuid.uuid4()
@@ -145,7 +136,6 @@ def test_start_checks_project_ownership(workspace):
     client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))])
     assert client.post(f"/api/projects/{pid}/start", headers={"X-User-Id": str(user_id)}).status_code == 404
     queue.assert_not_called()
-
 
 def test_project_rename_persists_without_changing_uploaded_files(workspace):
     client, pid, queue, sessions = workspace
@@ -158,7 +148,6 @@ def test_project_rename_persists_without_changing_uploaded_files(workspace):
     assert client.get("/api/projects").json()[0]["title"] == "Новый договор"
     queue.assert_not_called()
 
-
 def test_project_rename_rejects_blank_long_and_duplicate_titles(workspace):
     client, pid, _, _ = workspace
     client.post("/api/projects", json={"title": "Другой проект"})
@@ -167,7 +156,6 @@ def test_project_rename_rejects_blank_long_and_duplicate_titles(workspace):
     assert client.patch(f"/api/projects/{pid}", json={"title": "Другой проект"}).status_code == 409
     assert client.patch(f"/api/projects/{pid}", json={"title": "ДРУГОЙ ПРОЕКТ"}).status_code == 409
     assert client.get(f"/api/projects/{pid}").json()["title"] == "Закупка"
-
 
 def test_project_delete_removes_owned_files_and_results_only(workspace):
     client, pid, _, sessions = workspace
@@ -191,7 +179,6 @@ def test_project_delete_removes_owned_files_and_results_only(workspace):
     assert client.get(f"/api/projects/{other}").json()["files"][0]["id"] == other_file["id"]
     assert (settings.storage_dir / other_file["id"]).is_dir()
 
-
 def test_project_mutations_check_ownership(workspace):
     client, pid, _, sessions = workspace
     user_id = uuid.uuid4()
@@ -201,7 +188,6 @@ def test_project_mutations_check_ownership(workspace):
     assert client.patch(f"/api/projects/{pid}", json={"title": "Чужой"}, headers=headers).status_code == 404
     assert client.delete(f"/api/projects/{pid}", headers=headers).status_code == 404
     assert client.get(f"/api/projects/{pid}").json()["title"] == "Закупка"
-
 
 def test_delete_waiting_file_removes_storage_and_only_starts_remaining_documents(workspace):
     client, pid, queue, sessions = workspace
@@ -226,7 +212,6 @@ def test_delete_waiting_file_removes_storage_and_only_starts_remaining_documents
     assert client.delete(f"/api/projects/{pid}/files/{kept['id']}").status_code == 409
     assert (settings.storage_dir / kept["id"]).is_dir()
 
-
 def test_delete_last_waiting_file_leaves_empty_project_and_allows_reupload(workspace):
     client, pid, queue, _ = workspace
     uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
@@ -236,7 +221,6 @@ def test_delete_last_waiting_file_leaves_empty_project_and_allows_reupload(works
     queue.assert_not_called()
     uploaded_again = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()
     assert len(uploaded_again["files"]) == 1 and not uploaded_again["errors"]
-
 
 def test_delete_waiting_zip_removes_supported_and_unsupported_children(workspace):
     client, pid, queue, sessions = workspace
@@ -253,7 +237,6 @@ def test_delete_waiting_zip_removes_supported_and_unsupported_children(workspace
             assert db.get(Document, uuid.UUID(document["id"])) is None
     queue.assert_not_called()
 
-
 def test_delete_waiting_file_checks_project_and_user_ownership(workspace):
     client, pid, _, sessions = workspace
     uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
@@ -266,7 +249,6 @@ def test_delete_waiting_file_checks_project_and_user_ownership(workspace):
     assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}", headers={"X-User-Id": str(other_user)}).status_code == 404
     assert client.get(f"/api/projects/{pid}").json()["files"][0]["id"] == uploaded["id"]
     assert (settings.storage_dir / uploaded["id"]).is_dir()
-
 
 @pytest.mark.parametrize("analysis_status", ["QUEUED", "CONVERTING", "OCR", "VECTORIZING", "ANALYZING", "COMPLETED", "FAILED"])
 def test_delete_file_rejects_started_or_finished_analysis(workspace, analysis_status):
@@ -281,7 +263,6 @@ def test_delete_file_rejects_started_or_finished_analysis(workspace, analysis_st
         assert db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])) is not None
     assert (settings.storage_dir / uploaded["id"]).is_dir()
 
-
 def test_delete_file_also_checks_child_document_status(workspace):
     client, pid, _, sessions = workspace
     uploaded = client.post(f"/api/projects/{pid}/files", files=[("files", ("contract.txt", b"Contract"))]).json()["files"][0]
@@ -289,7 +270,6 @@ def test_delete_file_also_checks_child_document_status(workspace):
         db.get(Document, uuid.UUID(uploaded["documents"][0]["id"])).status = "QUEUED"
     assert client.delete(f"/api/projects/{pid}/files/{uploaded['id']}").status_code == 409
     assert (settings.storage_dir / uploaded["id"]).is_dir()
-
 
 @pytest.mark.parametrize("sensitivity", ["strict", "balanced", "sensitive"])
 def test_sensitivity_is_committed_before_enqueue_and_can_change_on_rerun(workspace, sensitivity):
@@ -311,7 +291,6 @@ def test_sensitivity_is_committed_before_enqueue_and_can_change_on_rerun(workspa
     expected = "sensitive" if sensitivity == "strict" else "strict"
     assert client.post(f"/api/projects/{pid}/rerun", json={"analysis_sensitivity": expected}).status_code == 202
     assert queue.call_count == 2
-
 
 @pytest.mark.parametrize("sensitivity", ["invalid", "", None, 0])
 def test_invalid_sensitivity_does_not_start_documents(workspace, sensitivity):

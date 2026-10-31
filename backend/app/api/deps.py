@@ -13,7 +13,6 @@ from app.schemas import AnalysisOut, DocumentOut, FindingOut, ProjectFileOut, Pr
 from app.services.scoring import risk_score, traffic_light
 from app.vocab import REVIEW_TO_API, SEVERITY_TO_API
 
-# Стадии пайплайна -> стадия и подпись для интерфейса
 _STAGE_LABELS = {
     "UPLOADED": ("uploaded", "Ожидает запуска"),
     "QUEUED": ("queued", "В очереди"),
@@ -26,10 +25,8 @@ _STAGE_LABELS = {
     "UNSUPPORTED": ("unsupported", "Формат не поддерживается"),
 }
 
-
 def stage(status: str) -> tuple[str, str]:
     return _STAGE_LABELS.get(status, ("processing", "Обрабатывается"))
-
 
 def current_user(
     db: Session = Depends(get_db),
@@ -45,10 +42,8 @@ def current_user(
         raise HTTPException(401, "Пользователь не найден")
     return user
 
-
 def _owned(owner_id: uuid.UUID | None, user: User) -> bool:
     return owner_id in (None, user.id) or user.role == "ADMIN"
-
 
 def get_project_or_404(db: Session, project_id: uuid.UUID, user: User) -> Project:
     project = db.get(Project, project_id)
@@ -56,13 +51,11 @@ def get_project_or_404(db: Session, project_id: uuid.UUID, user: User) -> Projec
         raise HTTPException(404, "Проект не найден")
     return project
 
-
 def get_analysis_or_404(db: Session, analysis_id: uuid.UUID, user: User) -> Analysis:
     analysis = db.get(Analysis, analysis_id)
     if analysis is None or not _owned(analysis.user_id, user):
         raise HTTPException(404, "Файл не найден")
     return analysis
-
 
 def get_document_or_404(db: Session, document_id: uuid.UUID, user: User) -> Document:
     document = db.get(Document, document_id)
@@ -70,9 +63,6 @@ def get_document_or_404(db: Session, document_id: uuid.UUID, user: User) -> Docu
         raise HTTPException(404, "Документ не найден")
     get_analysis_or_404(db, document.analysis_id, user)
     return document
-
-
-# ---------- подсчёты ----------
 
 def _counts(db: Session, group_column, filter_clause) -> dict:
     active = RiskFinding.review_status != "DISMISSED"
@@ -90,14 +80,11 @@ def _counts(db: Session, group_column, filter_clause) -> dict:
     ).all()
     return {r[0]: (SeverityCounts(critical=r[1], warning=r[2], low=r[3], ok=r[4], unseen=r[5], unknown=r[7]), r[6]) for r in rows}
 
-
 def counts_by_document(db: Session, document_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[SeverityCounts, int]]:
     return _counts(db, RiskFinding.document_id, RiskFinding.document_id.in_(document_ids)) if document_ids else {}
 
-
 def counts_by_analysis(db: Session, analysis_ids: list[uuid.UUID]) -> dict[uuid.UUID, tuple[SeverityCounts, int]]:
     return _counts(db, RiskFinding.analysis_id, RiskFinding.analysis_id.in_(analysis_ids)) if analysis_ids else {}
-
 
 def _sum(counts: list[SeverityCounts]) -> SeverityCounts:
     total = SeverityCounts()
@@ -106,20 +93,15 @@ def _sum(counts: list[SeverityCounts]) -> SeverityCounts:
             setattr(total, field, getattr(total, field) + getattr(c, field))
     return total
 
-
 def _has_results(counts: SeverityCounts, rules_checked: int) -> bool:
-    # После отклонения всех замечаний счётчики рисков обнуляются, но проверки остаются.
-    return rules_checked > 0 or any((counts.critical, counts.warning, counts.low, counts.unknown, counts.ok))
 
+    return rules_checked > 0 or any((counts.critical, counts.warning, counts.low, counts.unknown, counts.ok))
 
 def light(counts: SeverityCounts, finished: bool, rules_checked: int) -> str | None:
     if not finished or not _has_results(counts, rules_checked):
         return None
     return SEVERITY_TO_API[traffic_light(["RED"] * counts.critical + ["YELLOW"] * counts.warning
                                        + ["LOW"] * counts.low + ["UNKNOWN"] * counts.unknown)]
-
-
-# ---------- сборка ответов ----------
 
 def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None) -> DocumentOut:
     severity_counts, rules_checked = counts or (SeverityCounts(), 0)
@@ -128,15 +110,13 @@ def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None
     out.counts = severity_counts
     out.rules_checked = rules_checked
     out.traffic_light = light(severity_counts, doc.status == "COMPLETED", rules_checked)
-    # Считаем по тем же видимым замечаниям, что и светофор: выключенные правила
-    # и отклонённые замечания не должны оставлять устаревший индекс риска.
+
     out.risk_score = risk_score(
         ["RED"] * severity_counts.critical + ["YELLOW"] * severity_counts.warning + ["LOW"] * severity_counts.low
         + ["UNKNOWN"] * severity_counts.unknown
     ) if out.traffic_light is not None else None
     out.has_preview = bool(doc.preview_path)
     return out
-
 
 def analyses_out(db: Session, analyses: list[Analysis]) -> list[AnalysisOut]:
     files = {file.id: file for file in project_files_out(db, analyses)}
@@ -150,7 +130,6 @@ def analyses_out(db: Session, analyses: list[Analysis]) -> list[AnalysisOut]:
         out.documents_supported = sum(doc.status != "UNSUPPORTED" for doc in file.documents)
         result.append(out)
     return result
-
 
 def project_files_out(db: Session, analyses: list[Analysis]) -> list[ProjectFileOut]:
     """Файлы проекта: один файл = один анализ; у ZIP в documents — содержимое архива."""
@@ -194,7 +173,6 @@ def project_files_out(db: Session, analyses: list[Analysis]) -> list[ProjectFile
         ))
     return files
 
-
 def projects_out(db: Session, projects: list[Project]) -> list[ProjectOut]:
     project_ids = [p.id for p in projects]
     analyses_by_project: dict[uuid.UUID, list[Analysis]] = defaultdict(list)
@@ -222,7 +200,6 @@ def projects_out(db: Session, projects: list[Project]) -> list[ProjectOut]:
             traffic_light=light(counts, finished, sum(f.rules_checked for f in files)),
         ))
     return result
-
 
 def finding_out(f: RiskFinding) -> FindingOut:
     """Номер замечания в документе не меняется при фильтрации: sort_index выставляется при сохранении

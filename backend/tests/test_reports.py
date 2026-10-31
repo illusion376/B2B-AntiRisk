@@ -16,7 +16,6 @@ from app.services.quotes import locate_quote
 from app.services.reports.data import ReportData, ReportDocument, ReportFinding, collect
 from app.services.reports.docx_builder import BUILDERS
 
-
 def _data(contract_pdf) -> ReportData:
     pages = [{"page_number": p.page_number, "words": p.words} for p in extract_pages(contract_pdf)]
     match = locate_quote(pages, "штраф в размере 0,1% от стоимости Контракта", (1, 1))
@@ -48,7 +47,6 @@ def _data(contract_pdf) -> ReportData:
         rules_checked=3, documents=[doc], rules=[rule],
     )
 
-
 @pytest.mark.parametrize("mode", ["brief", "detailed", "protocol"])
 def test_docx_modes(contract_pdf, tmp_path, mode):
     data = _data(contract_pdf)
@@ -63,10 +61,9 @@ def test_docx_modes(contract_pdf, tmp_path, mode):
         assert "ПРОТОКОЛ РАЗНОГЛАСИЙ" in text
         assert "Новая редакция" in cells and "штраф в размере 0,1%" in cells
     if mode == "detailed":
-        assert "Срок оплаты 7 рабочих дней" in text  # пройденные проверки
+        assert "Срок оплаты 7 рабочих дней" in text
     assert "Светофор рисков" not in text + cells
     assert text.rstrip().endswith("проверить специалисту.")
-
 
 @pytest.mark.parametrize("mode", ["brief", "detailed"])
 @pytest.mark.parametrize("only_low", [False, True])
@@ -85,8 +82,7 @@ def test_summary_has_only_finding_counts(contract_pdf, tmp_path, mode, only_low)
     cells = "\n".join(c.text for t in docx.tables for r in t.rows for c in r.cells)
     assert "Светофор" not in text + cells and "Индекс риска" not in text + cells
     assert text.rstrip().endswith("проверить специалисту.")
-    assert "без LLM" not in text  # все замечания найдены LLM
-
+    assert "без LLM" not in text
 
 @pytest.mark.parametrize("mode", ["brief", "detailed"])
 def test_heuristic_note_is_written_once_at_the_top(contract_pdf, tmp_path, mode):
@@ -104,7 +100,6 @@ def test_heuristic_note_is_written_once_at_the_top(contract_pdf, tmp_path, mode)
     text = "\n".join(p.text for p in DocxDocument(BUILDERS[mode](data, tmp_path / f"{mode}-mixed.docx")).paragraphs)
     assert "Замечания №2, №3 найдены без LLM" in text
 
-
 def test_json_and_annotated(contract_pdf):
     data = _data(contract_pdf)
     report = reports.generate(data, "brief", "json")
@@ -112,10 +107,10 @@ def test_json_and_annotated(contract_pdf):
     assert payload["traffic_light"] == "RED" and len(payload["documents"][0]["findings"]) == 3
 
     table = reports.generate(data, "brief", "csv").path.read_bytes()
-    assert table.startswith(codecs.BOM_UTF8)  # BOM для Excel
+    assert table.startswith(codecs.BOM_UTF8)
     rows = table.decode("utf-8-sig").splitlines()
     assert any('"Критические замечания";"Неограниченная ответственность"' in r for r in rows)
-    assert not any("Срок оплаты" in r for r in rows)  # краткий режим — без пройденных проверок
+    assert not any("Срок оплаты" in r for r in rows)
 
     annotated = reports.generate(data, "annotated", "pdf")
     with pymupdf.open(contract_pdf) as source:
@@ -123,22 +118,21 @@ def test_json_and_annotated(contract_pdf):
     with pymupdf.open(annotated.path) as pdf:
         page = pdf[0]
         types = [a.type[1] for a in page.annots()]
-        # Всплывающих заметок нет: Chrome показывает их без кириллицы. Комментарии напечатаны на поле справа.
+
         assert "Highlight" in types and "Text" not in types and "Popup" not in types
-        # и у подсветки нет текста заметки — Chrome показывал бы его при наведении
+
         assert all(not a.info["content"] and not a.info["title"] for a in page.annots())
         assert page.rect.width > width
         margin = page.get_text("text", clip=pymupdf.Rect(width, 0, page.rect.width, page.rect.height))
         assert "Неограниченная ответственность" in margin and "Критично" in margin
         assert "Подготовил: Кирилл Иванов" in margin
         quote = next(w for w in page.get_text("words") if w[4] == "штраф")
-        assert quote[2] < width  # содержимое страницы не сдвинулось
-        # замечание без точной цитаты — на поле своей страницы; всё уместилось, лишних страниц нет
+        assert quote[2] < width
+
         assert "Срок поставки" in pdf[1].get_text() and pdf.page_count == pages
 
     with pytest.raises(reports.ReportError):
         reports.generate(data, "annotated", "docx")
-
 
 def test_annotated_pdf_moves_notes_without_place_to_appendix(contract_pdf, tmp_path):
     from app.services.pdf_tools import annotated_pdf
@@ -153,10 +147,9 @@ def test_annotated_pdf_moves_notes_without_place_to_appendix(contract_pdf, tmp_p
     with pymupdf.open(annotated_pdf(contract_pdf, findings, tmp_path / "a.pdf")) as pdf:
         appendix = "\n".join(pdf[i].get_text() for i in range(pages, pdf.page_count))
         assert pdf.page_count > pages and "Замечания к документу" in appendix
-        assert "Без страницы" in appendix and "стр. 1" in appendix  # у не уместившихся на поле — место в тексте
+        assert "Без страницы" in appendix and "стр. 1" in appendix
         everywhere = "\n".join(p.get_text() for p in pdf)
         assert all(f"Замечание {n}" in everywhere for n in range(1, 4))
-
 
 def test_csv_formula_injection_is_neutralized():
     from app.services.reports import csv_cell
@@ -167,7 +160,6 @@ def test_csv_formula_injection_is_neutralized():
     assert csv_cell("\ufeff=1+1") == "'\ufeff=1+1"
     assert csv_cell("Срок оплаты — 30 дней") == "Срок оплаты — 30 дней"
     assert csv_cell(5) == 5
-
 
 def _collected_report(status="COMPLETED", include_dismissed=False, with_findings=False,
                       severity="RED", review_status="DISMISSED"):
@@ -183,7 +175,6 @@ def _collected_report(status="COMPLETED", include_dismissed=False, with_findings
     db.scalars.side_effect = [[document], [finding] if with_findings else [], [rule]]
     return collect(db, analysis, User(full_name="Analyst"), include_dismissed=include_dismissed)
 
-
 @pytest.mark.parametrize("status", ["FAILED", "COMPLETED"])
 def test_report_without_completed_checks_has_unknown_assessment(status):
     data = _collected_report(status)
@@ -191,7 +182,6 @@ def test_report_without_completed_checks_has_unknown_assessment(status):
     assert data.light == data.documents[0].light == "UNKNOWN"
     assert data.risk_score is None and data.documents[0].risk_score is None
     assert data.rules_checked == data.documents[0].rules_checked == 0
-
 
 @pytest.mark.parametrize("include_dismissed", [False, True])
 def test_report_counts_executed_rules_even_when_all_findings_are_dismissed(include_dismissed):
@@ -201,7 +191,6 @@ def test_report_counts_executed_rules_even_when_all_findings_are_dismissed(inclu
     assert data.light == data.documents[0].light == "GREEN"
     assert data.risk_score == data.documents[0].risk_score == 0
     assert len(data.documents[0].findings) == int(include_dismissed)
-
 
 @pytest.mark.parametrize("include_dismissed", [False, True])
 @pytest.mark.parametrize("review_status,expected_light,expected_score", [
@@ -222,7 +211,6 @@ def test_low_risk_report_status_and_json(include_dismissed, review_status, expec
     if data.all_findings:
         assert data.all_findings[0].severity == "LOW"
 
-
 @pytest.mark.parametrize("mode", ["brief", "detailed", "protocol"])
 @pytest.mark.parametrize("status", ["FAILED", "COMPLETED"])
 def test_unassessed_docx_never_claims_no_risks_or_no_disagreements(tmp_path, mode, status):
@@ -239,7 +227,6 @@ def test_unassessed_docx_never_claims_no_risks_or_no_disagreements(tmp_path, mod
     assert "Разногласий по проверенным правилам не выявлено." not in all_text
     assert "None из 100" not in all_text
 
-
 def test_unknown_assessment_is_preserved_in_json():
     data = _collected_report("FAILED")
     report = reports.generate(data, "brief", "json")
@@ -248,7 +235,6 @@ def test_unknown_assessment_is_preserved_in_json():
     assert payload["traffic_light"] == payload["documents"][0]["traffic_light"] == "UNKNOWN"
     assert payload["risk_score"] is None and payload["documents"][0]["risk_score"] is None
 
-
 def test_incomplete_package_does_not_inherit_green_from_its_completed_document():
     completed = _collected_report(with_findings=True)
     failed = _collected_report("FAILED")
@@ -256,7 +242,6 @@ def test_incomplete_package_does_not_inherit_green_from_its_completed_document()
 
     assert completed.light == "UNKNOWN"
     assert completed.risk_score is None
-
 
 @pytest.mark.parametrize("mode", ["brief", "detailed", "protocol"])
 def test_unknown_finding_is_not_reported_as_confirmed_disagreement(contract_pdf, tmp_path, mode):
@@ -283,7 +268,6 @@ def test_unknown_finding_is_not_reported_as_confirmed_disagreement(contract_pdf,
         assert "Не отправлять как правку" not in cells
     else:
         assert "Недостаточно данных" in cells + text
-
 
 def test_unknown_finding_cannot_be_exported_as_a_clean_annotated_pdf(contract_pdf):
     data = _data(contract_pdf)

@@ -5,24 +5,21 @@ from dataclasses import dataclass
 from app.config import settings
 from app.services.extraction import PageContent, dehyphenate
 
-# «6. ОТВЕТСТВЕННОСТЬ СТОРОН», «Раздел 6. Ответственность сторон», «Статья 6»
 _SECTION_RE = re.compile(
     r"^\s*(?:(?:раздел|статья|глава)\s+)?(?P<num>\d{1,2}|[IVXLC]{1,6})\.?\s+(?P<title>[^\d\W][^\n]{2,120})$",
     re.IGNORECASE,
 )
-# «6.2.», «6.2», «8.1.1.» в начале строки
+
 _CLAUSE_RE = re.compile(r"^\s*(?P<num>\d{1,2}(?:\.\d{1,3}){1,3})\.?\s+(?P<rest>\S.*)$")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.;:!?])\s+(?=[А-ЯЁA-Z0-9«\"(])")
-
 
 @dataclass
 class Segment:
     page_start: int
     page_end: int
-    clause: str | None  # «6.2»
-    section: str | None  # «6. Ответственность сторон»
+    clause: str | None
+    section: str | None
     text: str
-
 
 @dataclass
 class Chunk:
@@ -36,7 +33,6 @@ class Chunk:
     def embedding_text(self) -> str:
         return f"{self.clause_title}\n{self.content}" if self.clause_title else self.content
 
-
 def _is_section_heading(line: str) -> re.Match | None:
     m = _SECTION_RE.match(line)
     if not m:
@@ -47,19 +43,17 @@ def _is_section_heading(line: str) -> re.Match | None:
         return None
     is_upper = sum(c.isupper() for c in letters) / len(letters) > 0.7
     explicit = line.strip().lower().startswith(("раздел", "статья", "глава"))
-    # Заголовок: КАПСОМ, явное «Раздел N» или короткая фраза с заглавной буквы без точки в конце
+
     short_title = len(title) <= 60 and len(title.split()) <= 6 and title[0].isupper() and not title.endswith(".")
     if is_upper or explicit or short_title:
         return m
     return None
-
 
 def section_title(match: re.Match) -> str:
     title = match.group("title").strip().rstrip(".")
     if title.isupper():
         title = title.capitalize()
     return f"{match.group('num')}. {title}"
-
 
 def split_segments(pages: list[PageContent]) -> list[Segment]:
     segments: list[Segment] = []
@@ -92,7 +86,6 @@ def split_segments(pages: list[PageContent]) -> list[Segment]:
     flush()
     return segments
 
-
 def build_outline(segments: list[Segment]) -> list[dict]:
     """Дерево для вкладки «Навигация»: разделы и их пункты с номерами страниц."""
     outline: list[dict] = []
@@ -111,7 +104,6 @@ def build_outline(segments: list[Segment]) -> list[dict]:
                 outline.append({"title": None, "page": seg.page_start, "clauses": [entry]})
     return outline
 
-
 def _clause_title(segs: list[Segment]) -> str | None:
     clauses = [s.clause for s in segs if s.clause]
     section = next((s.section for s in segs if s.section), None)
@@ -122,7 +114,6 @@ def _clause_title(segs: list[Segment]) -> str | None:
     parts = [p for p in (section, label) if p]
     return " › ".join(parts)[:255] if parts else None
 
-
 def _split_long(text: str, max_chars: int) -> list[str]:
     if len(text) <= max_chars:
         return [text]
@@ -130,7 +121,7 @@ def _split_long(text: str, max_chars: int) -> list[str]:
     parts: list[str] = []
     buf = ""
     for sentence in sentences:
-        while len(sentence) > max_chars:  # очень длинное «предложение» (таблица, перечень)
+        while len(sentence) > max_chars:
             if buf:
                 parts.append(buf)
                 buf = ""
@@ -146,7 +137,6 @@ def _split_long(text: str, max_chars: int) -> list[str]:
     if buf:
         parts.append(buf)
     return parts
-
 
 def build_chunks(segments: list[Segment]) -> list[Chunk]:
     max_chars, min_chars = settings.chunk_max_chars, settings.chunk_min_chars
@@ -172,10 +162,8 @@ def build_chunks(segments: list[Segment]) -> list[Chunk]:
     emit()
     return chunks
 
-
 _LAW_44 = re.compile(r"44\s*-\s*ФЗ|№\s*44\s*-?\s*ФЗ|от\s+05\.04\.2013", re.IGNORECASE)
 _LAW_223 = re.compile(r"223\s*-\s*ФЗ|№\s*223\s*-?\s*ФЗ|от\s+18\.07\.2011", re.IGNORECASE)
-
 
 def detect_law_type(text: str) -> str | None:
     n44, n223 = len(_LAW_44.findall(text)), len(_LAW_223.findall(text))
@@ -183,13 +171,11 @@ def detect_law_type(text: str) -> str | None:
         return None
     return "44-FZ" if n44 >= n223 else "223-FZ"
 
-
 def _join_line(text: str, line: str) -> str:
     """Склейка строк абзаца с учётом переноса слов «исполне-» + «ния»."""
     if text.endswith("-") and line[:1].islower():
         return text[:-1] + line
     return f"{text} {line}"
-
 
 def page_sections(pages: list[tuple[int, str]], page_number: int) -> list[dict]:
     """Текст страницы разделами и пунктами — для HTML-просмотрщика фронтенда (getPageSections).
@@ -201,7 +187,7 @@ def page_sections(pages: list[tuple[int, str]], page_number: int) -> list[dict]:
     sections: list[dict] = []
     section_heading = ""
     clause = ""
-    paragraph_open = False  # следующая строка без номера продолжает текущий абзац
+    paragraph_open = False
 
     for number, text in pages:
         if number > page_number:
@@ -232,7 +218,7 @@ def page_sections(pages: list[tuple[int, str]], page_number: int) -> list[dict]:
             elif paragraph_open and paragraphs:
                 paragraphs[-1]["text"] = _join_line(paragraphs[-1]["text"], line)
             else:
-                # Начало страницы — продолжение пункта с прошлой страницы, либо текст без нумерации
+
                 paragraphs.append({"clause": clause, "text": line})
                 paragraph_open = True
     return sections
