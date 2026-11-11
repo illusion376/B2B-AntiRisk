@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
+import { documentReviewPages, isQualityPending, pageRecognitionQuality } from '@/lib/document-quality';
 import { isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
 import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, ReviewStatus, Severity } from '@/lib/types';
 import { riskLabels } from '@/lib/rules';
@@ -12,6 +13,8 @@ import type { DocumentTourStage } from '@/lib/onboarding';
 import { CustomSelect, HighlightedText, IconButton, Modal } from './ui';
 import { FindingEvidenceBadges } from './shared-badges';
 import { DocumentAssistant } from './document-assistant';
+import { DocumentReviewMetrics } from './document-quality';
+import { PageQualityControls } from './page-quality-controls';
 import './review-enhancements.css';
 import './live-document.css';
 
@@ -60,13 +63,14 @@ function PageThumbnail({ documentId, page, hasPreview }: { documentId: string; p
   </span>;
 }
 
-function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSelect, onRetry }: {
+function PdfPage({ documentId, pageContent, page, zoom, findings, selected, needsQualityReview, onSelect, onRetry }: {
   documentId: string;
   pageContent: PageContent;
   page: number;
   zoom: number;
   findings: Finding[];
   selected: string | null;
+  needsQualityReview: boolean;
   onSelect: (finding: Finding) => void;
   onRetry: () => void;
 }) {
@@ -77,7 +81,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, onSe
     <AlertCircle size={28} /><h3>Не удалось загрузить страницу PDF</h3><p>Повторите загрузку или откройте текстовую версию.</p>
     <button className="secondary-button" onClick={onRetry}><RotateCcw size={15} />Повторить</button>
   </div>;
-  return <div className="live-pdf-page" style={{ width: `${zoom}%`, minWidth: `${zoom}%`, aspectRatio: hasDimensions ? `${width} / ${height}` : undefined }} aria-busy={imageState === 'loading'}>
+  return <div className={`live-pdf-page${needsQualityReview ? ' page-quality-review' : ''}`} style={{ width: `${zoom}%`, minWidth: `${zoom}%`, aspectRatio: hasDimensions ? `${width} / ${height}` : undefined }} aria-busy={imageState === 'loading'}>
     {imageState === 'loading' && <div className="pdf-loading-indicator" role="status"><LoaderCircle size={20} />Загрузка страницы…</div>}
     <img src={thumbnailUrl(documentId, page, 1200)} alt={`Страница ${page} документа`} draggable={false} onLoad={() => setImageState('ready')} onError={() => setImageState('error')} />
     {imageState === 'ready' && hasDimensions && findings.filter(finding => finding.quoteVerified && isRiskSeverity(finding.severity)).flatMap(finding =>
@@ -130,6 +134,10 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
   const previousPage = useRef(page);
   const totalPages = document.totalPages;
   const currentPage = pageContent?.page === page ? pageContent : null;
+  const pageQuality = pageRecognitionQuality(document, currentPage, page);
+  const reviewPageList = useMemo(() => documentReviewPages(document, currentPage, page), [document, currentPage, page]);
+  const reviewPages = useMemo(() => new Map(reviewPageList.map(item => [item.page, item])), [reviewPageList]);
+  const needsQualityReview = Boolean(pageQuality && (pageQuality.manualReviewRequired || pageQuality.status === 'low' || pageQuality.status === 'unknown'));
   const sections = currentPage?.sections ?? [];
   const riskFindings = useMemo(() => findings.filter(finding => isRiskSeverity(finding.severity)), [findings]);
   const categories = [...new Set(riskFindings.map(finding => finding.category).filter(Boolean))];
@@ -251,9 +259,10 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     {showPages && <aside className="pages-sidebar" aria-label="Страницы документа">
       <div className="panel-title"><span>Страницы</span><IconButton label="Скрыть страницы" onClick={() => setShowPages(false)}><PanelLeftClose size={16} /></IconButton></div>
       <div className="thumbnails">
-        {Array.from({ length: totalPages }, (_, index) => index + 1).map(number => <button ref={number === page ? thumbnailRef : undefined} key={number} aria-label={`Страница ${number}`} aria-current={number === page ? 'page' : undefined} className={`thumbnail ${number === page ? 'selected' : ''}`} onClick={() => onPage(number)}>
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map(number => <button ref={number === page ? thumbnailRef : undefined} key={number} aria-label={`Страница ${number}${reviewPages.has(number) ? ` · требуется ручная проверка: ${reviewPages.get(number)?.warning}` : ''}`} title={reviewPages.get(number)?.warning} aria-current={number === page ? 'page' : undefined} className={`thumbnail ${number === page ? 'selected' : ''} ${reviewPages.has(number) ? 'quality-review' : ''}`} onClick={() => onPage(number)}>
           <PageThumbnail key={`${document.id}-${number}-${previewRevision}`} documentId={document.id} page={number} hasPreview={document.hasPreview} />
-          <span className="thumbnail-label">{number}{riskFindings.some(finding => finding.page === number) && <i />}</span>
+          <span className="thumbnail-label">{number}{riskFindings.some(finding => finding.page === number) && <i />}{reviewPages.has(number) && <span className="thumbnail-quality-mark" aria-hidden="true"><AlertCircle size={12} /></span>}</span>
+          {reviewPages.has(number) && <span className="thumbnail-quality-caption" aria-hidden="true">Проверить</span>}
         </button>)}
         {!totalPages && <p className="no-page-thumbnails">Нет страниц</p>}
       </div>
@@ -287,6 +296,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
         </div>
         {document.hasPreview && <a href={documentFileUrl(document.id)} target="_blank" rel="noopener noreferrer" title="Открыть PDF в новой вкладке"><ExternalLink size={13} />Открыть PDF</a>}
       </div>
+      {totalPages > 0 && <PageQualityControls page={page} quality={pageQuality} reviewPages={reviewPageList} pending={isQualityPending(document)} loading={pageLoading} onPage={onPage} />}
       {selectedFinding && <div className={`selected-finding-context ${selectedFinding.severity}`}>
         <span className={`risk-dot ${selectedFinding.severity}`} aria-hidden="true" />
         <button className="selected-finding-title" onClick={() => setDetailId(selectedFinding.id)} title={selectedFinding.title}>
@@ -304,9 +314,9 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
           : pageLoading ? <div className="live-page-state" role="status"><LoaderCircle className="live-loading-spinner" size={28} /><h3>Загрузка страницы {page}…</h3></div>
           : pageError ? <div className="live-page-state" role="alert"><AlertCircle size={28} /><h3>Не удалось загрузить страницу</h3><p>{pageError}</p><button className="secondary-button" onClick={retryPage}><RotateCcw size={15} />Повторить</button></div>
           : !currentPage ? <div className="live-page-state"><FileSearch size={28} /><h3>Содержимое страницы недоступно</h3><button className="secondary-button" onClick={retryPage}>Загрузить страницу</button></div>
-          : viewerMode === 'pdf' && document.hasPreview ? <PdfPage key={`${document.id}-${page}-${previewRevision}`} documentId={document.id} pageContent={currentPage} page={page} zoom={zoom} findings={visibleEvidence} selected={selected} onSelect={openFinding} onRetry={retryPage} />
+          : viewerMode === 'pdf' && document.hasPreview ? <PdfPage key={`${document.id}-${page}-${previewRevision}`} documentId={document.id} pageContent={currentPage} page={page} zoom={zoom} findings={visibleEvidence} selected={selected} needsQualityReview={needsQualityReview} onSelect={openFinding} onRetry={retryPage} />
           : !hasText ? <div className="live-page-state"><FileSearch size={28} /><h3>Текст страницы не распознан</h3><p>На этой странице нет доступного для поиска текста.</p>{document.hasPreview && <button className="secondary-button" onClick={() => setViewerMode('pdf')}>Показать PDF</button>}</div>
-          : <article className="document-paper live-text-paper" style={{ width: `${zoom}%`, minWidth: `${zoom}%`, fontSize: `${zoom * .145}px` }} aria-label={`Текст страницы ${page}`}>
+          : <article className={`document-paper live-text-paper${needsQualityReview ? ' page-quality-review' : ''}`} style={{ width: `${zoom}%`, minWidth: `${zoom}%`, fontSize: `${zoom * .145}px` }} aria-label={`Текст страницы ${page}`}>
             <div className="paper-running-header"><span>{document.name}</span><span>{currentPage.isOcr ? 'РАСПОЗНАННЫЙ ТЕКСТ' : 'ТЕКСТ ДОКУМЕНТА'}</span></div>
             {sections.map((section, sectionIndex) => <section className="contract-section" key={`${sectionIndex}-${section.title}`}>
               {section.title && <h2>{section.title}</h2>}
@@ -329,6 +339,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
     <aside className="review-panel" hidden={expanded} aria-label="Проверка документа">
       <div className="review-tabs" role="tablist" aria-label="Раздел проверки">{reviewTabs.map(item => <button ref={element => { tabRefs.current[item.id] = element; }} data-onboarding={item.id === 'rules' ? undefined : `document-${item.id}`} tabIndex={tab === item.id ? 0 : -1} onKeyDown={event => navigateTabs(event, item.id)} role="tab" id={`tab-${item.id}`} aria-controls={tab === item.id ? `panel-${item.id}` : undefined} aria-selected={tab === item.id} key={item.id} className={`${tab === item.id ? 'active' : ''} ${item.id === 'assistant' ? 'assistant-tab' : ''}`.trim()} onClick={() => setTab(item.id)}>{item.id === 'assistant' && <Sparkles size={13} aria-hidden="true" />}{item.label}{item.id === 'findings' && <span>{riskFindings.length}</span>}</button>)}</div>
       {tab === 'findings' && <div role="tabpanel" tabIndex={0} id="panel-findings" aria-labelledby="tab-findings" className="findings-pane">
+        <DocumentReviewMetrics document={document} />
         <div className="filters">
           <CustomSelect
             ariaLabel="Категория"
@@ -400,7 +411,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
               </tbody>;
             })}
           </table>
-          {!filtered.length && <div className="empty-state"><FileSearch size={30} /><h3>{findings.length === 0 ? 'Нет результатов по выбранным правилам' : riskFindings.length === 0 ? 'Замечаний не выявлено' : 'Замечаний не найдено'}</h3><p>{findings.length === 0 ? 'Нет результатов для отображения. Можно изменить набор правил и повторить проверку.' : riskFindings.length === 0 ? 'По завершённым проверкам замечаний нет.' : 'Попробуйте изменить условия фильтра.'}</p>{findings.length === 0 ? <button className="secondary-button" onClick={onManageRules}>Управление правилами</button> : riskFindings.length > 0 && hasFilters && <button className="secondary-button" onClick={resetFilters}>Сбросить фильтры</button>}</div>}
+          {!filtered.length && <div className="empty-state"><FileSearch size={30} /><h3>{document.phase === 'failed' ? 'Проверка документа не завершена' : findings.length === 0 ? 'Нет результатов по выбранным правилам' : riskFindings.length === 0 ? 'Замечаний не выявлено' : 'Замечаний не найдено'}</h3><p>{document.phase === 'failed' ? 'Результаты неполные. Сверьте отмеченные страницы с оригиналом и повторите обработку документа.' : findings.length === 0 ? 'Нет результатов для отображения. Можно изменить набор правил и повторить проверку.' : riskFindings.length === 0 ? 'По завершённым проверкам замечаний нет.' : 'Попробуйте изменить условия фильтра.'}</p>{findings.length === 0 && document.phase !== 'failed' ? <button className="secondary-button" onClick={onManageRules}>Управление правилами</button> : riskFindings.length > 0 && hasFilters && <button className="secondary-button" onClick={resetFilters}>Сбросить фильтры</button>}</div>}
         </div>
         <div className="review-footer">
           {riskFindings.length > 0 ? <><span><Eye size={14} />Рассмотрено замечаний <strong>{reviewed} из {riskFindings.length}</strong></span><div className="review-progress-wrap"><div className="review-progress" role="progressbar" aria-label="Прогресс рассмотрения замечаний" aria-valuetext={`${reviewed} из ${riskFindings.length}, ${reviewPercent}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewPercent}><i style={{ width: `${reviewPercent}%` }} /></div><span>{reviewPercent}%</span></div></>

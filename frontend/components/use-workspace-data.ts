@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
-import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Project, ReportMode, User, UserProfileDraft } from '@/lib/types';
+import type { CheckRule, DocumentInfo, Finding, OutlineSection, PageContent, Project, QualitySettings, ReportMode, User, UserProfileDraft } from '@/lib/types';
 
 export function useWorkspaceData() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -17,7 +17,13 @@ export function useWorkspaceData() {
   const saveUser = useCallback(async (draft: UserProfileDraft) => {
     const saved = await api.updateUser(draft);
     refresh();
-    setUser(saved);
+    setUser(previous => previous ? { ...previous, fullName: saved.fullName, companyName: saved.companyName, initials: saved.initials } : saved);
+    return saved;
+  }, [refresh]);
+  const saveQualitySettings = useCallback(async (draft: QualitySettings) => {
+    const saved = await api.updateQualitySettings(draft);
+    refresh();
+    setUser(previous => previous ? { ...previous, qualitySettings: saved.qualitySettings } : saved);
     return saved;
   }, [refresh]);
   const replaceProject = useCallback((project: Project) => {
@@ -54,7 +60,7 @@ export function useWorkspaceData() {
     void read();
     return () => { clearTimeout(timer); controller.abort(); };
   }, [revision]);
-  return {projects, rules, user, reportModes, loading, error, refresh, replaceProject, removeProject, removeProjectFile, saveUser};
+  return {projects, rules, user, reportModes, loading, error, refresh, replaceProject, removeProject, removeProjectFile, saveUser, saveQualitySettings};
 }
 
 interface DocumentBundle { id: string; document: DocumentInfo; findings: Finding[]; outline: OutlineSection[] }
@@ -91,7 +97,7 @@ export function useLiveDocument(documentId: string | null, page: number) {
   }, [documentId, revision]);
   const [pageState, setPageState] = useState<{id:string; page:number; content:PageContent | null; error:string | null; loading:boolean} | null>(null);
   const [pageRevision, setPageRevision] = useState(0);
-  const ready = current?.document.phase === 'ready';
+  const ready = current?.document.phase === 'ready' || (current?.document.phase === 'failed' && current.document.hasPreview);
   useEffect(() => {
     if (!documentId || !ready) return;
     const id = documentId;

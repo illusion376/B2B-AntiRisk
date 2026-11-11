@@ -1,9 +1,9 @@
 """Схемы API. Поля и значения совпадают с типами фронтенда (frontend/lib/types.ts), см. app/vocab.py."""
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.vocab import ReviewStatus, RiskLevel, Severity
 
@@ -22,6 +22,12 @@ LongText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=10
 Category = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 FileName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
+class QualitySettings(BaseModel):
+    """Личные нормативы для следующих полных проверок документов."""
+    model_config = ConfigDict(extra="forbid")
+    ocr_min_confidence: float = Field(ge=0, le=100, allow_inf_nan=False, strict=True)
+    processing_sla_seconds: int | None = Field(ge=1, le=2_147_483, strict=True)
+
 class UserOut(ORM):
     id: uuid.UUID
     email: str
@@ -29,11 +35,22 @@ class UserOut(ORM):
     company_name: str | None
     role: str
     initials: str
+    quality_settings: QualitySettings
 
 class UserProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)] | None = None
     company_name: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] | None = None
+    quality_settings: QualitySettings | None = None
+
+    @model_validator(mode="after")
+    def validate_partial_update(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("Укажите изменённые настройки или данные профиля")
+        for name in ("full_name", "quality_settings"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"Поле {name} не может быть null")
+        return self
 
 class SeverityCounts(BaseModel):
     critical: int = 0
@@ -42,6 +59,42 @@ class SeverityCounts(BaseModel):
     ok: int = 0
     unknown: int = 0
     unseen: int = 0
+
+QualityStatus = Literal["ok", "low", "unknown", "native"]
+
+class PageQualityIssue(BaseModel):
+    page: int = Field(ge=1)
+    status: Literal["low", "unknown"]
+    confidence: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    reason: str
+    warning: str
+
+class PageQuality(BaseModel):
+    status: QualityStatus = "unknown"
+    confidence: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    confidence_threshold: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    manual_review_required: bool = False
+    warning: str | None = None
+    reason: str | None = None
+
+class DocumentQuality(BaseModel):
+    """Качество извлечения текста, а не вероятность правильности юридических выводов."""
+    status: QualityStatus = "unknown"
+    confidence_threshold: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    confidence: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    total_pages: int = Field(default=0, ge=0)
+    ocr_pages: int = Field(default=0, ge=0)
+    native_pages: int = Field(default=0, ge=0)
+    ocr_percent: float | None = Field(default=None, ge=0, le=100)
+    native_percent: float | None = Field(default=None, ge=0, le=100)
+    measured_ocr_pages: int = Field(default=0, ge=0)
+    review_pages: list[PageQualityIssue] = Field(default_factory=list)
+    manual_review_required: bool = False
+    warning: str | None = None
+    processing_ms: int | None = Field(default=None, ge=0)
+    processing_kind: Literal["full", "reanalysis"] | None = None
+    sla_ms: int | None = Field(default=None, gt=0)
+    sla_status: Literal["within", "exceeded", "not_configured", "not_measured", "not_applicable"] = "not_measured"
 
 class DocumentOut(ORM):
     id: uuid.UUID
@@ -72,6 +125,7 @@ class DocumentOut(ORM):
     rules_checked: int = 0
     error_message: str | None
     processing_ms: int | None
+    quality: DocumentQuality = Field(default_factory=DocumentQuality)
     has_preview: bool = False
     created_at: datetime
     updated_at: datetime | None
@@ -225,6 +279,7 @@ class PageContent(BaseModel):
     height: float
     is_ocr: bool
     ocr_confidence: float | None
+    quality: PageQuality = Field(default_factory=PageQuality)
     sections: list[Section]
 
 class SearchHit(BaseModel):

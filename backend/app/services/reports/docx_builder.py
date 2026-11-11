@@ -10,6 +10,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
 from app.services.reports.data import ReportData, ReportDocument, ReportFinding
+from app.services.reports.quality import QUALITY_LIMITATION, QUALITY_TITLE, quality_page_rows, quality_rows
 from app.vocab import REVIEW_LABELS, SEVERITY_SHORT_LABELS
 
 SEVERITY_LABEL = SEVERITY_SHORT_LABELS
@@ -188,7 +189,7 @@ def _document_title(doc, rd: ReportDocument, multi: bool) -> None:
     if rd.law_type:
         info += f" · {LAW_LABEL.get(rd.law_type, rd.law_type)}"
     if rd.is_scanned:
-        info += " · распознан OCR"
+        info += " · содержит сканы / OCR"
     if rd.status != "COMPLETED":
         info += f" · не обработан: {rd.error_message or rd.status}"
     doc.add_paragraph(info)
@@ -199,6 +200,24 @@ def _assessment_note(rd: ReportDocument) -> str:
     if any(f.severity == "UNKNOWN" and f.review_status != "DISMISSED" for f in rd.findings):
         return "Проверка выполнена частично: для части правил недостаточно подтверждённых данных."
     return "Нет результатов проверки по действующим правилам."
+
+def _quality_section(doc, rd: ReportDocument) -> None:
+    doc.add_heading(QUALITY_TITLE, level=3)
+    section = doc.sections[-1]
+    available_width = (section.page_width - section.left_margin - section.right_margin) / Cm(1)
+    widths = [4.4, available_width - 4.4]
+    table = _table(doc, ["Показатель", "Значение"], widths)
+    table.autofit = False
+    for column, width in zip(table.columns, widths):
+        column.width = Cm(width)
+    for label, value in quality_rows(rd.quality) + quality_page_rows(rd.quality):
+        row = _add_row(table, [label, value], widths)
+        if label == "Предупреждение" or (label == "Норматив времени" and rd.quality.sla_status == "exceeded"):
+            for cell in row.cells:
+                _shade(cell, SEVERITY_FILL["YELLOW"])
+    paragraph = doc.add_paragraph(QUALITY_LIMITATION)
+    paragraph.runs[0].italic = True
+    paragraph.runs[0].font.size = Pt(9)
 
 def _footer(doc) -> None:
     p = doc.add_paragraph(DISCLAIMER)
@@ -214,9 +233,10 @@ def build_brief(data: ReportData, target: Path) -> Path:
     _summary(doc, data)
     multi = len(data.documents) > 1
     widths = [1.0, 2.6, 8.4, 3.0, 1.5]
-    doc.add_heading("Замечания", level=2)
     for rd in data.documents:
         _document_title(doc, rd, multi)
+        _quality_section(doc, rd)
+        doc.add_heading("Замечания", level=2 if not multi else 3)
         if not rd.assessed:
             doc.add_paragraph(_assessment_note(rd))
         issues = rd.issues
@@ -244,6 +264,7 @@ def build_detailed(data: ReportData, target: Path) -> Path:
     for rd in data.documents:
         if multi:
             _document_title(doc, rd, multi)
+        _quality_section(doc, rd)
         if not rd.assessed:
             doc.add_paragraph(_assessment_note(rd))
         for f in rd.issues:
@@ -362,6 +383,10 @@ def build_protocol(data: ReportData, target: Path) -> Path:
             ], widths, size=9)
     if number == 0 and all(rd.assessed for rd in data.documents):
         doc.add_paragraph("Разногласий по проверенным правилам не выявлено.")
+
+    for rd in data.documents:
+        _document_title(doc, rd, len(data.documents) > 1)
+        _quality_section(doc, rd)
 
     doc.add_paragraph()
     sign = doc.add_table(rows=2, cols=2)

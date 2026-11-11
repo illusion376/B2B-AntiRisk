@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -22,8 +22,11 @@ class Settings(BaseSettings):
     ocr_enabled: bool = True
     ocr_languages: str = "rus+eng"
     ocr_dpi: int = 300
-    ocr_threads: int = 4
+    ocr_threads: int = Field(default=4, ge=1)
     ocr_min_text_chars: int = 40
+    ocr_quality_min_confidence: float = Field(default=95.0, ge=0, le=100, allow_inf_nan=False)
+    # None means that the assignment has no configured full-pipeline time limit.
+    document_processing_sla_seconds: int | None = Field(default=120, gt=0, le=2_147_483)
     tessdata_prefix: str | None = None
 
     soffice_bin: str = "soffice"
@@ -60,6 +63,11 @@ class Settings(BaseSettings):
     nli_batch_size: int = 16
     nli_device: str = "cpu"
     nli_quantize: bool = True
+
+    @field_validator("document_processing_sla_seconds", mode="before")
+    @classmethod
+    def empty_sla_is_unconfigured(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
 
     @property
     def max_upload_bytes(self) -> int:

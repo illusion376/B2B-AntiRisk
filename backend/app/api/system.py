@@ -10,6 +10,7 @@ from app.models import User
 from app.schemas import AnalysisModelsOut, AnalysisModesOut, UserOut, UserProfileUpdate
 from app.services.analysis_models import model_catalog
 from app.services.analysis_modes import capabilities, default_analysis_mode
+from app.services.document_quality import user_quality_settings
 
 router = APIRouter(tags=["Система"])
 
@@ -59,7 +60,7 @@ def health(response: Response, db: Session = Depends(get_db)):
 def _user_out(user: User) -> UserOut:
     initials = "".join(part[0] for part in user.full_name.split()[:2] if part).upper()
     return UserOut(id=user.id, email=user.email, full_name=user.full_name, company_name=user.company_name,
-                   role=user.role, initials=initials)
+                   role=user.role, initials=initials, quality_settings=user_quality_settings(user))
 
 
 @router.get("/api/users/me", response_model=UserOut, summary="Текущий пользователь (аватар в шапке)")
@@ -67,11 +68,14 @@ def me(user: User = Depends(current_user)):
     return _user_out(user)
 
 
-@router.patch("/api/users/me", response_model=UserOut, summary="Сохранить имя и компанию для отчётов")
+@router.patch("/api/users/me", response_model=UserOut, summary="Сохранить данные профиля и настройки качества проверки")
 def update_profile(body: UserProfileUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    user.full_name = body.full_name
+    if "full_name" in body.model_fields_set:
+        user.full_name = body.full_name
     if "company_name" in body.model_fields_set:
         user.company_name = body.company_name or None
+    if "quality_settings" in body.model_fields_set:
+        user.quality_settings = body.quality_settings.model_dump(mode="json")
     db.commit()
     db.refresh(user)
     return _user_out(user)

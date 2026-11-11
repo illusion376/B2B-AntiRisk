@@ -1,7 +1,5 @@
 .dashboard-shell .settings-view { width: 100%; max-width: none; }
 .dashboard-shell .settings-title { margin-bottom: 22px; }
-.dashboard-shell .settings-autosave { display: flex; align-items: center; gap: 6px; color: #475569; font-size: .6875rem; white-space: nowrap; }
-.dashboard-shell .settings-autosave svg { color: #609474; }
 .dashboard-shell .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .dashboard-shell .settings-card { padding: 18px; min-width: 0; border: 1px solid #e6e6e6; border-radius: 8px; background: #fff; }
 .dashboard-shell .settings-card-heading { display: flex; align-items: center; gap: 9px; }
@@ -9,7 +7,8 @@
 .dashboard-shell .settings-card-heading h2 { margin: 0; font-size: .875rem; color: #0f172a; letter-spacing: -.15px; font-weight: 700; }
 .dashboard-shell .settings-card-heading > small { margin-left: auto; font-size: .625rem; color: #475569; }
 .dashboard-shell .settings-card-description { margin: 10px 0 14px; color: #334155; font-size: .75rem; line-height: 1.6; }
-.dashboard-shell .settings-profile-card { grid-column: 1 / -1; }
+.dashboard-shell .settings-profile-card, .dashboard-shell .settings-quality-card { grid-column: 1 / -1; }
+.dashboard-shell .settings-quality-card > form { margin-top: 14px; }
 .dashboard-shell .settings-profile-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .dashboard-shell .settings-profile-fields label { min-width: 0; color: #1e293b; font-size: .75rem; font-weight: 600; }
 .dashboard-shell .settings-profile-fields label small { color: #475569; font-size: .625rem; margin-left: 5px; font-weight: 400; }
@@ -17,6 +16,7 @@
 .dashboard-shell .settings-profile-fields input::placeholder { color: #64748b; }
 .dashboard-shell .settings-profile-fields input:focus-visible { outline: 2px solid #707070; outline-offset: 2px; }
 .dashboard-shell .settings-profile-fields input:disabled { background: #fafafa; color: #94a3b8; }
+.dashboard-shell .settings-quality-fields .settings-input-hint { display: block; margin-top: 6px; color: #475569; font-size: .6875rem; font-weight: 400; line-height: 1.5; }
 .dashboard-shell .settings-profile-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; }
 .dashboard-shell .settings-profile-actions .settings-card-note { margin: 0; }
 .dashboard-shell .settings-profile-actions .primary-button { min-height: 30px; padding: 7px 11px; font-size: .6875rem; flex-shrink: 0; }
@@ -66,5 +66,4 @@
   .dashboard-shell .settings-profile-fields { grid-template-columns: 1fr; gap: 12px; }
   .dashboard-shell .settings-card { padding: 15px; }
   .dashboard-shell .settings-title { gap: 12px; }
-  .dashboard-shell .settings-autosave { display: none; }
 }

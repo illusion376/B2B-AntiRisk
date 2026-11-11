@@ -15,12 +15,13 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import session_scope
-from app.models import Analysis, AuditLog, Document, DocumentChunk, DocumentPage, Project, RiskFinding, RiskRule
+from app.models import Analysis, AuditLog, Document, DocumentChunk, DocumentPage, Project, RiskFinding, RiskRule, User
 from app.services import storage
 from app.services.analysis_modes import AnalysisModeError, resolve_analysis_mode
 from app.services.analyzer import FindingDraft, RuleContext, evaluate_heuristic, evaluate_nli, evaluate_with_llm
 from app.services.converter import ConversionError, to_pdf
 from app.services.dedup import merge_duplicate_drafts
+from app.services.document_quality import build_quality_snapshot, user_quality_settings
 from app.services.embeddings import EmbeddingError, embed_texts
 from app.services.extraction import PageContent, extract_pages
 from app.services.retrieval import hybrid_search
@@ -173,8 +174,10 @@ def applicable_rules(db: Session, law_type: str | None, rule_ids: list[str] | No
         query = query.where(RiskRule.id.in_(rule_ids))
     return list(db.scalars(query))
 
-def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) -> None:
+def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None, *,
+                     started_at: float | None = None, processing_kind: str = "reanalysis") -> None:
     """Прогоняет правила по уже извлечённому и векторизованному документу и сохраняет замечания."""
+    started = time.monotonic() if started_at is None else started_at
     with session_scope() as db:
         doc = db.get(Document, document_id)
         if doc is None:
@@ -226,6 +229,7 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None) 
         ).all()
         db.execute(update(Document).where(Document.id == document_id).values(
             risk_score=risk_score(severities), status="COMPLETED", progress=100, chat_revision=uuid.uuid4(),
+            processing_ms=max(0, round((time.monotonic() - started) * 1000)), processing_kind=processing_kind,
             error_message=("Не удалось проверить часть правил: ошибка ИИ-сервиса. Повторите анализ."
                            if any(draft.source == "ERROR" for draft in drafts) else None),
         ))
@@ -277,15 +281,20 @@ def process_document(document_id: uuid.UUID) -> None:
             return
         analysis = db.get(Analysis, doc.analysis_id)
         source, analysis_id, analysis_law = Path(doc.file_path), doc.analysis_id, analysis.law_type
+        owner = db.get(User, analysis.user_id) if analysis.user_id else None
+        policy = user_quality_settings(owner)
+        quality_threshold = policy.ocr_min_confidence
+        sla_ms = policy.processing_sla_seconds * 1000 if policy.processing_sla_seconds is not None else None
 
     try:
-
+        set_document(document_id, status="CONVERTING", progress=5, error_message=None,
+                     processing_ms=None, processing_kind="full", processing_sla_ms=sla_ms,
+                     quality_snapshot=None, ocr_confidence=None, ocr_pages=0, is_scanned=False)
         with session_scope() as db:
             doc = db.get(Document, document_id)
             doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)
             if doc.analysis_mode == "llm" and not doc.llm_model:
                 doc.llm_model = settings.llm_model.strip()
-        set_document(document_id, status="CONVERTING", progress=5, error_message=None)
         preview_target = storage.subdir(analysis_id, "preview") / f"{document_id}.pdf"
         try:
             preview = to_pdf(source, preview_target)
@@ -294,6 +303,15 @@ def process_document(document_id: uuid.UUID) -> None:
         set_document(document_id, preview_path=str(preview), status="OCR", progress=10)
 
         pages = _extract(document_id, preview)
+        quality_snapshot = build_quality_snapshot(pages, quality_threshold)
+        # Persist diagnostics even when no usable text was extracted at all.
+        with session_scope() as db:
+            _save_pages(db, document_id, pages)
+            db.execute(update(Document).where(Document.id == document_id).values(
+                total_pages=len(pages), is_scanned=bool(quality_snapshot["ocr_pages"]),
+                ocr_pages=quality_snapshot["ocr_pages"], ocr_confidence=quality_snapshot["confidence"],
+                quality_snapshot=quality_snapshot,
+            ))
         full_text = "\n".join(p.text for p in pages)
         if len(full_text.strip()) < 50:
             raise ProcessingError("Не удалось извлечь текст из документа (пустой или нечитаемый скан)")
@@ -301,16 +319,8 @@ def process_document(document_id: uuid.UUID) -> None:
         segments = split_segments(pages)
         chunks = build_chunks(segments)
         law_type = analysis_law if analysis_law in ("44-FZ", "223-FZ") else detect_law_type(full_text)
-        ocr_pages = [p for p in pages if p.is_ocr]
-        confidences = [p.ocr_confidence for p in ocr_pages if p.ocr_confidence is not None]
-
         with session_scope() as db:
-            _save_pages(db, document_id, pages)
             db.execute(update(Document).where(Document.id == document_id).values(
-                total_pages=len(pages),
-                is_scanned=bool(ocr_pages),
-                ocr_pages=len(ocr_pages),
-                ocr_confidence=round(sum(confidences) / len(confidences), 1) if confidences else None,
                 outline=build_outline(segments),
                 law_type=law_type,
                 status="VECTORIZING",
@@ -338,13 +348,15 @@ def process_document(document_id: uuid.UUID) -> None:
             db.execute(update(Document).where(Document.id == document_id).values(status="ANALYZING", progress=70))
             refresh_analysis(db, analysis_id)
 
-        analyze_document(document_id)
-        set_document(document_id, processing_ms=round((time.monotonic() - started) * 1000))
+        analyze_document(document_id, started_at=started, processing_kind="full")
         log.info("Document %s processed in %.1fs", document_id, time.monotonic() - started)
     except (ProcessingError, AnalysisModeError) as exc:
         log.warning("Document %s failed: %s", document_id, exc)
-        set_document(document_id, status="FAILED", error_message=str(exc))
+        set_document(document_id, status="FAILED", progress=100, error_message=str(exc),
+                     processing_ms=max(0, round((time.monotonic() - started) * 1000)))
     except Exception as exc:
         log.exception("Document %s failed", document_id)
-        set_document(document_id, status="FAILED", error_message=f"Внутренняя ошибка обработки: {type(exc).__name__}")
+        set_document(document_id, status="FAILED", progress=100,
+                     error_message=f"Внутренняя ошибка обработки: {type(exc).__name__}",
+                     processing_ms=max(0, round((time.monotonic() - started) * 1000)))
         raise

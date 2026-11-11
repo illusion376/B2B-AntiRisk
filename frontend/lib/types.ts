@@ -61,6 +61,41 @@ export interface ProcessingState {
   status: string;
   errorMessage: string | null;
 }
+export type QualityStatus = 'ok' | 'low' | 'unknown' | 'native';
+export type QualitySlaStatus = 'within' | 'exceeded' | 'not_configured' | 'not_measured' | 'not_applicable';
+export interface ReviewPageQuality {
+  page: number;
+  status: 'low' | 'unknown';
+  confidence: number | null;
+  reason: string;
+  warning: string;
+}
+export interface PageQuality {
+  status: QualityStatus;
+  confidence: number | null;
+  confidenceThreshold: number | null;
+  manualReviewRequired: boolean;
+  warning: string | null;
+  reason: string | null;
+}
+export interface DocumentQuality {
+  status: QualityStatus;
+  confidenceThreshold: number | null;
+  confidence: number | null;
+  totalPages: number;
+  ocrPages: number;
+  nativePages: number;
+  ocrPercent: number | null;
+  nativePercent: number | null;
+  measuredOcrPages: number;
+  reviewPages: ReviewPageQuality[];
+  manualReviewRequired: boolean;
+  warning: string | null;
+  processingMs: number | null;
+  processingKind: 'full' | 'reanalysis' | null;
+  slaMs: number | null;
+  slaStatus: QualitySlaStatus;
+}
 export interface DocumentInfo extends ProcessingState {
   id: string;
   analysisId: string;
@@ -82,6 +117,7 @@ export interface DocumentInfo extends ProcessingState {
   counts: SeverityCounts;
   rulesChecked: number;
   processingMs: number | null;
+  quality?: DocumentQuality | null;
   hasPreview: boolean;
   createdAt: number;
   updatedAt: number | null;
@@ -147,6 +183,7 @@ export interface PageContent {
   height: number;
   isOcr: boolean;
   ocrConfidence: number | null;
+  quality?: PageQuality | null;
   sections: Section[];
 }
 export interface OutlineClause { clause: string; title: string; page: number }
@@ -163,6 +200,10 @@ export interface HistoryEntry {
   entityType: string;
   entityId: string | null;
 }
+export interface QualitySettings {
+  ocrMinConfidence: number;
+  processingSlaSeconds: number | null;
+}
 export interface User {
   id: string;
   email: string;
@@ -170,6 +211,7 @@ export interface User {
   companyName: string | null;
   role: string;
   initials: string;
+  qualitySettings: QualitySettings | null;
 }
 export interface UserProfileDraft { fullName: string; companyName: string }
 export type ReportFormat = 'docx' | 'pdf' | 'csv' | 'json';

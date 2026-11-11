@@ -9,6 +9,7 @@
 pytesseract запускает отдельный процесс, поэтому потоки дают реальный параллелизм.
 """
 import logging
+import math
 import re
 from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -31,6 +32,8 @@ class PageContent:
     words: list[list] = field(default_factory=list)
     is_ocr: bool = False
     ocr_confidence: float | None = None
+    # A failed/disabled OCR page is still an image page, never a native success.
+    ocr_error: str | None = None
 
 _CLEAN = str.maketrans({
     "\u00ad": "-",
@@ -69,13 +72,33 @@ def _native_page(page: fitz.Page, page_number: int) -> PageContent:
         words=words,
     )
 
+# Detect a scanned sheet with a short, selectable header/footer. A small logo
+# must not cause an otherwise readable text page to be rasterized again.
+_DOMINANT_IMAGE_PAGE_SHARE = 0.65
+_HYBRID_NATIVE_TEXT_LIMIT = 200
+
 def _needs_ocr(page: fitz.Page, native: PageContent) -> bool:
-    if not settings.ocr_enabled:
-        return False
-    if len(native.text.strip()) >= settings.ocr_min_text_chars:
+    """Use OCR for sparse text over a dominant raster, as well as plain scans.
+
+    200 characters permits typical headers/footers; one visible image must cover
+    at least 65% of the page. This deliberately conservative heuristic avoids
+    OCR for small stamps/logos and preserves substantial existing text layers,
+    including external OCR layers whose original confidence is unavailable.
+    It does not infer image content or prove that every raster contains text.
+    """
+    text_chars = len(native.text.strip())
+    if text_chars < settings.ocr_min_text_chars:
+        return bool(page.get_images(full=False)) or bool(page.get_drawings())
+    if text_chars >= _HYBRID_NATIVE_TEXT_LIMIT:
         return False
 
-    return bool(page.get_images(full=False)) or bool(page.get_drawings())
+    page_area = page.rect.get_area()
+    if page_area <= 0:
+        return False
+    return any(
+        (fitz.Rect(image["bbox"]) & page.rect).get_area() / page_area >= _DOMINANT_IMAGE_PAGE_SHARE
+        for image in page.get_image_info()
+    )
 
 def _render(page: fitz.Page) -> Image.Image:
     pix = page.get_pixmap(dpi=settings.ocr_dpi, colorspace=fitz.csGRAY, alpha=False)
@@ -99,7 +122,7 @@ def ocr_image(image: Image.Image, page_number: int, width: float, height: float)
     for i, raw_word in enumerate(data["text"]):
         word = clean_text(raw_word or "").strip()
         conf = float(data["conf"][i])
-        if not word or conf < 0:
+        if not word or not math.isfinite(conf) or not 0 <= conf <= 100:
             continue
         key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
         line_no = line_ids.setdefault(key, len(line_ids))
@@ -118,7 +141,9 @@ def ocr_image(image: Image.Image, page_number: int, width: float, height: float)
         text=_words_to_text(words),
         words=words,
         is_ocr=True,
-        ocr_confidence=round(sum(confidences) / len(confidences), 1) if confidences else None,
+        # Compare the measured value with quality thresholds before rounding for display.
+        ocr_confidence=sum(confidences) / len(confidences) if confidences else None,
+        ocr_error=None if words else "ocr_empty",
     )
 
 def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = None) -> list[PageContent]:
@@ -138,13 +163,25 @@ def extract_pages(pdf_path: Path, on_page: Callable[[int, int], None] | None = N
                 page = doc[index]
                 native = _native_page(page, index + 1)
                 if _needs_ocr(page, native):
-
+                    native.is_ocr = True
+                    results[index] = native
+                    if not settings.ocr_enabled:
+                        native.ocr_error = "ocr_disabled"
+                        done += 1
+                        report()
+                        continue
                     while len(pending) >= settings.ocr_threads * 2:
                         done += _collect_one(pending, results)
                         report()
-                    image = _render(page)
+                    try:
+                        image = _render(page)
+                    except Exception:  # noqa: BLE001 — retain diagnostics for this page
+                        log.exception("Could not render OCR page %s", index + 1)
+                        native.ocr_error = "ocr_failed"
+                        done += 1
+                        report()
+                        continue
                     pending[index] = pool.submit(ocr_image, image, index + 1, native.width, native.height)
-                    results[index] = native
                 else:
                     results[index] = native
                     done += 1
@@ -161,6 +198,9 @@ def _collect_one(pending: dict[int, Future], results: list) -> int:
     try:
         results[index] = future.result()
     except Exception:  # noqa: BLE001 — страница остаётся с текстовым слоем
+        results[index].is_ocr = True
+        results[index].ocr_confidence = None
+        results[index].ocr_error = "ocr_failed"
         log.exception("OCR failed on page %s", index + 1)
     return 1
 

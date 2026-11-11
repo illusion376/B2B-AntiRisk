@@ -1,4 +1,4 @@
-import type { AnalysisMode, AnalysisModeOption, AnalysisSensitivity, Highlight, LawType, ProcessingPhase, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
+import type { AnalysisMode, AnalysisModeOption, AnalysisSensitivity, Highlight, LawType, ProcessingPhase, QualitySlaStatus, QualityStatus, ReportMode, ReviewStatus, RiskLevel, Severity, SeverityCounts, TrafficLight } from './types';
 
 export interface AnalysisModesDto {
   default_mode: AnalysisMode;
@@ -13,6 +13,20 @@ export interface AnalysisModelsDto {
   warning?: string | null;
 }
 
+export interface PageQualityDto {
+  status: QualityStatus; confidence: number | null; confidence_threshold: number | null;
+  manual_review_required: boolean; warning: string | null; reason: string | null;
+}
+export interface DocumentQualityDto {
+  status: QualityStatus; confidence_threshold: number | null; confidence: number | null;
+  total_pages: number; ocr_pages: number; native_pages: number;
+  ocr_percent: number | null; native_percent: number | null; measured_ocr_pages: number;
+  review_pages: { page: number; status: 'low' | 'unknown'; confidence: number | null; reason: string; warning: string }[];
+  manual_review_required: boolean; warning: string | null;
+  processing_ms: number | null; processing_kind: 'full' | 'reanalysis' | null;
+  sla_ms: number | null; sla_status: QualitySlaStatus;
+}
+
 export interface DocumentDto {
   id: string; analysis_id: string; file_name: string; relative_path: string | null;
   analysis_mode: AnalysisMode | null;
@@ -24,6 +38,7 @@ export interface DocumentDto {
   ocr_confidence: number | null; law_type: string | null; risk_score: number | null;
   traffic_light: TrafficLight | null; counts: SeverityCounts; rules_checked: number;
   error_message: string | null; processing_ms: number | null; has_preview: boolean;
+  quality?: DocumentQualityDto | null;
   created_at: string; updated_at: string | null;
 }
 export interface ProjectFileDto {
@@ -57,10 +72,16 @@ export interface RuleDto {
 export interface PageDto {
   page: number; total_pages: number; width: number; height: number;
   is_ocr: boolean; ocr_confidence: number | null;
+  quality?: PageQualityDto | null;
   sections: { title: string; paragraphs: { clause: string; text: string; finding_ids: string[] }[] }[];
+}
+export interface QualitySettingsDto {
+  ocr_min_confidence: number;
+  processing_sla_seconds: number | null;
 }
 export interface UserDto {
   id: string; email: string; full_name: string; company_name: string | null; role: string; initials: string;
+  quality_settings?: QualitySettingsDto | null;
 }
 export interface HistoryDto {
   id: string; action: string; title: string; detail: string; time: string; entity_type: string; entity_id: string | null;

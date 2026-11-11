@@ -7,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Analysis, Document, RiskFinding, RiskRule, User, visible_findings
+from app.schemas import DocumentQuality
+from app.services.document_quality import document_quality
 from app.services.scoring import risk_score, traffic_light
 
 @dataclass
@@ -43,6 +45,7 @@ class ReportDocument:
     error_message: str | None
     findings: list[ReportFinding] = field(default_factory=list)
     rules_checked: int = 0
+    quality: DocumentQuality = field(default_factory=DocumentQuality)
 
     @property
     def assessed(self) -> bool:
@@ -146,7 +149,7 @@ def collect(db: Session, analysis: Analysis, user: User, document_id: uuid.UUID 
             risk_score=risk_score(severities) if assessed else None,
             light=traffic_light(severities) if assessed else "UNKNOWN",
             preview_path=doc.preview_path, error_message=doc.error_message,
-            findings=items, rules_checked=len(checked_rules),
+            findings=items, rules_checked=len(checked_rules), quality=document_quality(doc),
         ))
 
     rules = list(db.scalars(select(RiskRule).where(RiskRule.id.in_(used_rules)).order_by(RiskRule.sort_order))) \

@@ -19,6 +19,7 @@ from app.services import pdf_tools
 from app.services.analysis_modes import analysis_mode_or_422
 from app.services.analysis_models import analysis_model_or_422
 from app.services.audit import log_action
+from app.services.document_quality import page_quality
 from app.services.search import search_pages
 from app.services.pipeline import refresh_analysis
 from app.services.structure import page_sections
@@ -133,7 +134,8 @@ def get_page(document_id: uuid.UUID, page_number: int, db: Session = Depends(get
             target["finding_ids"].append(f.id)
 
     return PageContent(page=page_number, total_pages=doc.total_pages, width=page.width, height=page.height,
-                       is_ocr=page.is_ocr, ocr_confidence=page.ocr_confidence, sections=sections)
+                       is_ocr=page.is_ocr, ocr_confidence=page.ocr_confidence, sections=sections,
+                       quality=page_quality(doc, page))
 
 @router.get("/{document_id}/outline", response_model=list[OutlineSection], summary="Оглавление (вкладка «Навигация»)")
 def get_outline(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -224,6 +226,14 @@ def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User 
     doc.llm_model = model
     doc.analysis_sensitivity = body.analysis_sensitivity if body else "balanced"
     doc.error_message = None
+    doc.processing_ms = None
+    doc.processing_kind = "full" if is_initial else "reanalysis"
+    doc.processing_sla_ms = None
+    if is_initial:
+        doc.quality_snapshot = None
+        doc.ocr_confidence = None
+        doc.ocr_pages = 0
+        doc.is_scanned = False
 
     analysis = db.get(Analysis, doc.analysis_id)
     if analysis and is_initial and analysis.analysis_status in ("UPLOADED", "FAILED"):

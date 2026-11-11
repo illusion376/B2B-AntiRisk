@@ -14,6 +14,7 @@ from app.schemas import ReportMode
 from app.services import pdf_tools, storage
 from app.services.reports.data import ReportData
 from app.services.reports.docx_builder import BUILDERS
+from app.services.reports.quality import QUALITY_LIMITATION, QUALITY_TITLE, quality_page_rows, quality_rows
 from app.vocab import REVIEW_LABELS, SEVERITY_GROUP_LABELS
 
 MODES: list[ReportMode] = [
@@ -87,6 +88,7 @@ def _json_payload(data: ReportData, mode: str) -> dict:
                 "id": str(d.id), "file_name": d.file_name, "relative_path": d.relative_path, "status": d.status,
                 "total_pages": d.total_pages, "law_type": d.law_type, "risk_score": d.risk_score,
                 "traffic_light": d.light,
+                "quality": d.quality.model_dump(mode="json"),
                 "findings": [finding(f) for f in (d.findings if mode == "detailed" else d.issues)],
             }
             for d in data.documents
@@ -152,6 +154,14 @@ def _write_csv(data: ReportData, mode: str, path: Path) -> None:
                     item.exact_quote or "", item.counter_proposal or "", item.legal_reference or "",
                     REVIEW_LABELS.get(item.review_status, item.review_status),
                 ])
+        writer.writerow([])
+        writer.writerow([QUALITY_TITLE])
+        writer.writerow(["Документ", "Показатель", "Значение"])
+        for doc in data.documents:
+            name = doc.relative_path or doc.file_name
+            for label, value in quality_rows(doc.quality) + quality_page_rows(doc.quality):
+                writer.writerow([name, label, value])
+        writer.writerow([QUALITY_LIMITATION])
 
 def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
     if mode not in MODE_IDS:
@@ -180,7 +190,11 @@ def generate(data: ReportData, mode: str, fmt: str) -> ReportFile:
                               "Скачайте подробный отчёт — он содержит причины неполной оценки.")
         findings = [f.__dict__ for f in doc.issues]
         path = pdf_tools.annotated_pdf(Path(doc.preview_path), findings, target.with_suffix(".pdf"),
-                                       author=data.author, company=data.company)
+                                       author=data.author, company=data.company,
+                                       quality_rows=[("Документ", doc.relative_path or doc.file_name)]
+                                       + quality_rows(doc.quality) + quality_page_rows(doc.quality),
+                                       quality_note=QUALITY_LIMITATION,
+                                       quality_page_warnings={page.page: page.warning for page in doc.quality.review_pages})
         return ReportFile(path, f"{_slug(Path(doc.file_name).stem)}_с_пометками.pdf", MEDIA_TYPES["pdf"])
 
     if fmt == "csv":

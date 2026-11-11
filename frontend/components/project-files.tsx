@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/api';
 import type { AnalysisMode, AnalysisModes, DocumentInfo, ProcessingState, Project, ProjectFile, SeverityCounts } from '@/lib/types';
 import { formatFileSize, formatProjectDate, MAX_FILE_BYTES, UPLOAD_ACCEPT } from '@/lib/projects';
 import { CustomSelect, Modal } from './ui';
+import { DocumentQualityBadges } from './document-quality';
 import type { AnalysisModelsState } from './use-analysis-models';
 import './project-enhancements.css';
 
@@ -206,7 +207,7 @@ export function ProjectFilesView({
             const Icon = isArchive ? Archive : FileText;
             const singleDocument = !isArchive && file.documents.length === 1 ? file.documents[0] : null;
             const processingState = singleDocument ?? file;
-            const canOpen = singleDocument?.phase === 'ready' && singleDocument.hasPreview;
+            const canOpen = singleDocument && (singleDocument.phase === 'ready' || singleDocument.phase === 'failed') && singleDocument.hasPreview;
             const canRemove = file.phase === 'uploaded' && file.documents.every(document => document.phase === 'uploaded' || document.phase === 'unsupported');
             return (
               <Fragment key={file.id}>
@@ -225,6 +226,7 @@ export function ProjectFilesView({
                     <ProcessingStatus item={processingState} name={file.name} />
                     {processingState.phase === 'ready' && <small>{file.rulesChecked > 0 ? `Проверено правил: ${file.rulesChecked} · Замечаний: ${riskCount(file.counts)}` : 'Нет результатов проверки правил'}</small>}
                     {singleDocument?.phase === 'ready' && !singleDocument.hasPreview && <small>Предпросмотр документа недоступен</small>}
+                    {singleDocument && <DocumentQualityBadges document={singleDocument} />}
                   </td>
                   <td className="project-file-size" data-label="Размер">{formatFileSize(file.size)}</td>
                   <td className="project-file-date" data-label="Дата добавления"><time dateTime={new Date(file.addedAt).toISOString()}>{formatProjectDate(file.addedAt)}</time></td>
@@ -265,12 +267,13 @@ export function ProjectFilesView({
                           <ProcessingStatus item={document} name={document.name} />
                           {document.phase === 'ready' && <small>{document.rulesChecked > 0 ? `Проверено правил: ${document.rulesChecked} · Замечаний: ${riskCount(document.counts)}` : 'Нет результатов проверки правил'}</small>}
                           {document.phase === 'ready' && !document.hasPreview && <small>Предпросмотр недоступен</small>}
+                          <DocumentQualityBadges document={document} />
                         </div>
                         <div className="project-child-actions">
                         <button type="button" className="project-file-remove-button" title="Удалить документ" aria-label={`Удалить документ «${document.name}»`} onClick={() => { setRemoveDocError(''); setDocumentToRemove(document); }}>
                           <Trash2 size={15} />
                         </button>
-                        {document.phase === 'ready' && document.hasPreview && (
+                        {(document.phase === 'ready' || document.phase === 'failed') && document.hasPreview && (
                           <button className="secondary-button file-open-button" data-onboarding="open-document" onClick={() => onOpenDocument(document)} aria-label={`Открыть документ «${document.name}»`}>
                             Открыть <ArrowUpRight size={15} />
                           </button>

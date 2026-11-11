@@ -221,11 +221,20 @@ def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str]
     if not docs:
         raise HTTPException(409, "Нет документов для повторной проверки")
     for doc in docs:
+        is_initial = doc.status == "FAILED"
         doc.status, doc.progress = ("ANALYZING", 70) if doc.status == "COMPLETED" else ("QUEUED", 0)
         doc.analysis_mode = mode
         doc.llm_model = model
         doc.analysis_sensitivity = analysis_sensitivity
         doc.error_message = None
+        doc.processing_ms = None
+        doc.processing_kind = "full" if is_initial else "reanalysis"
+        doc.processing_sla_ms = None
+        if is_initial:
+            doc.quality_snapshot = None
+            doc.ocr_confidence = None
+            doc.ocr_pages = 0
+            doc.is_scanned = False
     for analysis in analyses:
         if any(d.analysis_id == analysis.id for d in docs):
             log_action(db, user.id, "ANALYSIS_RERUN", "analysis", analysis.id,

@@ -4,9 +4,11 @@ import type {
 } from './api-types';
 import type {
   AnalysisMode, AnalysisModels, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
-  ProjectDraft, ProjectFile, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
+  ProjectDraft, ProjectFile, QualitySettings, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
 } from './types';
 import { reportFilename, saveDownload } from './report';
+import { mapDocumentQuality, mapPageQuality } from './document-quality';
+import { mapQualitySettings, qualitySettingsPayload } from './quality-settings';
 
 export interface RequestOptions { signal?: AbortSignal }
 export interface AnalysisRequestOptions extends RequestOptions { analysisMode?: AnalysisMode; sensitivity?: AnalysisSensitivity; llmModel?: string }
@@ -152,6 +154,7 @@ export function mapDocument(value: DocumentDto): DocumentInfo {
     ocrConfidence: value.ocr_confidence, lawType: value.law_type, riskScore: value.risk_score,
     trafficLight: value.traffic_light, counts: mapCounts(value.counts), rulesChecked: value.rules_checked,
     errorMessage: value.error_message, processingMs: value.processing_ms, hasPreview: value.has_preview,
+    quality: mapDocumentQuality(value.quality),
     createdAt: timestamp(value.created_at), updatedAt: nullableTime(value.updated_at),
   };
 }
@@ -194,6 +197,7 @@ export function mapPage(value: PageDto): PageContent {
   return {
     page: value.page, totalPages: value.total_pages, width: value.width, height: value.height,
     isOcr: value.is_ocr, ocrConfidence: value.ocr_confidence,
+    quality: mapPageQuality(value.quality),
     sections: value.sections.map(section => ({
       title: section.title,
       paragraphs: section.paragraphs.map(paragraph => ({ clause: paragraph.clause, text: paragraph.text, findingIds: paragraph.finding_ids.map(id) })),
@@ -201,7 +205,8 @@ export function mapPage(value: PageDto): PageContent {
   };
 }
 export function mapUser(value: UserDto): User {
-  return { id: id(value.id), email: value.email, fullName: value.full_name, companyName: value.company_name, role: value.role, initials: value.initials };
+  return { id: id(value.id), email: value.email, fullName: value.full_name, companyName: value.company_name, role: value.role, initials: value.initials,
+    qualitySettings: mapQualitySettings(value.quality_settings) };
 }
 export function mapHistory(value: HistoryDto): HistoryEntry {
   timestamp(value.time);
@@ -289,6 +294,11 @@ export const api = {
   updateUser: (draft: UserProfileDraft, options: RequestOptions = {}): Promise<User> => request('/users/me', mapUser, {
     ...options, method: 'PATCH', ...json({ full_name: draft.fullName.trim(), company_name: draft.companyName.trim() || null }),
   }),
+  updateQualitySettings: async (settings: QualitySettings, options: RequestOptions = {}): Promise<User> => request('/users/me', (value: UserDto) => {
+    const user = mapUser(value);
+    if (!user.qualitySettings) throw new Error('Missing saved quality settings');
+    return user;
+  }, { ...options, method: 'PATCH', ...json(qualitySettingsPayload(settings)) }),
   getReportModes: (options: RequestOptions = {}): Promise<ReportMode[]> => request<ReportMode[], ReportMode[]>('/reports/modes', values => values.map(value => {
     if (typeof value.id !== 'string' || typeof value.title !== 'string' || !Array.isArray(value.formats)) throw new Error('Invalid report mode');
     return value;

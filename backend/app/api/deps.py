@@ -11,6 +11,7 @@ from app.db import get_db
 from app.models import Analysis, Document, Project, RiskFinding, User, visible_findings
 from app.schemas import AnalysisOut, DocumentOut, FindingOut, ProjectFileOut, ProjectOut, SeverityCounts
 from app.services.scoring import risk_score, traffic_light
+from app.services.document_quality import document_quality
 from app.vocab import REVIEW_TO_API, SEVERITY_TO_API
 
 _STAGE_LABELS = {
@@ -116,6 +117,7 @@ def document_out(doc: Document, counts: tuple[SeverityCounts, int] | None = None
         + ["UNKNOWN"] * severity_counts.unknown
     ) if out.traffic_light is not None else None
     out.has_preview = bool(doc.preview_path)
+    out.quality = document_quality(doc)
     return out
 
 def analyses_out(db: Session, analyses: list[Analysis]) -> list[AnalysisOut]:

@@ -18,6 +18,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True)
     full_name: Mapped[str] = mapped_column(String(255))
     company_name: Mapped[str | None] = mapped_column(String(255))
+    quality_settings: Mapped[dict | None] = mapped_column(JSONB)
     role: Mapped[str] = mapped_column(String(50), default="USER")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -88,6 +89,9 @@ class Document(Base):
     outline: Mapped[list] = mapped_column(JSONB, default=list)
     error_message: Mapped[str | None] = mapped_column(Text)
     processing_ms: Mapped[int | None] = mapped_column(Integer)
+    processing_kind: Mapped[str | None] = mapped_column(String(20))
+    processing_sla_ms: Mapped[int | None] = mapped_column(Integer)
+    quality_snapshot: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

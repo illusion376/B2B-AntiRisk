@@ -32,6 +32,7 @@ def thumbnail(pdf_path: Path, analysis_id: uuid.UUID, document_id: uuid.UUID, pa
 
 _MARGIN = 190
 _NOTE_CSS = "* {font-family: sans-serif; font-size: 7.5pt; line-height: 1.25;} .meta {color: #555555;}"
+_QUALITY_CSS = "* {font-family: sans-serif; font-size: 10pt; line-height: 1.35;} .meta {color: #555555;}"
 _PAGE_BOTTOM = 12
 
 @dataclass(eq=False)
@@ -57,12 +58,12 @@ def _note_html(f: dict, with_location: bool = False) -> str:
         parts.append(f"<b>Рекомендация:</b> {escape(f['counter_proposal'])}")
     return "<br>".join(parts)
 
-def _put_html(page, rect: fitz.Rect, html: str, scale_low: float = 1) -> float | None:
+def _put_html(page, rect: fitz.Rect, html: str, scale_low: float = 1, css: str = _NOTE_CSS) -> float | None:
     """Пишет HTML в прямоугольник; возвращает занятую высоту или None, если текст не помещается.
 
     scale_low=1 — без уменьшения шрифта: не поместившийся текст не пишется вовсе.
     """
-    spare, scale = page.insert_htmlbox(rect, html, css=_NOTE_CSS, scale_low=scale_low)
+    spare, scale = page.insert_htmlbox(rect, html, css=css, scale_low=scale_low)
     if spare < 0:
         return None
     return rect.height - spare if scale >= 1 else rect.height
@@ -87,7 +88,8 @@ def _marker(page, rect: fitz.Rect, number, color, content_width: float, placed: 
     page.draw_rect(box, color=None, fill=color)
     page.insert_text(fitz.Point(box.x0 + 2.5, box.y1 - 2.3), label, fontname="hebo", fontsize=7, color=(1, 1, 1))
 
-def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
+def _margin_notes(doc, notes: list[_Note], profile: list[str],
+                  page_warnings: dict[int, str] | None = None) -> list[_Note]:
     """Размещает комментарии на поле справа напротив цитат. Возвращает те, что не поместились."""
     leftovers: list[_Note] = []
     by_page: dict[int, list[_Note]] = defaultdict(list)
@@ -98,6 +100,10 @@ def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
             by_page[n.page_index].append(n)
     if profile and doc.page_count and not doc[0].rotation:
         by_page.setdefault(0, [])
+    page_warnings = page_warnings or {}
+    for page_number in page_warnings:
+        if 1 <= page_number <= doc.page_count and not doc[page_number - 1].rotation:
+            by_page.setdefault(page_number - 1, [])
 
     for index in sorted(by_page):
         page = doc[index]
@@ -111,6 +117,13 @@ def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
             used = _put_html(page, fitz.Rect(x0, cursor, x1, bottom),
                              "<span class='meta'>" + "<br>".join(escape(p) for p in profile) + "</span>")
             cursor += (used or 0) + 10
+        if warning := page_warnings.get(index + 1):
+            used = _put_html(page, fitz.Rect(x0 + 6, cursor, x1, bottom),
+                             "<b style='color: #986000'>Качество распознавания</b><br>" + escape(warning))
+            if used is not None:
+                page.draw_rect(fitz.Rect(x0, cursor, x0 + 2.5, cursor + used), color=None,
+                               fill=_COLORS["YELLOW"])
+                cursor += used + 12
         for n in sorted(by_page[index], key=lambda n: n.rect.y0 if n.rect else 0):
             color = _COLORS.get(n.finding["severity"], _COLORS["YELLOW"])
             if n.rect:
@@ -126,6 +139,47 @@ def _margin_notes(doc, notes: list[_Note], profile: list[str]) -> list[_Note]:
             if not placed:
                 leftovers.append(n)
     return leftovers
+
+def _rotated_quality_markers(doc, page_warnings: dict[int, str]) -> None:
+    """Пометки повёрнутых страниц: отдельное поле, не перекрывающее исходный скан."""
+    for number, warning in page_warnings.items():
+        if not 1 <= number <= doc.page_count:
+            continue
+        page = doc[number - 1]
+        rotation = page.rotation
+        if not rotation:
+            continue
+        # MuPDF writes in unrotated page coordinates. The extra field rotates
+        # with the original page; rotate its text back to the reading direction.
+        page.set_rotation(0)
+        content_width, height = page.rect.width, page.rect.height
+        _widen(page, _MARGIN)
+        box = fitz.Rect(content_width + 12, 12, content_width + _MARGIN - 12, height - 12)
+        page.insert_htmlbox(box, "<b style='color: #986000'>Качество распознавания</b><br>" + escape(warning),
+                            css=_NOTE_CSS, rotate=rotation, scale_low=0.7)
+        page.set_rotation(rotation)
+
+def _quality_appendix(doc, rows: list[tuple[str, str]], note: str | None) -> None:
+    """Раздел в конце PDF, сохраняющий исходные номера страниц документа."""
+    def new_page():
+        page = doc.new_page(width=595, height=842)
+        used = _put_html(page, fitz.Rect(50, 40, 545, 800),
+                         "<b style='font-size: 12pt'>Качество проверки документа</b>", css=_QUALITY_CSS)
+        return page, 40 + (used or 0) + 12
+
+    page, cursor = new_page()
+    content = [(f"<b>{escape(label)}:</b> {escape(value)}") for label, value in rows]
+    if note:
+        content.append(f"<span class='meta'>{escape(note)}</span>")
+    for html in content:
+        used = _put_html(page, fitz.Rect(50, cursor, 545, 802), html, css=_QUALITY_CSS)
+        if used is None:
+            page, cursor = new_page()
+            box = fitz.Rect(50, cursor, 545, 802)
+            used = _put_html(page, box, html, css=_QUALITY_CSS)
+            if used is None:
+                used = _put_html(page, box, html, scale_low=0.7, css=_QUALITY_CSS) or box.height
+        cursor += used + 10
 
 def _appendix_page(doc) -> tuple[fitz.Page, float]:
     page = doc.new_page(width=595, height=842)
@@ -151,7 +205,8 @@ def _notes_appendix(doc, notes: list[_Note]) -> None:
         cursor += used + 10
 
 def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author: str | None = None,
-                  company: str | None = None) -> Path:
+                  company: str | None = None, quality_rows: list[tuple[str, str]] | None = None,
+                  quality_note: str | None = None, quality_page_warnings: dict[int, str] | None = None) -> Path:
     """Копия документа с подсветкой проблемных мест и комментариями на полях (для юриста)."""
     with PDF_LOCK, fitz.open(pdf_path) as doc:
         profile = ([f"Подготовил: {author}"] if author else []) + ([f"Компания: {company}"] if company else [])
@@ -179,9 +234,13 @@ def annotated_pdf(pdf_path: Path, findings: list[dict], target: Path, *, author:
             if note.page_index is None and f.get("page_number") and 1 <= f["page_number"] <= doc.page_count:
                 note.page_index = f["page_number"] - 1
             notes.append(note)
-        leftovers = _margin_notes(doc, notes, profile)
+        leftovers = _margin_notes(doc, notes, profile, quality_page_warnings)
+        if quality_page_warnings:
+            _rotated_quality_markers(doc, quality_page_warnings)
         if leftovers:
             _notes_appendix(doc, leftovers)
+        if quality_rows is not None:
+            _quality_appendix(doc, quality_rows, quality_note)
 
         doc.save(target, garbage=4, deflate=True)
     return target

@@ -1,10 +1,11 @@
 'use client';
 
-import { Bell, Check, CircleCheck, LoaderCircle, RefreshCw, ShieldCheck, SlidersHorizontal } from 'lucide-react';
-import type { AnalysisMode, AnalysisModes, User, UserProfileDraft } from '@/lib/types';
+import { Bell, Check, LoaderCircle, RefreshCw, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import type { AnalysisMode, AnalysisModes, QualitySettings, User, UserProfileDraft } from '@/lib/types';
 import { displaySeverities, sensitivityOptions } from '@/lib/workspace-preferences';
 import type { NoticeKind, WorkspacePreferences } from '@/lib/workspace-preferences';
 import { ReportProfileSettings } from './report-profile-settings';
+import { QualitySettingsCard } from './quality-settings';
 import { AnalysisModelSelector } from './analysis-model-selector';
 import type { AnalysisModelsState } from './use-analysis-models';
 import './settings.css';
@@ -25,6 +26,7 @@ interface Props {
   onDesktop: () => void;
   user: User | null;
   onSaveProfile: (draft: UserProfileDraft) => Promise<User>;
+  onSaveQualitySettings: (settings: QualitySettings) => Promise<User>;
   analysisModels: AnalysisModelsState;
 }
 
@@ -36,16 +38,16 @@ const notices: { id: NoticeKind; title: string; description: string }[] = [
 ];
 
 export function SettingsView({ config, loading, error, selectedMode, onChange, onRetry, storageError,
-  preferences, preferencesReady, onPreferences, desktopPermission, desktopRequesting, onDesktop, user, onSaveProfile, analysisModels }: Props) {
+  preferences, preferencesReady, onPreferences, desktopPermission, desktopRequesting, onDesktop, user, onSaveProfile, onSaveQualitySettings, analysisModels }: Props) {
   const selected = config?.modes.find(mode => mode.id === selectedMode);
   const desktopEnabled = preferences.notifications.desktop && desktopPermission === 'granted';
   return <section className="secondary-view settings-view">
     <div className="view-title settings-title">
       <div><h1>Настройки</h1><p>Данные для отчётов и параметры проверки.</p></div>
-      <span className="settings-autosave"><CircleCheck size={14} />Параметры: автосохранение</span>
     </div>
     <div className="settings-grid">
       <ReportProfileSettings user={user} onSave={onSaveProfile} />
+      <QualitySettingsCard user={user} onSave={onSaveQualitySettings} />
       <section className="settings-card" aria-labelledby="mode-card-title">
         <div className="settings-card-heading"><span className="settings-card-icon"><ShieldCheck size={17} /></span><h2 id="mode-card-title">Режим анализа</h2><small>01</small></div>
         <p className="settings-card-description">Как система проверяет документы.</p>
@@ -103,6 +105,6 @@ export function SettingsView({ config, loading, error, selectedMode, onChange, o
         <p className="settings-card-note">Уведомления приходят, пока сайт открыт.{desktopPermission === 'denied' && ' Разрешение можно изменить в настройках браузера.'}</p>
       </section>
     </div>
-    <p className={`settings-save-note${storageError ? ' has-error' : ''}`} role="status">{storageError ? 'Браузер не разрешил сохранить параметры проверки. Они действуют до перезагрузки страницы.' : 'Параметры проверки автоматически сохраняются в этом браузере.'}</p>
+    <p className={`settings-save-note${storageError ? ' has-error' : ''}`} role="status">{storageError ? 'Браузер не разрешил сохранить режим анализа, уровни риска, чувствительность и уведомления. Они действуют до перезагрузки страницы.' : 'Режим анализа, уровни риска, чувствительность и уведомления сохраняются в этом браузере автоматически. Данные для отчётов и нормативы качества — в профиле после нажатия «Сохранить».'}</p>
   </section>;
 }

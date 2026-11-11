@@ -129,7 +129,8 @@ def test_json_and_annotated(contract_pdf):
         quote = next(w for w in page.get_text("words") if w[4] == "штраф")
         assert quote[2] < width
 
-        assert "Срок поставки" in pdf[1].get_text() and pdf.page_count == pages
+        assert "Срок поставки" in pdf[1].get_text() and pdf.page_count > pages
+        assert "Качество проверки документа" in pdf[-1].get_text()
 
     with pytest.raises(reports.ReportError):
         reports.generate(data, "annotated", "docx")
