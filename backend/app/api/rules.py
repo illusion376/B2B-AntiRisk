@@ -4,6 +4,7 @@
 и задание для ИИ при их отсутствии строятся из названия и описания.
 """
 import asyncio
+import time
 import uuid
 from dataclasses import fields
 
@@ -14,13 +15,22 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user, get_document_or_404
 from app.config import settings
 from app.db import get_db
-from app.models import DocumentPage, RiskFinding, RiskRule, User
-from app.schemas import RuleCreate, RuleOut, RuleTestRequest, RuleTestResult, RuleUpdate
+from app.models import Document, DocumentPage, RiskFinding, RiskRule, User
+from app.schemas import (
+    RuleCreate,
+    RuleOut,
+    RulePreviewRequest,
+    RuleTestFinding,
+    RuleTestFragment,
+    RuleTestRequest,
+    RuleTestResult,
+    RuleUpdate,
+)
 from app.services.analysis_modes import analysis_mode_or_422
 from app.services.analyzer import RuleContext, evaluate_heuristic, evaluate_with_llm
 from app.services.audit import log_action
 from app.services.pipeline import ensure_rule_embeddings
-from app.services.retrieval import hybrid_search
+from app.services.retrieval import RetrievedChunk, hybrid_search
 from app.vocab import SEVERITY_FROM_API, SEVERITY_TO_API
 
 router = APIRouter(prefix="/api/rules", tags=["Правила проверки"])
@@ -44,11 +54,11 @@ def rule_out(rule: RiskRule) -> RuleOut:
     )
 
 def _model_fields(body: RuleCreate) -> dict:
-    data = body.model_dump(exclude={"id", "severity", "enabled"})
+    data = body.model_dump(exclude={"id", "severity", "enabled", "document_id", "custom_text"})
     data["severity"] = SEVERITY_FROM_API[body.severity]
     data["is_active"] = body.enabled
-    data["semantic_query"] = data["semantic_query"] or default_query(body.title, body.description)
-    data["llm_prompt"] = data["llm_prompt"] or default_prompt(body.title, body.description)
+    data["semantic_query"] = data.get("semantic_query") or default_query(body.title, body.description)
+    data["llm_prompt"] = data.get("llm_prompt") or default_prompt(body.title, body.description)
     return data
 
 def _get(db: Session, rule_id: str) -> RiskRule:
@@ -137,48 +147,167 @@ def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depend
     log_action(db, user.id, "RULE_DELETED", "rule", None, {"rule_id": rule_id, "title": rule.title})
     db.commit()
 
-def _run_rule(db: Session, rule: RiskRule, document_id: uuid.UUID) -> RuleTestResult:
+def _run_rule(
+    db: Session,
+    rule: RiskRule,
+    document_id: uuid.UUID | None = None,
+    custom_text: str | None = None,
+) -> RuleTestResult:
     mode = analysis_mode_or_422()
-    ensure_rule_embeddings(db, [rule])
-    chunks = hybrid_search(db, document_id, rule.semantic_query, list(rule.query_embedding), settings.retrieval_top_k)
-    pages = [
-        {"page_number": n, "words": w}
-        for n, w in db.execute(select(DocumentPage.page_number, DocumentPage.words)
-                               .where(DocumentPage.document_id == document_id).order_by(DocumentPage.page_number))
-    ]
-    contexts = [RuleContext(rule, chunks)]
-    doc_name = str(document_id)
-    if mode == "llm":
-        drafts = asyncio.run(evaluate_with_llm(contexts, pages, doc_name, None))
+    start_time = time.monotonic()
+
+    raw_text = (custom_text or "").strip()
+    if not document_id and not raw_text:
+        raise HTTPException(422, "Укажите документ для проверки или введите фрагмент текста")
+
+    doc_id: uuid.UUID | None = None
+    doc_file_name: str | None = None
+
+    if raw_text and not document_id:
+        chunks = [
+            RetrievedChunk(
+                id=uuid.uuid4(),
+                chunk_index=0,
+                page_number=1,
+                page_end=1,
+                clause_title="Пользовательский фрагмент",
+                content=raw_text,
+                score=1.0,
+                fts_hit=True,
+            )
+        ]
+        words = [[0.0, 0.0, 10.0, 10.0, w, 0] for w in raw_text.split()]
+        pages = [{"page_number": 1, "words": words}]
+        doc_name = "Фрагмент текста"
+        law_type = rule.law_type if rule.law_type != "ALL" else None
+        model = settings.llm_model.strip() if settings.llm_model else None
+        sensitivity = "balanced"
     else:
-        drafts = evaluate_heuristic(contexts, pages)
-    findings = []
+        doc = db.get(Document, document_id)
+        if doc is None:
+            raise HTTPException(404, "Документ не найден")
+
+        if doc.status in ("QUEUED", "CONVERTING", "OCR", "VECTORIZING", "ANALYZING"):
+            raise HTTPException(
+                409,
+                f"Документ «{doc.file_name}» ещё обрабатывается ({doc.progress}%). Дождитесь завершения обработки.",
+            )
+        if doc.status != "COMPLETED":
+            raise HTTPException(409, f"Документ «{doc.file_name}» не готов к проверке (статус: {doc.status}).")
+
+        doc_id = doc.id
+        doc_file_name = doc.file_name
+        ensure_rule_embeddings(db, [rule])
+        chunks = hybrid_search(db, doc.id, rule.semantic_query, list(rule.query_embedding), settings.retrieval_top_k)
+        pages = [
+            {"page_number": n, "words": w}
+            for n, w in db.execute(
+                select(DocumentPage.page_number, DocumentPage.words)
+                .where(DocumentPage.document_id == doc.id)
+                .order_by(DocumentPage.page_number)
+            )
+        ]
+        doc_name = doc.file_name
+        law_type = doc.law_type
+        model = doc.llm_model or (settings.llm_model.strip() if settings.llm_model else None)
+        sensitivity = doc.analysis_sensitivity or "balanced"
+
+    contexts = [RuleContext(rule, chunks)]
+    if mode == "llm":
+        try:
+            drafts = asyncio.run(evaluate_with_llm(contexts, pages, doc_name, law_type, sensitivity=sensitivity, model=model))
+        except Exception as exc:
+            log.warning("LLM evaluation failed in sandbox (%s), falling back to heuristic: %s", type(exc).__name__, exc)
+            drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
+    else:
+        drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
+
+    findings: list[RuleTestFinding] = []
+    has_risk = False
     for d in drafts:
-        item = {f.name: getattr(d, f.name) for f in fields(d) if f.name != "rule"}
-        item["severity"] = SEVERITY_TO_API.get(d.severity, "warning")
-        findings.append(item)
+        api_severity = SEVERITY_TO_API.get(d.severity, "warning")
+        if d.severity in ("RED", "YELLOW", "LOW", "UNKNOWN"):
+            has_risk = True
+        findings.append(
+            RuleTestFinding(
+                id=str(uuid.uuid4()),
+                severity=api_severity,
+                title=d.title,
+                short_description=d.short_description,
+                page=d.page_number,
+                clause=d.clause,
+                quote=d.exact_quote,
+                comment=d.comment,
+                counter_proposal=d.counter_proposal,
+                confidence=d.confidence,
+                quote_verified=d.quote_verified,
+            )
+        )
+
     fragments = [
-        {"page": c.page_number, "clause_title": c.clause_title, "content": c.content, "score": round(c.score, 4)}
+        RuleTestFragment(
+            page=c.page_number,
+            clause_title=c.clause_title,
+            content=c.content,
+            score=round(c.score, 4),
+        )
         for c in chunks
     ]
-    return RuleTestResult(rule_id=rule.id, findings=findings, fragments=fragments)
+
+    execution_ms = round((time.monotonic() - start_time) * 1000)
+
+    guidance: list[str] = []
+    verdict = "RISK" if has_risk else ("OK" if chunks and any(d.severity == "GREEN" for d in drafts) else "NOT_FOUND")
+
+    if has_risk:
+        guidance.append("Правило успешно выявило потенциальный риск в проверенном тексте.")
+    elif not chunks:
+        guidance.append("В документе не найдены фрагменты по поисковому запросу правила.")
+        guidance.append(
+            "Совет: добавьте в название или описание ключевые слова и синонимы из контрактной практики "
+            "(например: неустойка, пени, удержание, обеспечение, односторонний отказ, приёмка, срок оплаты)."
+        )
+    else:
+        guidance.append("Фрагменты текста найдены, но система не зафиксировала нарушений и сочла условия законными.")
+        guidance.append(
+            "Совет: если пункт документа кажется вам рискованным, уточните в описании точный критерий нарушения "
+            "(например: «срок возврата превышает 5 рабочих дней» вместо общего «проверить срок возврата»)."
+        )
+
+    return RuleTestResult(
+        rule_id=rule.id,
+        document_id=doc_id,
+        document_name=doc_file_name,
+        verdict=verdict,
+        findings=findings,
+        fragments=fragments,
+        guidance=guidance,
+        execution_ms=execution_ms,
+    )
 
 @router.post("/{rule_id}/test", response_model=RuleTestResult,
              summary="Проверить сохранённое правило на документе (результат не сохраняется)")
 def test_rule(rule_id: str, body: RuleTestRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    doc = get_document_or_404(db, body.document_id, user)
-    if doc.status != "COMPLETED":
-        raise HTTPException(409, "Документ ещё не обработан")
-    result = _run_rule(db, _get(db, rule_id), doc.id)
+    rule = _get(db, rule_id)
+    doc_id = body.document_id
+    if doc_id:
+        doc = get_document_or_404(db, doc_id, user)
+        doc_id = doc.id
+    result = _run_rule(db, rule, document_id=doc_id, custom_text=body.custom_text)
     db.commit()
     return result
 
 @router.post("/preview", response_model=RuleTestResult,
              summary="Проверить черновик правила на документе до сохранения")
-def preview_rule(body: RuleCreate, document_id: uuid.UUID = Query(...), db: Session = Depends(get_db),
-                 user: User = Depends(current_user)):
-    doc = get_document_or_404(db, document_id, user)
-    if doc.status != "COMPLETED":
-        raise HTTPException(409, "Документ ещё не обработан")
+def preview_rule(
+    body: RulePreviewRequest,
+    document_id: uuid.UUID | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    doc_id = body.document_id or document_id
+    if doc_id:
+        doc = get_document_or_404(db, doc_id, user)
+        doc_id = doc.id
     draft = RiskRule(id=body.id or "draft", **_model_fields(body))
-    return _run_rule(db, draft, doc.id)
+    return _run_rule(db, draft, document_id=doc_id, custom_text=body.custom_text)

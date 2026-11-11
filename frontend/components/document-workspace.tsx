@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight, EllipsisVertical, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Hand, List, LoaderCircle, Maximize, MessageSquare, Minimize, Minus, PanelLeftClose, PanelLeftOpen, Play, Plus, RotateCcw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { documentFileUrl, thumbnailUrl } from '@/lib/api';
 import { documentReviewPages, isQualityPending, pageRecognitionQuality } from '@/lib/document-quality';
 import { isRiskSeverity, severityLabels, statusLabels } from '@/lib/labels';
@@ -48,6 +48,7 @@ export type DocumentWorkspaceProps = {
   onPage: (page: number) => void;
   onSelect: (finding: Finding) => void;
   onStatus: (id: string, status: ReviewStatus) => void;
+  onReanalyzeRule?: (rule: CheckRule) => Promise<void>;
 };
 
 function findingLabel(finding: Finding) {
@@ -106,7 +107,7 @@ function PdfPage({ documentId, pageContent, page, zoom, findings, selected, need
   </div>;
 }
 
-export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, page, selected, search, findings, onboardingPane, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
+export function DocumentWorkspace({ document, pageContent, pageLoading, pageError, onRetryPage, pendingIds = noPendingStatuses, rules, onManageRules, onEditRule, onReanalyzeRule, page, selected, search, findings, onboardingPane, defaultSeverities = displaySeverities, statuses, onPage, onSelect, onStatus }: DocumentWorkspaceProps) {
   const [zoom, setZoom] = useState(100);
   const [hand, setHand] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -126,6 +127,7 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [viewerMode, setViewerMode] = useState<'pdf' | 'text'>(document.hasPreview ? 'pdf' : 'text');
   const [previewRevision, setPreviewRevision] = useState(0);
+  const [reanalyzingRuleId, setReanalyzingRuleId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchToggleRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<Partial<Record<ReviewTab, HTMLButtonElement | null>>>({});
@@ -420,7 +422,43 @@ export function DocumentWorkspace({ document, pageContent, pageLoading, pageErro
       </div>}
       {tab === 'rules' && <div className="inline-rules" role="tabpanel" tabIndex={0} id="panel-rules" aria-labelledby="tab-rules">
         <div className="pane-heading"><ShieldCheck size={18} /><span>Правила проверки · {rules.length}</span></div><div className="manage-rules-link"><button className="secondary-button" onClick={onManageRules}>Управление правилами</button></div>
-        {rules.map(rule => <button key={rule.id} onClick={() => onEditRule(rule)} aria-label={`Редактировать правило «${rule.title}»`}><span className={`rule-check ${rule.severity}`}><FileCheck2 size={18} /></span><span><strong>{rule.title}</strong><small>{riskLabels[rule.severity]} · {!rule.enabled ? 'Выключено' : findings.some(finding => finding.ruleId === rule.id) ? 'Есть результат проверки' : 'Нет результата проверки'}</small></span><ChevronRight size={16} /></button>)}
+        {rules.map(rule => (
+          <div key={rule.id} className="inline-rule-item">
+            <button
+              type="button"
+              className="inline-rule-main-btn"
+              onClick={() => onEditRule(rule)}
+              aria-label={`Редактировать правило «${rule.title}»`}
+            >
+              <span className={`rule-check ${rule.severity}`}><FileCheck2 size={18} /></span>
+              <span>
+                <strong>{rule.title}</strong>
+                <small>{riskLabels[rule.severity]} · {!rule.enabled ? 'Выключено' : findings.some(finding => finding.ruleId === rule.id) ? 'Есть результат проверки' : 'Нет результата проверки'}</small>
+              </span>
+            </button>
+            {onReanalyzeRule && (
+              <button
+                type="button"
+                className="rule-reanalyze-button"
+                title="Повторно проверить это правило на текущем документе"
+                aria-label={`Проверить правило «${rule.title}» на документе`}
+                disabled={reanalyzingRuleId === rule.id || document.phase === 'processing' || document.phase === 'queued'}
+                onClick={e => {
+                  e.stopPropagation();
+                  setReanalyzingRuleId(rule.id);
+                  onReanalyzeRule(rule).finally(() => setReanalyzingRuleId(null));
+                }}
+              >
+                {reanalyzingRuleId === rule.id ? (
+                  <LoaderCircle size={13} className="spin" />
+                ) : (
+                  <Play size={12} />
+                )}
+                <span>Проверить</span>
+              </button>
+            )}
+          </div>
+        ))}
         {!rules.length && <div className="empty-state"><p>Добавьте правила в разделе «Правила».</p></div>}
       </div>}
       <div className="assistant-pane" role="tabpanel" id="panel-assistant" aria-labelledby="tab-assistant" hidden={tab !== 'assistant'}>

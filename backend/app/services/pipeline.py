@@ -160,11 +160,17 @@ def ensure_rule_embeddings(db: Session, rules: list[RiskRule]) -> None:
     stale = [r for r in rules if r.query_embedding is None or r.embedding_model != rule_embedding_key(r)]
     if not stale:
         return
-    vectors = embed_texts([r.semantic_query for r in stale])
+    try:
+        vectors = embed_texts([r.semantic_query for r in stale])
+    except Exception as exc:
+        log.warning("Embedding service unavailable, falling back to local hash embedding: %s", exc)
+        from app.services.embeddings import _hash_embedding
+        vectors = [_hash_embedding(r.semantic_query, settings.embedding_dim) for r in stale]
     for rule, vector in zip(stale, vectors):
         rule.query_embedding = vector
         rule.embedding_model = rule_embedding_key(rule)
-    db.flush()
+    if any(r in db for r in stale):
+        db.flush()
 
 def applicable_rules(db: Session, law_type: str | None, rule_ids: list[str] | None = None) -> list[RiskRule]:
     query = select(RiskRule).where(RiskRule.is_active.is_(True)).order_by(RiskRule.sort_order, RiskRule.id)

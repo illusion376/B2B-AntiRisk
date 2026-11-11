@@ -1,13 +1,43 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { AlertTriangle, BookOpenCheck, LoaderCircle, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react';
-import type { CheckRule, RuleDraft, RiskLevel } from '@/lib/types';
+import { useId, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  BookOpenCheck,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FileSearch,
+  FileText,
+  Lightbulb,
+  LoaderCircle,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
+import { api } from '@/lib/api';
+import { severityLabels } from '@/lib/labels';
+import type { CheckRule, RiskLevel, RuleDraft, RuleTestResult } from '@/lib/types';
 import { compareRulesByRisk, riskLabels } from '@/lib/rules';
 import { CustomSelect, IconButton, Modal } from './ui';
+import './rule-editor.css';
+
+export interface RuleTestTargetDocument {
+  id: string;
+  name: string;
+  projectTitle?: string;
+  status: string;
+  progress: number;
+  phase?: string;
+}
 
 type RulesManagerProps = {
   rules: CheckRule[];
+  documents?: RuleTestTargetDocument[];
   onAdd: () => void;
   onEdit: (rule: CheckRule) => void;
   onDelete: (rule: CheckRule) => void;
@@ -180,6 +210,8 @@ export function RulesManager({
 type RuleEditorProps = {
   rule: CheckRule | null;
   categories: string[];
+  documents?: RuleTestTargetDocument[];
+  initialDocumentId?: string | null;
   onSave: (draft: RuleDraft) => Promise<string | void>;
   onClose: () => void;
 };
@@ -195,7 +227,14 @@ const defaultCategories = [
   'Гарантийные обязательства',
 ];
 
-export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProps) {
+export function RuleEditor({
+  rule,
+  categories,
+  documents = [],
+  initialDocumentId = null,
+  onSave,
+  onClose,
+}: RuleEditorProps) {
   const availableCategories = Array.from(new Set([...categories, ...defaultCategories]));
 
   const [draft, setDraft] = useState<RuleDraft>(() => rule ? {
@@ -218,6 +257,34 @@ export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProp
   const [error, setError] = useState<string | null>(null);
   const savingRef = useRef(false);
   const valid = Boolean(draft.title.trim() && draft.category.trim());
+
+  // Состояние песочницы тестирования
+  const [testSource, setTestSource] = useState<'document' | 'custom'>('document');
+  const [selectedDocId, setSelectedDocId] = useState<string>(() => {
+    if (initialDocumentId && documents.some(d => d.id === initialDocumentId)) {
+      return initialDocumentId;
+    }
+    const readyDoc = documents.find(d => d.status === 'COMPLETED' || d.phase === 'ready');
+    return readyDoc?.id || documents[0]?.id || '';
+  });
+  const [customSnippet, setCustomSnippet] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
+  const [showFragments, setShowFragments] = useState(false);
+
+  const selectedDocInfo = useMemo(() => {
+    return documents.find(d => d.id === selectedDocId);
+  }, [documents, selectedDocId]);
+
+  const selectedDocReady = Boolean(
+    selectedDocInfo && (selectedDocInfo.status === 'COMPLETED' || selectedDocInfo.phase === 'ready')
+  );
+
+  const canTest = Boolean(
+    draft.title.trim() &&
+    (testSource === 'document' ? selectedDocId && selectedDocReady : customSnippet.trim().length >= 10)
+  );
 
   function close() {
     if (!savingRef.current) onClose();
@@ -245,111 +312,402 @@ export function RuleEditor({ rule, categories, onSave, onClose }: RuleEditorProp
     }
   }
 
+  async function runTest() {
+    if (!draft.title.trim()) {
+      setTestError('Укажите название правила для проверки');
+      return;
+    }
+    if (testSource === 'document') {
+      if (!selectedDocId) {
+        setTestError('Выберите документ для проверки');
+        return;
+      }
+      if (!selectedDocReady) {
+        setTestError(
+          `Документ «${selectedDocInfo?.name || ''}» ещё обрабатывается (${selectedDocInfo?.progress || 0}%). Дождитесь завершения обработки.`
+        );
+        return;
+      }
+    } else {
+      if (customSnippet.trim().length < 10) {
+        setTestError('Введите фрагмент текста договора (не менее 10 символов)');
+        return;
+      }
+    }
+
+    setTesting(true);
+    setTestError(null);
+    setTestResult(null);
+    try {
+      const res = await api.previewRule(
+        {
+          title: draft.title.trim(),
+          description: draft.description.trim(),
+          category: draft.category.trim(),
+          severity: draft.severity,
+          enabled: draft.enabled,
+        },
+        {
+          documentId: testSource === 'document' ? selectedDocId : undefined,
+          customText: testSource === 'custom' ? customSnippet.trim() : undefined,
+        }
+      );
+      setTestResult(res);
+    } catch (cause) {
+      setTestError(getErrorMessage(cause, 'Не удалось выполнить проверку правила.'));
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
-    <Modal title={rule ? 'Редактировать правило' : 'Добавить правило'} onClose={close} closeDisabled={saving}>
-      <form onSubmit={event => void save(event)} aria-busy={saving}>
-        <label className="form-label" htmlFor="rule-title">Название правила <span aria-hidden="true">*</span></label>
-        <input
-          className="form-input"
-          id="rule-title"
-          autoFocus
-          required
-          disabled={saving}
-          maxLength={120}
-          placeholder="Например, срок оплаты"
-          value={draft.title}
-          onChange={event => setDraft({ ...draft, title: event.target.value })}
-        />
-        <label className="form-label" htmlFor="rule-description">Описание</label>
-        <textarea
-          className="form-input"
-          id="rule-description"
-          rows={3}
-          disabled={saving}
-          maxLength={1000}
-          placeholder="Что необходимо проверить в документе"
-          value={draft.description}
-          onChange={event => setDraft({ ...draft, description: event.target.value })}
-        />
-        <label className="form-label" htmlFor="rule-category">Категория <span aria-hidden="true">*</span></label>
-        {!customMode ? (
-          <div className="category-select-row">
-            <select
-              className="form-select category-select"
-              id="rule-category"
-              required
-              disabled={saving}
-              value={availableCategories.includes(draft.category) ? draft.category : availableCategories[0]}
-              onChange={event => {
-                if (event.target.value === '__custom__') {
-                  setCustomMode(true);
-                  setDraft({ ...draft, category: '' });
-                } else {
-                  setDraft({ ...draft, category: event.target.value });
-                }
-              }}
-            >
-              {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              <option value="__custom__">+ Другая категория…</option>
-            </select>
-          </div>
-        ) : (
-          <div className="custom-category-row">
+    <Modal
+      title={rule ? 'Редактировать правило' : 'Добавить правило'}
+      wide
+      className="rule-editor-modal"
+      onClose={close}
+      closeDisabled={saving || testing}
+    >
+      <form onSubmit={event => void save(event)} aria-busy={saving || testing}>
+        <div className="rule-editor-layout">
+          {/* Левая колонка: форма параметров правила */}
+          <div className="rule-editor-form">
+            <label className="form-label" htmlFor="rule-title">
+              Название правила <span aria-hidden="true">*</span>
+            </label>
             <input
               className="form-input"
-              id="rule-category"
+              id="rule-title"
               autoFocus
               required
               disabled={saving}
-              maxLength={60}
-              placeholder="Введите название новой категории"
-              value={draft.category}
-              onChange={event => setDraft({ ...draft, category: event.target.value })}
+              maxLength={120}
+              placeholder="Например, срок оплаты товара"
+              value={draft.title}
+              onChange={event => setDraft({ ...draft, title: event.target.value })}
             />
+
+            <label className="form-label" htmlFor="rule-description">
+              Описание риска
+            </label>
+            <textarea
+              className="form-input"
+              id="rule-description"
+              rows={3}
+              disabled={saving}
+              maxLength={1000}
+              placeholder="Что именно является нарушением (например: срок оплаты более 7 рабочих дней)"
+              value={draft.description}
+              onChange={event => setDraft({ ...draft, description: event.target.value })}
+            />
+
+            {/* Подсказки юристу по формулированию правила */}
+            <details className="rule-hints-card">
+              <summary>
+                <Lightbulb size={14} /> Как сформулировать правило для точного поиска
+              </summary>
+              <div className="rule-hints-content">
+                <ul>
+                  <li>
+                    <strong>Название:</strong> конкретизируйте предмет условия (например, <em>«Срок оплаты товара»</em> вместо <em>«Оплата»</em>).
+                  </li>
+                  <li>
+                    <strong>Описание:</strong> сформулируйте границу допустимого — что именно нарушает закон или права поставщика (например: <em>«Срок оплаты превышает 7 рабочих дней с момента приёмки»</em> или <em>«Штраф за просрочку превышает 10% от цены договора»</em>).
+                  </li>
+                  <li>
+                    <strong>Степень риска:</strong> задаёт верхнюю границу строгости замечания (критическое, внимание или низкий риск).
+                  </li>
+                </ul>
+              </div>
+            </details>
+
+            <label className="form-label" htmlFor="rule-category">
+              Категория <span aria-hidden="true">*</span>
+            </label>
+            {!customMode ? (
+              <div className="category-select-row">
+                <select
+                  className="form-select category-select"
+                  id="rule-category"
+                  required
+                  disabled={saving}
+                  value={availableCategories.includes(draft.category) ? draft.category : availableCategories[0]}
+                  onChange={event => {
+                    if (event.target.value === '__custom__') {
+                      setCustomMode(true);
+                      setDraft({ ...draft, category: '' });
+                    } else {
+                      setDraft({ ...draft, category: event.target.value });
+                    }
+                  }}
+                >
+                  {availableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  <option value="__custom__">+ Другая категория…</option>
+                </select>
+              </div>
+            ) : (
+              <div className="custom-category-row">
+                <input
+                  className="form-input"
+                  id="rule-category"
+                  autoFocus
+                  required
+                  disabled={saving}
+                  maxLength={60}
+                  placeholder="Введите название новой категории"
+                  value={draft.category}
+                  onChange={event => setDraft({ ...draft, category: event.target.value })}
+                />
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={saving}
+                  onClick={() => {
+                    setCustomMode(false);
+                    setDraft({ ...draft, category: availableCategories[0] });
+                  }}
+                >
+                  Выбрать из списка
+                </button>
+              </div>
+            )}
+
+            <fieldset className="risk-choices" disabled={saving}>
+              <legend className="form-label">Степень риска</legend>
+              {Object.entries(riskLabels).map(([value, label]) => (
+                <label key={value} className={`risk-choice ${value} ${draft.severity === value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="rule-risk"
+                    value={value}
+                    checked={draft.severity === value}
+                    onChange={() => setDraft({ ...draft, severity: value as RiskLevel })}
+                  />
+                  <span className={`risk-dot ${value}`} />{label}
+                </label>
+              ))}
+            </fieldset>
+
+            <label className="rule-enable-field">
+              <input
+                type="checkbox"
+                disabled={saving}
+                checked={draft.enabled}
+                onChange={event => setDraft({ ...draft, enabled: event.target.checked })}
+              />
+              Использовать правило при проверке
+            </label>
+
+            <p className="form-hint">
+              {rule
+                ? 'Изменения сохранятся в базе и будут применимы к новым и повторным проверкам.'
+                : 'Новое правило сохранится в базе и будет применяться при проверках.'}
+            </p>
+          </div>
+
+          {/* Правая колонка: песочница интерактивной проверки правила */}
+          <aside className="rule-editor-sandbox" aria-label="Песочница тестирования правила">
+            <div className="sandbox-header">
+              <h3>Проверить правило</h3>
+              <p>Проверьте, какие фрагменты находит правило, до сохранения.</p>
+            </div>
+
+            <div className="sandbox-tabs" role="tablist">
+              <button
+                type="button"
+                className={`sandbox-tab ${testSource === 'document' ? 'active' : ''}`}
+                onClick={() => { setTestSource('document'); setTestError(null); }}
+              >
+                <FileText size={14} /> На документе
+              </button>
+              <button
+                type="button"
+                className={`sandbox-tab ${testSource === 'custom' ? 'active' : ''}`}
+                onClick={() => { setTestSource('custom'); setTestError(null); }}
+              >
+                <FileSearch size={14} /> Вставить текст
+              </button>
+            </div>
+
+            {testSource === 'document' ? (
+              <div className="sandbox-input-group">
+                <label className="form-label" htmlFor="sandbox-doc-select">
+                  Документ для проверки
+                </label>
+                {documents.length > 0 ? (
+                  <>
+                    <select
+                      id="sandbox-doc-select"
+                      className="form-select sandbox-doc-select"
+                      disabled={testing || saving}
+                      value={selectedDocId}
+                      onChange={e => {
+                        setSelectedDocId(e.target.value);
+                        setTestResult(null);
+                        setTestError(null);
+                      }}
+                    >
+                      {documents.map(doc => {
+                        const isReady = doc.status === 'COMPLETED' || doc.phase === 'ready';
+                        return (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.projectTitle ? `${doc.projectTitle} / ` : ''}{doc.name} {isReady ? '✓' : `(обработка ${doc.progress}%)`}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {!selectedDocReady && (
+                      <div className="sandbox-warning-banner" role="status">
+                        <AlertCircle size={16} />
+                        <span>
+                          Выбранный документ ещё обрабатывается ({selectedDocInfo?.progress || 0}%).
+                          Дождитесь завершения анализа или выберите готовый документ.
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="sandbox-warning-banner">
+                    <AlertCircle size={16} />
+                    <span>В проектах пока нет загруженных документов. Переключитесь на вкладку «Вставить текст» для быстрой проверки на фрагменте договора.</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="sandbox-input-group">
+                <label className="form-label" htmlFor="sandbox-custom-snippet">
+                  Фрагмент текста договора
+                </label>
+                <textarea
+                  id="sandbox-custom-snippet"
+                  className="form-input sandbox-textarea"
+                  rows={3}
+                  disabled={testing || saving}
+                  placeholder="Вставьте сюда пункт договора, например: Оплата товара производится заказчиком в течение 45 календарных дней со дня подписания акта..."
+                  value={customSnippet}
+                  onChange={e => setCustomSnippet(e.target.value)}
+                />
+              </div>
+            )}
+
             <button
               type="button"
-              className="secondary-button"
-              disabled={saving}
-              onClick={() => {
-                setCustomMode(false);
-                setDraft({ ...draft, category: availableCategories[0] });
-              }}
+              className="primary-button sandbox-run-button"
+              disabled={testing || saving || !canTest}
+              onClick={() => void runTest()}
             >
-              Выбрать из списка
+              {testing ? <LoaderCircle size={15} className="spin" /> : <Play size={14} />}
+              {testing ? 'Проверяем правило…' : 'Проверить правило'}
             </button>
-          </div>
-        )}
-        <fieldset className="risk-choices" disabled={saving}>
-          <legend className="form-label">Степень риска</legend>
-          {Object.entries(riskLabels).map(([value, label]) => (
-            <label key={value} className={`risk-choice ${value} ${draft.severity === value ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="rule-risk"
-                value={value}
-                checked={draft.severity === value}
-                onChange={() => setDraft({ ...draft, severity: value as RiskLevel })}
-              />
-              <span className={`risk-dot ${value}`} />{label}
-            </label>
-          ))}
-        </fieldset>
-        <label className="rule-enable-field">
-          <input
-            type="checkbox"
-            disabled={saving}
-            checked={draft.enabled}
-            onChange={event => setDraft({ ...draft, enabled: event.target.checked })}
-          />
-          Использовать правило при проверке
-        </label>
-        <p className="form-hint">{rule
-          ? 'Изменения применятся при следующей проверке документов.'
-          : 'Новое правило будет применяться при следующих проверках документов.'}</p>
+
+            {testError && <p className="field-error" role="alert">{testError}</p>}
+
+            {/* Результаты проверки */}
+            {testResult && (
+              <div className="sandbox-results-panel">
+                <div className={`sandbox-results-summary ${testResult.findings.length > 0 ? 'has-risk' : 'not-found'}`}>
+                  <span>
+                    {testResult.findings.length > 0
+                      ? `Найдено замечаний: ${testResult.findings.length}`
+                      : 'Замечаний не выявлено'}
+                  </span>
+                  {testResult.executionMs !== null && (
+                    <span className="sandbox-execution-time">
+                      {(testResult.executionMs / 1000).toFixed(1)} с
+                    </span>
+                  )}
+                </div>
+
+                {testResult.findings.length > 0 ? (
+                  <div className="sandbox-findings-list">
+                    {testResult.findings.map(finding => (
+                      <article key={finding.id} className={`sandbox-finding-card ${finding.severity}`}>
+                        <div className="sandbox-finding-top">
+                          <span className={`severity-tag ${finding.severity}`}>
+                            {riskLabels[finding.severity as RiskLevel] || severityLabels[finding.severity] || 'Замечание'}
+                          </span>
+                          <span className="sandbox-finding-clause">
+                            {finding.clause ? `п. ${finding.clause}` : ''}
+                            {finding.page ? ` · стр. ${finding.page}` : ''}
+                          </span>
+                        </div>
+                        {finding.quote ? (
+                          <blockquote className="sandbox-finding-quote">«{finding.quote}»</blockquote>
+                        ) : null}
+                        {finding.comment && (
+                          <p className="sandbox-finding-comment">
+                            <strong>Обоснование:</strong> {finding.comment}
+                          </p>
+                        )}
+                        {finding.counterProposal && (
+                          <p className="sandbox-finding-proposal">
+                            <strong>Рекомендация:</strong> {finding.counterProposal}
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="sandbox-empty-results">
+                    <CheckCircle2 size={24} color="#16a34a" />
+                    <h4>Замечаний по правилу не обнаружено</h4>
+                    <p>Система не нашла кабальных или незаконных условий по заданной формулировке.</p>
+                  </div>
+                )}
+
+                {/* Блок советов по уточнению формулировки */}
+                {testResult.guidance && testResult.guidance.length > 0 && (
+                  <div className={`sandbox-guidance-box ${testResult.findings.length > 0 ? 'neutral' : ''}`}>
+                    <div className="sandbox-guidance-title">
+                      <Lightbulb size={14} /> Подсказка по правилу
+                    </div>
+                    <ul className="sandbox-guidance-list">
+                      {testResult.guidance.map((tip, i) => (
+                        <li key={i}>{tip}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Спойлер отобранных фрагментов текста */}
+                {testResult.fragments && testResult.fragments.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      className="sandbox-fragments-toggle"
+                      onClick={() => setShowFragments(!showFragments)}
+                    >
+                      {showFragments ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {showFragments
+                        ? 'Скрыть найденные фрагменты'
+                        : `Показать отобранные фрагменты (${testResult.fragments.length})`}
+                    </button>
+                    {showFragments && (
+                      <div className="sandbox-fragments-list">
+                        {testResult.fragments.map((fr, i) => (
+                          <div key={i} className="sandbox-fragment-item">
+                            <div className="sandbox-fragment-item-header">
+                              <span>стр. {fr.page} {fr.clauseTitle ? `· ${fr.clauseTitle}` : ''}</span>
+                              <span>релевантность: {Math.round(fr.score * 100)}%</span>
+                            </div>
+                            <div className="sandbox-fragment-item-content">{fr.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+
         {error && <p className="field-error" role="alert">{error}</p>}
         <div className="modal-actions">
-          <button type="button" className="secondary-button" disabled={saving} onClick={close}>Отмена</button>
-          <button type="submit" className="primary-button" disabled={!valid || saving}>
+          <button type="button" className="secondary-button" disabled={saving || testing} onClick={close}>
+            Отмена
+          </button>
+          <button type="submit" className="primary-button" disabled={!valid || saving || testing}>
             {saving && <LoaderCircle size={16} className="spin" aria-hidden="true" />}
             {saving ? 'Сохранение…' : rule ? 'Сохранить изменения' : 'Добавить правило'}
           </button>

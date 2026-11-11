@@ -54,6 +54,43 @@ export interface CheckRule {
 }
 export type RuleDraft = Omit<CheckRule, 'id' | 'createdAt' | 'updatedAt'>;
 
+export interface RuleTestFinding {
+  id: string;
+  severity: Severity;
+  title: string;
+  shortDescription: string | null;
+  page: number | null;
+  clause: string | null;
+  quote: string | null;
+  comment: string | null;
+  counterProposal: string | null;
+  confidence: number | null;
+  quoteVerified: boolean;
+}
+
+export interface RuleTestFragment {
+  page: number;
+  clauseTitle: string | null;
+  content: string;
+  score: number;
+}
+
+export interface RuleTestResult {
+  ruleId: string;
+  documentId: string | null;
+  documentName: string | null;
+  verdict: string;
+  findings: RuleTestFinding[];
+  fragments: RuleTestFragment[];
+  guidance: string[];
+  executionMs: number | null;
+}
+
+export interface RuleTestRequest {
+  documentId?: string;
+  customText?: string;
+}
+
 export interface ProcessingState {
   phase: ProcessingPhase;
   label: string;
