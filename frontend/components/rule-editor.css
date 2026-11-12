@@ -261,6 +261,42 @@
   width: 100%;
 }
 
+.sandbox-upload {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sandbox-upload-button {
+  justify-content: center;
+  width: 100%;
+  white-space: normal;
+}
+
+.sandbox-upload small,
+.sandbox-upload-status {
+  color: var(--muted, #64748b);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.sandbox-load-error p,
+.sandbox-upload .field-error {
+  margin: 0;
+}
+
+.sandbox-load-error {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.sandbox-tab:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .sandbox-warning-banner {
   margin-top: 8px;
   padding: 10px 12px;

@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.analyses import check_content_length, enqueue_documents, rerun
-from app.api.deps import current_user, get_project_or_404, project_files_out, projects_out
+from app.api.deps import current_user, get_project_or_404, project_files_out, projects_out, require_regular_project
 from app.db import get_db
 from app.models import Analysis, Document, Project, User
 from app.schemas import ProjectCreate, ProjectOut, ProjectUpdate, RerunRequest, StartRequest, UploadError, UploadResult
@@ -22,7 +22,9 @@ router = APIRouter(prefix="/api/projects", tags=["Проекты"])
 DUPLICATE_TITLE = "Проект с таким названием уже существует."
 
 def _title_taken(db: Session, user: User, title: str, exclude: uuid.UUID | None = None) -> bool:
-    query = select(Project.id).where(Project.user_id == user.id, func.lower(Project.title) == title.lower())
+    query = select(Project.id).where(
+        Project.user_id == user.id, Project.is_rule_test.is_(False), func.lower(Project.title) == title.lower(),
+    )
     if exclude:
         query = query.where(Project.id != exclude)
     return db.scalar(query) is not None
@@ -35,8 +37,9 @@ def list_projects(
     q: str | None = Query(None, description="Поиск по названию проекта и именам файлов"),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    purpose: Literal["analysis", "rule_test"] = Query("analysis"),
 ):
-    query = select(Project).where(Project.user_id == user.id)
+    query = select(Project).where(Project.user_id == user.id, Project.is_rule_test.is_(purpose == "rule_test"))
     if q:
         pattern = f"%{q.strip()}%"
         in_files = select(Analysis.project_id).where(Analysis.original_filename.ilike(pattern))
@@ -67,6 +70,7 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User
 def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Depends(get_db),
                    user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
+    require_regular_project(project)
     changes = body.model_dump(exclude_unset=True, exclude_none=True)
     if "title" in changes and _title_taken(db, user, changes["title"], exclude=project.id):
         raise HTTPException(409, DUPLICATE_TITLE)
@@ -100,6 +104,7 @@ def upload_files(
     """Ошибка одного файла не отменяет загрузку остальных — как во фронтенде, ошибки возвращаются списком."""
     check_content_length(request)
     project = get_project_or_404(db, project_id, user)
+    require_regular_project(project)
     existing = {(a.original_filename, a.file_size) for a in project.analyses}
 
     accepted: list[Analysis] = []
@@ -151,6 +156,7 @@ def delete_project_file(project_id: uuid.UUID, analysis_id: uuid.UUID, db: Sessi
 def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
                   body: StartRequest | None = None):
     project = get_project_or_404(db, project_id, user)
+    require_regular_project(project)
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
     model = analysis_model_or_422(body.llm_model if body else None, mode)
     sensitivity = body.analysis_sensitivity if body else "balanced"
@@ -183,6 +189,7 @@ def start_project(project_id: uuid.UUID, db: Session = Depends(get_db), user: Us
 def rerun_project(project_id: uuid.UUID, body: RerunRequest | None = None, db: Session = Depends(get_db),
                   user: User = Depends(current_user)):
     project = get_project_or_404(db, project_id, user)
+    require_regular_project(project)
     documents = rerun(db, user, list(project.analyses), body.rule_ids if body else None,
                       body.analysis_mode if body else None, body.analysis_sensitivity if body else "balanced",
                       body.llm_model if body else None)

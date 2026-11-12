@@ -9,7 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.analyses import enqueue_documents
-from app.api.deps import counts_by_document, current_user, document_out, finding_out, get_document_or_404
+from app.api.deps import (
+    counts_by_document, current_user, document_out, finding_out, get_document_or_404, require_regular_project,
+)
 from app.db import get_db
 from app.models import Analysis, DocumentPage, RiskFinding, User, visible_findings
 from app.schemas import (
@@ -208,6 +210,7 @@ def document_findings(
 def reanalyze(document_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(current_user),
               body: RerunRequest | None = None):
     doc = get_document_or_404(db, document_id, user)
+    require_regular_project(doc.analysis.project if doc.analysis else None)
     mode = analysis_mode_or_422(body.analysis_mode if body else None)
     model = analysis_model_or_422(body.llm_model if body else None, mode)
     db.refresh(doc, with_for_update=True)

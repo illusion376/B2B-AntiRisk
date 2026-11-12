@@ -2,6 +2,7 @@
 
 CONVERTING -> OCR (извлечение текста / распознавание) -> VECTORIZING -> ANALYZING -> COMPLETED
 Каждый этап коммитит статус и прогресс сразу, чтобы фронтенд видел их через API.
+Тестовые документы завершают подготовку после VECTORIZING; правила проверяются отдельно в редакторе.
 """
 import asyncio
 import hashlib
@@ -103,15 +104,19 @@ def _log_completion(db: Session, analysis: Analysis) -> None:
         select(RiskFinding.severity, func.count()).where(RiskFinding.analysis_id == analysis.id)
         .group_by(RiskFinding.severity)
     ).all())
-    project_title = db.scalar(select(Project.title).where(Project.id == analysis.project_id)) if analysis.project_id else None
+    project = db.get(Project, analysis.project_id) if analysis.project_id else None
+    if project and project.is_rule_test:
+        action = "RULE_TEST_DOCUMENT_READY" if analysis.analysis_status == "COMPLETED" else "RULE_TEST_DOCUMENT_FAILED"
+    else:
+        action = "ANALYSIS_COMPLETED" if analysis.analysis_status == "COMPLETED" else "ANALYSIS_FAILED"
     db.add(AuditLog(
         user_id=analysis.user_id,
-        action="ANALYSIS_COMPLETED" if analysis.analysis_status == "COMPLETED" else "ANALYSIS_FAILED",
+        action=action,
         entity_type="analysis",
         entity_id=analysis.id,
         details={
             "file": analysis.original_filename,
-            "project": project_title,
+            "project": project.title if project else None,
             "project_id": str(analysis.project_id) if analysis.project_id else None,
             "rules": analysis.rules_checked,
             "critical": counts.get("RED", 0),
@@ -188,6 +193,8 @@ def analyze_document(document_id: uuid.UUID, rule_ids: list[str] | None = None, 
         doc = db.get(Document, document_id)
         if doc is None:
             raise ProcessingError("Документ не найден")
+        if doc.analysis and doc.analysis.project and doc.analysis.project.is_rule_test:
+            raise ProcessingError("Тестовые документы проверяются отдельным правилом в его настройках")
 
         mode = resolve_analysis_mode(doc.analysis_mode)
         doc.analysis_mode = mode
@@ -287,20 +294,23 @@ def process_document(document_id: uuid.UUID) -> None:
             return
         analysis = db.get(Analysis, doc.analysis_id)
         source, analysis_id, analysis_law = Path(doc.file_path), doc.analysis_id, analysis.law_type
+        prepare_only = bool(analysis.project and analysis.project.is_rule_test)
         owner = db.get(User, analysis.user_id) if analysis.user_id else None
         policy = user_quality_settings(owner)
         quality_threshold = policy.ocr_min_confidence
-        sla_ms = policy.processing_sla_seconds * 1000 if policy.processing_sla_seconds is not None else None
+        sla_ms = (policy.processing_sla_seconds * 1000
+                  if not prepare_only and policy.processing_sla_seconds is not None else None)
 
     try:
         set_document(document_id, status="CONVERTING", progress=5, error_message=None,
-                     processing_ms=None, processing_kind="full", processing_sla_ms=sla_ms,
+                     processing_ms=None, processing_kind=None if prepare_only else "full", processing_sla_ms=sla_ms,
                      quality_snapshot=None, ocr_confidence=None, ocr_pages=0, is_scanned=False)
-        with session_scope() as db:
-            doc = db.get(Document, document_id)
-            doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)
-            if doc.analysis_mode == "llm" and not doc.llm_model:
-                doc.llm_model = settings.llm_model.strip()
+        if not prepare_only:
+            with session_scope() as db:
+                doc = db.get(Document, document_id)
+                doc.analysis_mode = resolve_analysis_mode(doc.analysis_mode)
+                if doc.analysis_mode == "llm" and not doc.llm_model:
+                    doc.llm_model = settings.llm_model.strip()
         preview_target = storage.subdir(analysis_id, "preview") / f"{document_id}.pdf"
         try:
             preview = to_pdf(source, preview_target)
@@ -351,10 +361,17 @@ def process_document(document_id: uuid.UUID) -> None:
                 content=c.content,
                 embedding=v,
             ) for c, v in zip(chunks, vectors))
-            db.execute(update(Document).where(Document.id == document_id).values(status="ANALYZING", progress=70))
+            if prepare_only:
+                db.execute(update(Document).where(Document.id == document_id).values(
+                    status="COMPLETED", progress=100, risk_score=None,
+                    processing_ms=max(0, round((time.monotonic() - started) * 1000)),
+                ))
+            else:
+                db.execute(update(Document).where(Document.id == document_id).values(status="ANALYZING", progress=70))
             refresh_analysis(db, analysis_id)
 
-        analyze_document(document_id, started_at=started, processing_kind="full")
+        if not prepare_only:
+            analyze_document(document_id, started_at=started, processing_kind="full")
         log.info("Document %s processed in %.1fs", document_id, time.monotonic() - started)
     except (ProcessingError, AnalysisModeError) as exc:
         log.warning("Document %s failed: %s", document_id, exc)

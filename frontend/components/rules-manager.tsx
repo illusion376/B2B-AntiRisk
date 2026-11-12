@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -18,22 +18,21 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  UploadCloud,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { severityLabels } from '@/lib/labels';
 import type { CheckRule, RiskLevel, RuleDraft, RuleTestResult } from '@/lib/types';
 import { compareRulesByRisk, riskLabels } from '@/lib/rules';
+import {
+  isRuleTestDocumentReady, mergeRuleTestDocuments, RULE_TEST_UPLOAD_ACCEPT, ruleTestDocumentLabel,
+  ruleTestDocumentWarning, type RuleTestTargetDocument,
+} from '@/lib/rule-test-documents';
+import { useRuleTestDocuments } from './use-rule-test-documents';
 import { CustomSelect, IconButton, Modal } from './ui';
 import './rule-editor.css';
 
-export interface RuleTestTargetDocument {
-  id: string;
-  name: string;
-  projectTitle?: string;
-  status: string;
-  progress: number;
-  phase?: string;
-}
+export type { RuleTestTargetDocument } from '@/lib/rule-test-documents';
 
 type RulesManagerProps = {
   rules: CheckRule[];
@@ -259,13 +258,15 @@ export function RuleEditor({
   const valid = Boolean(draft.title.trim() && draft.category.trim());
 
   // Состояние песочницы тестирования
+  const testDocuments = useRuleTestDocuments();
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const availableDocuments = useMemo(() => mergeRuleTestDocuments(testDocuments.documents, documents), [testDocuments.documents, documents]);
   const [testSource, setTestSource] = useState<'document' | 'custom'>('document');
   const [selectedDocId, setSelectedDocId] = useState<string>(() => {
     if (initialDocumentId && documents.some(d => d.id === initialDocumentId)) {
       return initialDocumentId;
     }
-    const readyDoc = documents.find(d => d.status === 'COMPLETED' || d.phase === 'ready');
-    return readyDoc?.id || documents[0]?.id || '';
+    return '';
   });
   const [customSnippet, setCustomSnippet] = useState('');
   const [testing, setTesting] = useState(false);
@@ -273,13 +274,18 @@ export function RuleEditor({
   const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
   const [showFragments, setShowFragments] = useState(false);
 
-  const selectedDocInfo = useMemo(() => {
-    return documents.find(d => d.id === selectedDocId);
-  }, [documents, selectedDocId]);
+  useEffect(() => {
+    if (testDocuments.loading) return;
+    setSelectedDocId(previous => availableDocuments.some(document => document.id === previous)
+      ? previous : availableDocuments.find(isRuleTestDocumentReady)?.id || availableDocuments[0]?.id || '');
+  }, [availableDocuments, testDocuments.loading]);
 
-  const selectedDocReady = Boolean(
-    selectedDocInfo && (selectedDocInfo.status === 'COMPLETED' || selectedDocInfo.phase === 'ready')
-  );
+  const selectedDocInfo = useMemo(() => {
+    return availableDocuments.find(d => d.id === selectedDocId);
+  }, [availableDocuments, selectedDocId]);
+
+  const selectedDocReady = Boolean(selectedDocInfo && isRuleTestDocumentReady(selectedDocInfo));
+  const documentWarning = selectedDocInfo ? ruleTestDocumentWarning(selectedDocInfo) : null;
 
   const canTest = Boolean(
     draft.title.trim() &&
@@ -290,9 +296,16 @@ export function RuleEditor({
     if (!savingRef.current) onClose();
   }
 
+  async function uploadTestDocument(file: File) {
+    setTestResult(null);
+    setTestError(null);
+    const documentId = await testDocuments.upload(file);
+    if (documentId) setSelectedDocId(documentId);
+  }
+
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!valid || savingRef.current) return;
+    if (!valid || savingRef.current || testing || testDocuments.uploading) return;
     savingRef.current = true;
     setSaving(true);
     setError(null);
@@ -323,9 +336,7 @@ export function RuleEditor({
         return;
       }
       if (!selectedDocReady) {
-        setTestError(
-          `Документ «${selectedDocInfo?.name || ''}» ещё обрабатывается (${selectedDocInfo?.progress || 0}%). Дождитесь завершения обработки.`
-        );
+        setTestError(documentWarning || 'Документ пока не готов к проверке');
         return;
       }
     } else {
@@ -368,7 +379,7 @@ export function RuleEditor({
       onClose={close}
       closeDisabled={saving || testing}
     >
-      <form onSubmit={event => void save(event)} aria-busy={saving || testing}>
+      <form onSubmit={event => void save(event)} aria-busy={saving || testing || testDocuments.uploading}>
         <div className="rule-editor-layout">
           {/* Левая колонка: форма параметров правила */}
           <div className="rule-editor-form">
@@ -516,6 +527,7 @@ export function RuleEditor({
               <button
                 type="button"
                 className={`sandbox-tab ${testSource === 'document' ? 'active' : ''}`}
+                disabled={testing || testDocuments.uploading}
                 onClick={() => { setTestSource('document'); setTestError(null); }}
               >
                 <FileText size={14} /> На документе
@@ -523,6 +535,7 @@ export function RuleEditor({
               <button
                 type="button"
                 className={`sandbox-tab ${testSource === 'custom' ? 'active' : ''}`}
+                disabled={testing || testDocuments.uploading}
                 onClick={() => { setTestSource('custom'); setTestError(null); }}
               >
                 <FileSearch size={14} /> Вставить текст
@@ -534,12 +547,12 @@ export function RuleEditor({
                 <label className="form-label" htmlFor="sandbox-doc-select">
                   Документ для проверки
                 </label>
-                {documents.length > 0 ? (
+                {availableDocuments.length > 0 ? (
                   <>
                     <select
                       id="sandbox-doc-select"
                       className="form-select sandbox-doc-select"
-                      disabled={testing || saving}
+                      disabled={testing || saving || testDocuments.uploading}
                       value={selectedDocId}
                       onChange={e => {
                         setSelectedDocId(e.target.value);
@@ -547,31 +560,49 @@ export function RuleEditor({
                         setTestError(null);
                       }}
                     >
-                      {documents.map(doc => {
-                        const isReady = doc.status === 'COMPLETED' || doc.phase === 'ready';
-                        return (
-                          <option key={doc.id} value={doc.id}>
-                            {doc.projectTitle ? `${doc.projectTitle} / ` : ''}{doc.name} {isReady ? '✓' : `(обработка ${doc.progress}%)`}
-                          </option>
-                        );
-                      })}
+                      {!selectedDocId && <option value="">Выберите документ</option>}
+                      {availableDocuments.map(doc => <option key={doc.id} value={doc.id}>{ruleTestDocumentLabel(doc)}</option>)}
                     </select>
-                    {!selectedDocReady && (
+                    {documentWarning && (
                       <div className="sandbox-warning-banner" role="status">
                         <AlertCircle size={16} />
-                        <span>
-                          Выбранный документ ещё обрабатывается ({selectedDocInfo?.progress || 0}%).
-                          Дождитесь завершения анализа или выберите готовый документ.
-                        </span>
+                        <span>{documentWarning}</span>
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="sandbox-warning-banner">
+                  <div className="sandbox-warning-banner" role="status">
                     <AlertCircle size={16} />
-                    <span>В проектах пока нет загруженных документов. Переключитесь на вкладку «Вставить текст» для быстрой проверки на фрагменте договора.</span>
+                    <span>{testDocuments.loading ? 'Загружаем список тестовых документов…' : 'Выберите файл для проверки правила или вставьте текст договора.'}</span>
                   </div>
                 )}
+                <div className="sandbox-upload">
+                  <input
+                    ref={uploadInput} className="sr-only" type="file" tabIndex={-1}
+                    aria-label="Загрузить тестовый документ" accept={RULE_TEST_UPLOAD_ACCEPT}
+                    disabled={saving || testing || testDocuments.uploading}
+                    onChange={event => {
+                      const file = event.target.files?.[0];
+                      event.target.value = '';
+                      if (file) void uploadTestDocument(file);
+                    }}
+                  />
+                  <button
+                    type="button" className="secondary-button sandbox-upload-button"
+                    disabled={saving || testing || testDocuments.uploading}
+                    onClick={() => uploadInput.current?.click()}
+                  >
+                    {testDocuments.uploading ? <LoaderCircle size={16} className="spin" /> : <UploadCloud size={16} />}
+                    {testDocuments.uploading ? 'Загружаем документ…' : 'Загрузить тестовый документ'}
+                  </button>
+                  <small>Отдельный документ или изображение до 100 МБ. Тестовые файлы доступны здесь и не появляются в списке проектов.</small>
+                  {testDocuments.uploading && <span className="sandbox-upload-status" role="status">Сохраняем файл и запускаем подготовку текста</span>}
+                  {testDocuments.uploadError && <p className="field-error" role="alert">{testDocuments.uploadError}</p>}
+                  {testDocuments.loadError && <div className="sandbox-load-error" role="alert">
+                    <p>Не удалось обновить тестовые документы: {testDocuments.loadError}</p>
+                    <button type="button" className="secondary-button" onClick={testDocuments.refresh} disabled={testDocuments.uploading}>Повторить</button>
+                  </div>}
+                </div>
               </div>
             ) : (
               <div className="sandbox-input-group">
@@ -593,7 +624,7 @@ export function RuleEditor({
             <button
               type="button"
               className="primary-button sandbox-run-button"
-              disabled={testing || saving || !canTest}
+              disabled={testing || saving || testDocuments.uploading || !canTest}
               onClick={() => void runTest()}
             >
               {testing ? <LoaderCircle size={15} className="spin" /> : <Play size={14} />}
@@ -707,7 +738,7 @@ export function RuleEditor({
           <button type="button" className="secondary-button" disabled={saving || testing} onClick={close}>
             Отмена
           </button>
-          <button type="submit" className="primary-button" disabled={!valid || saving || testing}>
+          <button type="submit" className="primary-button" disabled={!valid || saving || testing || testDocuments.uploading}>
             {saving && <LoaderCircle size={16} className="spin" aria-hidden="true" />}
             {saving ? 'Сохранение…' : rule ? 'Сохранить изменения' : 'Добавить правило'}
           </button>

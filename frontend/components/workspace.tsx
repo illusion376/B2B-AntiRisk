@@ -172,6 +172,7 @@ export function Workspace() {
           status: doc.status,
           progress: doc.progress,
           phase: doc.phase,
+          errorMessage: doc.errorMessage,
         }))
       )
     );

@@ -49,7 +49,11 @@ export interface ProjectFileDto {
 }
 export interface ProjectDto {
   id: string; title: string; description: string; created_at: string; updated_at: string;
+  is_rule_test?: boolean;
   files: ProjectFileDto[]; processing_count: number; counts: SeverityCounts; traffic_light: TrafficLight | null;
+}
+export interface AnalysisDetailDto {
+  id: string; project_id: string | null; documents: DocumentDto[];
 }
 export interface FindingDto {
   id: string; number: number | null; document_id: string; rule_id: string | null;

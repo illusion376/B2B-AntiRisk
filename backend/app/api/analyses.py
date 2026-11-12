@@ -13,11 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import (
     analyses_out, counts_by_document, current_user, document_out, finding_out, get_analysis_or_404,
-    get_project_or_404,
+    get_project_or_404, require_regular_project,
 )
 from app.config import settings
 from app.db import SessionLocal, get_db
-from app.models import Analysis, Document, RiskFinding, User, visible_findings
+from app.models import Analysis, Document, Project, RiskFinding, User, visible_findings
 from app.schemas import AnalysisDetail, AnalysisPage, FindingOut, RerunRequest
 from app.services import uploads
 from app.services.analysis_modes import analysis_mode_or_422
@@ -59,11 +59,19 @@ def create_analysis(
     user: User = Depends(current_user),
     analysis_mode: str | None = Form(None),
     llm_model: str | None = Form(None, min_length=1, max_length=200),
+    purpose: Literal["analysis", "rule_test"] = Form("analysis"),
 ):
     check_content_length(request)
-    mode = analysis_mode_or_422(analysis_mode)
-    model = analysis_model_or_422(llm_model, mode)
-    project = get_project_or_404(db, project_id, user) if project_id else None
+    if purpose == "rule_test":
+        if project_id is not None:
+            raise HTTPException(422, "Проект для тестового документа выбирается автоматически")
+        project = uploads.get_rule_test_project(db, user)
+        mode, model = None, None
+    else:
+        mode = analysis_mode_or_422(analysis_mode)
+        model = analysis_model_or_422(llm_model, mode)
+        project = get_project_or_404(db, project_id, user) if project_id else None
+        require_regular_project(project)
     try:
         analysis, to_process = uploads.create_analysis(db, user, file, law_type, project, title,
                                                        analysis_mode=mode, llm_model=model)
@@ -124,7 +132,9 @@ def list_analyses(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    query = select(Analysis).where(Analysis.user_id == user.id)
+    query = select(Analysis).where(
+        Analysis.user_id == user.id, ~Analysis.project.has(Project.is_rule_test.is_(True)),
+    )
     if q:
         pattern = f"%{q}%"
         query = query.where(Analysis.title.ilike(pattern) | Analysis.original_filename.ilike(pattern))
@@ -211,6 +221,8 @@ def rerun_analysis(
 
 def rerun(db: Session, user: User, analyses: list[Analysis], rule_ids: list[str] | None,
           analysis_mode: str | None = None, analysis_sensitivity: str = "balanced", llm_model: str | None = None) -> int:
+    for analysis in analyses:
+        require_regular_project(analysis.project)
     mode = analysis_mode_or_422(analysis_mode)
     model = analysis_model_or_422(llm_model, mode)
     if any(a.analysis_status not in TERMINAL for a in analyses):

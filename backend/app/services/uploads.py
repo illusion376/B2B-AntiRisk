@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -46,6 +47,16 @@ def _check_magic(path: Path, ext: str) -> None:
     if magic not in window:
         raise UploadRejected(400, f"Содержимое файла не соответствует расширению {ext}")
 
+def get_rule_test_project(db: Session, user: User) -> Project:
+    """Create one private sandbox per owner, including concurrent first uploads."""
+    db.scalar(select(User.id).where(User.id == user.id).with_for_update())
+    project = db.scalar(select(Project).where(Project.user_id == user.id, Project.is_rule_test.is_(True)))
+    if project is None:
+        project = Project(user_id=user.id, title="Тестовые документы", description="", is_rule_test=True)
+        db.add(project)
+        db.flush()
+    return project
+
 def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str = "AUTO",
                     project: Project | None = None, title: str | None = None,
                     *, defer_processing: bool = False, analysis_mode: str | None = None,
@@ -56,13 +67,18 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     остаются UPLOADED до явного запуска пользователем, иначе готовы к постановке в очередь.
     """
 
-    mode = resolve_analysis_mode(analysis_mode) if not defer_processing or analysis_mode is not None else None
+    prepare_only = bool(project and project.is_rule_test)
+    mode = (resolve_analysis_mode(analysis_mode)
+            if not prepare_only and (not defer_processing or analysis_mode is not None) else None)
     model = (llm_model or settings.llm_model.strip()) if mode == "llm" else None
     original_name = storage.safe_filename(upload.filename or "document")
     ext = storage.extension(original_name)
+    if prepare_only and ext in storage.ARCHIVES:
+        raise UploadRejected(415, "Для проверки правила загрузите отдельный документ, а не ZIP-архив")
     if ext not in storage.SUPPORTED_DOCUMENTS | storage.ARCHIVES:
+        formats = "PDF, TXT, DOCX, DOC, RTF, ODT или изображение" if prepare_only else "PDF, TXT, ZIP, DOCX, DOC, RTF, ODT или изображение"
         raise UploadRejected(415, f"Формат {ext or 'без расширения'} не поддерживается. "
-                                  "Загрузите PDF, TXT, ZIP, DOCX, DOC, RTF, ODT или изображение")
+                                  f"Загрузите {formats}")
 
     initial_status = "UPLOADED" if defer_processing else "QUEUED"
     analysis = Analysis(
@@ -130,7 +146,10 @@ def create_analysis(db: Session, user: User, upload: UploadFile, law_type: str =
     db.add(analysis)
     db.flush()
     db.add_all(documents)
-    log_action(db, user.id, "ANALYSIS_CREATED", "analysis", analysis.id, {
+    if project:
+        project.updated_at = func.now()
+    action = "RULE_TEST_DOCUMENT_UPLOADED" if prepare_only else "ANALYSIS_CREATED"
+    log_action(db, user.id, action, "analysis", analysis.id, {
         "file": original_name, "size": analysis.file_size, "documents": len(documents),
         "project": project.title if project else None, "project_id": str(project.id) if project else None,
         "analysis_mode": mode, "llm_model": model,

@@ -163,6 +163,7 @@ class ProjectOut(BaseModel):
     id: uuid.UUID
     title: str
     description: str
+    is_rule_test: bool = False
     created_at: datetime
     updated_at: datetime
     files: list[ProjectFileOut]

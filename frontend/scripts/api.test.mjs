@@ -102,6 +102,45 @@ test('multipart upload sends actual file bytes and preserves partial upload fail
   assert.deepEqual(result.errors, [{ name: 'broken.pdf', detail: 'Файл повреждён' }]);
 });
 
+test('rule-test projects use an explicit scope without changing the main project listing', async t => {
+  const controller = new AbortController();
+  const urls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    urls.push(url);
+    assert.equal(options.signal, controller.signal);
+    return response([{ ...project, is_rule_test: url.includes('purpose=rule_test') }]);
+  });
+  assert.equal((await api.getProjects({ signal: controller.signal }))[0].isRuleTest, false);
+  assert.equal((await api.getProjects({ purpose: 'rule_test', signal: controller.signal }))[0].isRuleTest, true);
+  assert.deepEqual(urls, ['/api/projects', '/api/projects?purpose=rule_test']);
+});
+
+test('rule-test upload sends one real file through analyses with its purpose and preserves cancellation', async t => {
+  const controller = new AbortController();
+  const bytes = new File(['contract content'], 'Договор.txt', { type: 'text/plain' });
+  const uploaded = { ...document, phase: 'queued', status: 'QUEUED', progress: 0 };
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/analyses');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.signal, controller.signal);
+    assert.equal(new Headers(options.headers).get('Content-Type'), null);
+    assert.ok(options.body instanceof FormData);
+    assert.deepEqual([...options.body.keys()], ['file', 'purpose']);
+    assert.equal(options.body.get('purpose'), 'rule_test');
+    assert.equal(await options.body.get('file').text(), 'contract content');
+    return response({ id: 'analysis-uuid', project_id: 'test-project', documents: [uploaded] });
+  });
+  const result = await api.uploadRuleTestDocument(bytes, { signal: controller.signal });
+  assert.equal(result.projectId, 'test-project');
+  assert.equal(result.documents[0].id, document.id);
+  assert.equal(result.documents[0].phase, 'queued');
+});
+
+test('rule-test upload does not report success without the hidden project identifier', async t => {
+  t.mock.method(globalThis, 'fetch', async () => response({ id: 'analysis-uuid', project_id: null, documents: [document] }));
+  await assert.rejects(api.uploadRuleTestDocument(new File(['contract'], 'contract.txt')), /Формат данных/);
+});
+
 test('HTTP validation errors expose useful details and a status for the UI', async t => {
   t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ detail: [{ loc: ['body', 'title'], msg: 'String should have at least 1 character' }] }), { status: 422 }));
   await assert.rejects(api.createProject({ title: '', description: '' }), error => {

@@ -4,6 +4,7 @@
 и задание для ИИ при их отсутствии строятся из названия и описания.
 """
 import asyncio
+import logging
 import time
 import uuid
 from dataclasses import fields
@@ -33,6 +34,7 @@ from app.services.pipeline import ensure_rule_embeddings
 from app.services.retrieval import RetrievedChunk, hybrid_search
 from app.vocab import SEVERITY_FROM_API, SEVERITY_TO_API
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/rules", tags=["Правила проверки"])
 
 def default_query(title: str, description: str) -> str:

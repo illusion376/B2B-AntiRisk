@@ -52,6 +52,10 @@ def get_project_or_404(db: Session, project_id: uuid.UUID, user: User) -> Projec
         raise HTTPException(404, "Проект не найден")
     return project
 
+def require_regular_project(project: Project | None) -> None:
+    if project and project.is_rule_test:
+        raise HTTPException(409, "Тестовые документы предназначены для проверки отдельного правила в его настройках")
+
 def get_analysis_or_404(db: Session, analysis_id: uuid.UUID, user: User) -> Analysis:
     analysis = db.get(Analysis, analysis_id)
     if analysis is None or not _owned(analysis.user_id, user):
@@ -194,6 +198,7 @@ def projects_out(db: Session, projects: list[Project]) -> list[ProjectOut]:
             id=project.id,
             title=project.title,
             description=project.description,
+            is_rule_test=bool(project.is_rule_test),
             created_at=project.created_at,
             updated_at=project.updated_at,
             files=files,

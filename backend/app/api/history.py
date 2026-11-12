@@ -40,6 +40,12 @@ def describe(action: str, d: dict) -> tuple[str, str]:
             count = d.get("documents") or 1
             documents = f"{count} {_plural(count, 'документ', 'документа', 'документов')} в архиве" if count > 1 else None
             return ("Файл добавлен в проект" if project else "Документ добавлен"), _join(project, file, documents)
+        case "RULE_TEST_DOCUMENT_UPLOADED":
+            return "Тестовый документ загружен", file or ""
+        case "RULE_TEST_DOCUMENT_READY":
+            return "Документ готов к проверке правила", file or ""
+        case "RULE_TEST_DOCUMENT_FAILED":
+            return "Не удалось подготовить тестовый документ", _join(file, d.get("error"))
         case "ANALYSIS_STARTED":
             return "Анализ запущен", _join(project, file)
         case "ANALYSIS_COMPLETED":

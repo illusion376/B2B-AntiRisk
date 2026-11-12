@@ -176,6 +176,7 @@ export interface Project {
   id: string;
   title: string;
   description: string;
+  isRuleTest: boolean;
   files: ProjectFile[];
   createdAt: number;
   updatedAt: number;
@@ -185,6 +186,7 @@ export interface Project {
 }
 export type ProjectDraft = Pick<Project, 'title' | 'description'>;
 export interface UploadResult { files: ProjectFile[]; errors: { name: string; detail: string }[] }
+export interface RuleTestUploadResult { projectId: string; documents: DocumentInfo[] }
 
 export interface Highlight { page: number; rects: number[][] }
 export interface Finding {

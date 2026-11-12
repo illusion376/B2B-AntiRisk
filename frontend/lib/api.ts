@@ -1,10 +1,10 @@
 import type {
-  AnalysisModelsDto, AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
+  AnalysisDetailDto, AnalysisModelsDto, AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
   ProjectFileDto, RuleDto, RuleTestFindingDto, RuleTestFragmentDto, RuleTestResultDto, UploadDto, UserDto,
 } from './api-types';
 import type {
   AnalysisMode, AnalysisModels, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
-  ProjectDraft, ProjectFile, QualitySettings, ReportMode, ReviewStatus, RuleDraft, RuleTestFinding, RuleTestFragment, RuleTestRequest, RuleTestResult, SearchResponse, UploadResult, User, UserProfileDraft,
+  ProjectDraft, ProjectFile, QualitySettings, ReportMode, ReviewStatus, RuleDraft, RuleTestFinding, RuleTestFragment, RuleTestRequest, RuleTestResult, RuleTestUploadResult, SearchResponse, UploadResult, User, UserProfileDraft,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 import { mapDocumentQuality, mapPageQuality } from './document-quality';
@@ -169,6 +169,7 @@ export function mapProjectFile(value: ProjectFileDto): ProjectFile {
 export function mapProject(value: ProjectDto): Project {
   return {
     id: id(value.id), title: value.title, description: value.description, files: value.files.map(mapProjectFile),
+    isRuleTest: value.is_rule_test === true,
     createdAt: timestamp(value.created_at), updatedAt: timestamp(value.updated_at), processingCount: value.processing_count,
     counts: mapCounts(value.counts), trafficLight: value.traffic_light,
   };
@@ -289,7 +290,10 @@ export const api = {
   },
   getAnalysisModes: (options: RequestOptions = {}): Promise<AnalysisModes> => request('/analysis-modes', mapAnalysisModes, options),
   getAnalysisModels: (options: RequestOptions = {}): Promise<AnalysisModels> => request('/analysis-models', mapAnalysisModels, options),
-  getProjects: (options: RequestOptions = {}): Promise<Project[]> => request<ProjectDto[], Project[]>('/projects', values => values.map(mapProject), options),
+  getProjects: (options: RequestOptions & { purpose?: 'rule_test' } = {}): Promise<Project[]> => request<ProjectDto[], Project[]>(
+    `/projects${options.purpose ? `?${new URLSearchParams({ purpose: options.purpose })}` : ''}`,
+    values => values.map(mapProject), { signal: options.signal },
+  ),
   getProject: (projectId: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, options),
   createProject: (draft: ProjectDraft, options: RequestOptions = {}): Promise<Project> => request('/projects', mapProject, { ...options, method: 'POST', ...json(draft) }),
   renameProject: (projectId: string, title: string, options: RequestOptions = {}): Promise<Project> => request(`/projects/${segment(projectId)}`, mapProject, { ...options, method: 'PATCH', ...json({ title: title.trim() }) }),
@@ -300,6 +304,15 @@ export const api = {
     for (const file of files) body.append('files', file);
     body.append('law_type', options.lawType ?? 'AUTO');
     return request<UploadDto, UploadResult>(`/projects/${segment(projectId)}/files`, value => ({ files: value.files.map(mapProjectFile), errors: value.errors }), { signal: options.signal, method: 'POST', body });
+  },
+  uploadRuleTestDocument: (file: File, options: RequestOptions = {}): Promise<RuleTestUploadResult> => {
+    const body = new FormData();
+    body.append('file', file);
+    body.append('purpose', 'rule_test');
+    return request<AnalysisDetailDto, RuleTestUploadResult>('/analyses', value => {
+      if (value.project_id === null) throw new Error('Missing test project');
+      return { projectId: id(value.project_id), documents: value.documents.map(mapDocument) };
+    }, { signal: options.signal, method: 'POST', body });
   },
   getDocument: (documentId: string, options: RequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}`, mapDocument, options),
   getPage: (documentId: string, page: number, options: RequestOptions = {}): Promise<PageContent> => request(`/documents/${segment(documentId)}/pages/${page}`, mapPage, options),
