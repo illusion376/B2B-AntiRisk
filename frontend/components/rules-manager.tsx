@@ -5,7 +5,6 @@ import {
   AlertCircle,
   AlertTriangle,
   BookOpenCheck,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   FileSearch,
@@ -272,6 +271,7 @@ export function RuleEditor({
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<RuleTestResult | null>(null);
+  const noMatchingFragments = testResult?.verdict === 'NOT_FOUND' && testResult.fragments.length === 0;
   const [showFragments, setShowFragments] = useState(false);
 
   useEffect(() => {
@@ -640,7 +640,7 @@ export function RuleEditor({
                   <span>
                     {testResult.findings.length > 0
                       ? `Найдено замечаний: ${testResult.findings.length}`
-                      : 'Замечаний не выявлено'}
+                      : noMatchingFragments ? 'Совпадений: 0' : 'Нет подтверждённого вывода'}
                   </span>
                   {testResult.executionMs !== null && (
                     <span className="sandbox-execution-time">
@@ -680,9 +680,8 @@ export function RuleEditor({
                   </div>
                 ) : (
                   <div className="sandbox-empty-results">
-                    <CheckCircle2 size={24} color="#16a34a" />
-                    <h4>Замечаний по правилу не обнаружено</h4>
-                    <p>Система не нашла кабальных или незаконных условий по заданной формулировке.</p>
+                    <FileSearch size={24} aria-hidden="true" />
+                    <h4>{noMatchingFragments ? 'Релевантные фрагменты не найдены' : 'Нет подтверждённого вывода по правилу'}</h4>
                   </div>
                 )}
 
@@ -719,7 +718,6 @@ export function RuleEditor({
                           <div key={i} className="sandbox-fragment-item">
                             <div className="sandbox-fragment-item-header">
                               <span>стр. {fr.page} {fr.clauseTitle ? `· ${fr.clauseTitle}` : ''}</span>
-                              <span>релевантность: {Math.round(fr.score * 100)}%</span>
                             </div>
                             <div className="sandbox-fragment-item-content">{fr.content}</div>
                           </div>

@@ -107,7 +107,12 @@ def apply_mmr(
 _HYBRID_SQL = text("""
 WITH q AS (
     SELECT CAST(:embedding AS vector) AS emb,
-           NULLIF(replace(plainto_tsquery('russian', :query)::text, '&', '|'), '')::tsquery AS tsq
+           NULLIF(replace(plainto_tsquery('russian', :query)::text, '&', '|'), '')::tsquery AS tsq,
+           CASE WHEN :rule_test THEN plainto_tsquery('russian', :rule_title) END AS title_query,
+           CASE WHEN :rule_test THEN ARRAY(
+               SELECT term FROM unnest(tsvector_to_array(to_tsvector('russian', :query))) AS term
+               WHERE term ~ '[[:alpha:]]'
+           ) END AS query_terms
 ),
 vec AS (
     SELECT c.id,
@@ -123,6 +128,16 @@ fts AS (
     SELECT c.id, row_number() OVER (ORDER BY ts_rank_cd(c.tsv, q.tsq) DESC) AS r
     FROM document_chunks c, q
     WHERE c.document_id = :document_id AND q.tsq IS NOT NULL AND c.tsv @@ q.tsq
+      AND (
+          NOT :rule_test
+          OR (numnode(q.title_query) > 1 AND c.tsv @@ q.title_query)
+          OR (
+              cardinality(q.query_terms) > 0
+              AND (SELECT count(*) FROM unnest(q.query_terms) AS term
+                   WHERE term = ANY(tsvector_to_array(c.tsv)))
+                  >= LEAST(cardinality(q.query_terms), GREATEST(2, (cardinality(q.query_terms) + 1) / 2))
+          )
+      )
     ORDER BY ts_rank_cd(c.tsv, q.tsq) DESC
     LIMIT :candidates
 )
@@ -146,7 +161,11 @@ def hybrid_search(
     embedding: list[float],
     top_k: int,
     max_distance: float | None = None,
+    *,
+    rule_test_title: str | None = None,
 ) -> list[RetrievedChunk]:
+    # В тесте правила одного слова из длинного запроса недостаточно.
+    # Отбор по терминам выполняется до ранжирования и LIMIT.
     if max_distance is None:
         max_distance = settings.retrieval_max_distance
     rows = db.execute(_HYBRID_SQL, {
@@ -156,6 +175,8 @@ def hybrid_search(
         "candidates": max(top_k * 3, 12),
         "top_k": top_k,
         "max_distance": max_distance,
+        "rule_test": rule_test_title is not None,
+        "rule_title": rule_test_title or "",
     }).mappings().all()
     candidate_chunks = [
         RetrievedChunk(

@@ -294,8 +294,9 @@ def test_ready_test_document_works_with_existing_preview_and_does_not_persist_th
     workspace = rule_workspace
     data, doc_id = prepared(workspace)
 
-    def search(db, requested_id, *_args):
+    def search(db, requested_id, *_args, rule_test_title, max_distance):
         assert requested_id == doc_id
+        assert rule_test_title == "Срок оплаты" and max_distance <= settings.retrieval_max_distance
         return [RetrievedChunk(id=chunk.id, chunk_index=chunk.chunk_index, page_number=chunk.page_number,
                                page_end=chunk.page_end, clause_title=chunk.clause_title, content=chunk.content,
                                score=1.0, fts_hit=True)
