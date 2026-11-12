@@ -5,6 +5,8 @@ every page of every document. Confidence applies to OCR only. Native text does
 not receive an invented 100% score; old runs without a snapshot remain unknown.
 """
 import math
+import re
+from decimal import Decimal, ROUND_HALF_UP
 from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
@@ -24,6 +26,10 @@ _REASONS = {
 }
 _MANUAL_REVIEW = "Результат требует ручной проверки"
 _TERMINAL = {"COMPLETED", "FAILED"}
+_PERCENT_NUMBER = r"\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?"
+_LOW_CONFIDENCE_PREFIX = re.compile(
+    rf"^Уверенность OCR {_PERCENT_NUMBER}% ниже порога {_PERCENT_NUMBER}%"
+)
 
 
 def user_quality_settings(user: "User | None") -> QualitySettings:
@@ -45,6 +51,17 @@ def valid_confidence(value: float | None) -> float | None:
     if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and 0 <= value <= 100:
         return float(value)
     return None
+
+
+def format_quality_percent(value: float) -> str:
+    """Round display text only, consistently with the UI's decimal formatting."""
+    rounded = Decimal(str(value)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{rounded:f}".rstrip("0").rstrip(".").replace(".", ",") + "%"
+
+
+def _low_confidence_message(confidence: float, threshold: float) -> str:
+    return (f"Уверенность OCR {format_quality_percent(confidence)} ниже порога "
+            f"{format_quality_percent(threshold)}")
 
 
 def build_quality_snapshot(pages: list["PageContent"], threshold: float) -> dict:
@@ -69,7 +86,7 @@ def build_quality_snapshot(pages: list["PageContent"], threshold: float) -> dict
             if confidence < threshold:
                 reason = "low_confidence"
         if reason:
-            message = (f"Уверенность OCR {confidence:g}% ниже порога {threshold:g}%"
+            message = (_low_confidence_message(confidence, threshold)
                        if reason == "low_confidence" else _REASONS.get(reason, _REASONS["confidence_missing"]))
             issues.append(PageQualityIssue(
                 page=page.page_number, status="low" if reason == "low_confidence" else "unknown",
@@ -110,6 +127,14 @@ def _snapshot_quality(doc: "Document") -> DocumentQuality | None:
             or quality.measured_ocr_pages > quality.ocr_pages
             or any(p.page > quality.total_pages for p in quality.review_pages)):
         return None
+    # Old snapshots contain higher-precision display strings. Refresh their known
+    # numeric prefix without changing saved measurements, diagnoses, or extra text.
+    for issue in quality.review_pages:
+        if issue.reason == "low_confidence" and issue.confidence is not None:
+            issue.warning = _LOW_CONFIDENCE_PREFIX.sub(
+                _low_confidence_message(issue.confidence, quality.confidence_threshold),
+                issue.warning, count=1,
+            )
     return quality
 
 

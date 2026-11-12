@@ -13,7 +13,7 @@ from app.schemas import DocumentQuality
 from app.services import reports
 from app.services.reports.data import ReportData, ReportDocument
 from app.services.reports.docx_builder import BUILDERS
-from app.services.reports.quality import duration_label, quality_rows
+from app.services.reports.quality import duration_label, quality_page_rows, quality_rows
 
 
 def _quality(status="low", **changes):
@@ -143,6 +143,23 @@ def test_report_does_not_invent_quality_or_sla_success(quality, required, forbid
     text = "\n".join(value for _, value in quality_rows(quality))
     assert required in text
     assert forbidden not in text
+
+
+def test_report_percentages_use_tenths_without_changing_numeric_quality():
+    quality = _quality(
+        confidence=92.2857, confidence_threshold=95.5555,
+        total_pages=3, native_pages=2, ocr_percent=33.3333, native_percent=66.6667,
+        review_pages=[dict(page=2, status="low", confidence=92.2857, reason="low_confidence",
+                           warning="Низкая уверенность OCR. Результат требует ручной проверки")],
+    )
+    before = quality.model_dump(mode="json")
+
+    rows = dict(quality_rows(quality))
+    assert "92,3%" in rows["Оценка распознавания"]
+    assert rows["Порог уверенности OCR"] == "95,6%"
+    assert rows["Источник текста"] == "Сканы / OCR: 1 из 3 (33,3%). Текстовый слой: 2 из 3 (66,7%)"
+    assert "Уверенность OCR: 92,3%" in quality_page_rows(quality)[0][1]
+    assert quality.model_dump(mode="json") == before
 
 
 @pytest.mark.parametrize("milliseconds,expected", [(0, "0 мс"), (1, "1 мс"), (1000, "1 с"),

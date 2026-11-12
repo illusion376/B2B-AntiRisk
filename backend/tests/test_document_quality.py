@@ -1,6 +1,7 @@
 """Quality describes measured extraction and the actual run, never inferred accuracy."""
 import os
 import uuid
+from copy import deepcopy
 
 import pytest
 from pydantic import ValidationError
@@ -90,6 +91,50 @@ def test_threshold_is_inclusive_and_zero_confidence_is_a_measurement(confidence,
     assert quality.confidence == confidence
     assert quality.measured_ocr_pages == 1
     assert quality.manual_review_required == (status == "low")
+
+
+@pytest.mark.parametrize("confidence,threshold,confidence_label,threshold_label", [
+    (92.2857, 95, "92,3%", "95%"),
+    (92.25, 95, "92,3%", "95%"),
+    (94.96, 95, "95%", "95%"),
+    (95.55, 95.56, "95,6%", "95,6%"),
+    (0, 95, "0%", "95%"),
+])
+def test_warning_rounds_percentages_only_after_quality_is_assessed(
+        confidence, threshold, confidence_label, threshold_label):
+    page = extracted_page(1, ocr=True, confidence=confidence)
+    doc = document(pages=[page], threshold=threshold)
+    quality = document_quality(doc)
+    details = page_quality(doc, stored_page(page))
+
+    assert quality.status == details.status == "low"
+    assert quality.manual_review_required and details.manual_review_required
+    assert quality.confidence == details.confidence == confidence
+    assert quality.confidence_threshold == details.confidence_threshold == threshold
+    expected = (f"Уверенность OCR {confidence_label} ниже порога {threshold_label}. "
+                "Результат требует ручной проверки")
+    assert quality.review_pages[0].warning == details.warning == expected
+    assert doc.quality_snapshot["confidence"] == confidence
+    assert doc.quality_snapshot["confidence_threshold"] == threshold
+
+
+@pytest.mark.parametrize("warning,expected", [
+    ("Уверенность OCR 92.2857% ниже порога 95.5555%. Результат требует ручной проверки. Сверьте печать.",
+     "Уверенность OCR 92,3% ниже порога 95,6%. Результат требует ручной проверки. Сверьте печать."),
+    ("Уверенность OCR 92,2857% ниже порога 95,5555%. Результат требует ручной проверки",
+     "Уверенность OCR 92,3% ниже порога 95,6%. Результат требует ручной проверки"),
+    ("Низкая уверенность OCR. Сверьте печать на странице.",
+     "Низкая уверенность OCR. Сверьте печать на странице."),
+])
+def test_saved_warnings_are_formatted_without_rewriting_the_snapshot_or_diagnostics(warning, expected):
+    page = extracted_page(1, ocr=True, confidence=92.2857)
+    doc = document(pages=[page], threshold=95.5555)
+    doc.quality_snapshot["review_pages"][0]["warning"] = warning
+    before = deepcopy(doc.quality_snapshot)
+
+    assert document_quality(doc).review_pages[0].warning == expected
+    assert page_quality(doc, stored_page(page)).warning == expected
+    assert doc.quality_snapshot == before
 
 
 @pytest.mark.parametrize("confidence", [None, float("nan"), float("inf"), float("-inf"), -1, 101, True])

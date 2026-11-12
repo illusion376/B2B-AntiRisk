@@ -1,21 +1,51 @@
-.document-review-metrics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; flex-shrink: 0; margin: 0; padding: 12px 10px; border-bottom: 1px solid #e8e8e8; background: #fff; color: #334155; }
-.quality-metric { min-width: 0; }
-.quality-metric dt { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; color: #64748b; font-size: 10px; }
-.quality-metric dt svg { flex-shrink: 0; }
-.quality-metric dd { margin: 0; font-size: 17px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
-.quality-metric dd.quality-caption { margin-top: 4px; font-size: 10px; line-height: 1.45; font-weight: 400; color: #64748b; }
-.quality-needs-review .quality-confidence-value { color: #9a3412; }
-.quality-metric dd.quality-review-warning { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; padding: 6px 8px; border-radius: 4px; color: #87400e; background: #fff4e2; font-size: 10px; font-weight: 500; line-height: 1.45; }
-.quality-review-warning svg { flex-shrink: 0; margin-top: 1px; }
-.quality-page-count { display: inline-block; font-size: 10px; color: #64748b; font-weight: 400; }
-.quality-metric dd.quality-source-bar { height: 4px; border-radius: 3px; background: #cbd7e5; margin-top: 7px; overflow: hidden; }
-.quality-source-bar > span { display: block; height: 100%; background: #6d7ea1; }
+.document-review-metrics { flex-shrink: 0; min-width: 0; padding: 16px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.quality-disclosure { min-width: 0; border: 1px solid #dce3ec; border-radius: 8px; overflow: hidden; background: var(--surface); }
+.quality-disclosure-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 64px; padding: 13px 15px; background: #f8fafc; cursor: pointer; list-style: none; }
+.quality-disclosure-summary::-webkit-details-marker { display: none; }
+.quality-disclosure-summary::marker { content: ''; }
+.quality-disclosure-summary:hover { background: #f2f5f8; }
+.quality-disclosure-summary:focus-visible { outline: 2px solid #64748b; outline-offset: -3px; border-radius: 6px; }
+.quality-disclosure-icon { display: inline-flex; align-items: center; color: #64748b; }
+.quality-disclosure-heading { min-width: 0; }
+.quality-disclosure-heading strong { display: block; font-size: 12px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.quality-disclosure-heading > span { display: block; margin-top: 3px; font-size: 10px; line-height: 1.4; color: var(--muted); }
+.quality-disclosure-value { font-size: 22px; font-weight: 700; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quality-disclosure-value.is-label { max-width: 100px; white-space: normal; overflow-wrap: anywhere; font-size: 13px; }
+.quality-disclosure-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.quality-disclosure .quality-label-open { display: none; }
+.quality-disclosure[open] .quality-label-open { display: inline; }
+.quality-disclosure[open] .quality-label-closed { display: none; }
+.quality-disclosure[open] .quality-disclosure-toggle svg { transform: rotate(180deg); }
+.quality-disclosure.needs-review .quality-disclosure-icon, .quality-disclosure.needs-review .quality-disclosure-value { color: #9a3412; }
+.quality-disclosure.needs-review:not([open]) { border-color: #efd6ae; }
+.quality-disclosure.needs-review:not([open]) .quality-disclosure-summary { background: #fff4e2; }
+.quality-disclosure.needs-review:not([open]) .quality-disclosure-summary:hover { background: #ffedcf; }
+.quality-disclosure-content { padding: 15px; }
+.quality-disclosure-content h3 { margin: 0; font-size: 11px; font-weight: 650; line-height: 1.5; }
+.quality-assessment-warning { margin: 8px 0 0; padding: 9px 10px; border-radius: 5px; background: #fff4e2; color: #87400e; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.quality-assessment-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.quality-composition { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--line); }
+.quality-composition-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.quality-composition-heading > span { flex-shrink: 0; font-size: 11px; color: var(--muted); }
+.quality-composition-bar { height: 6px; margin-top: 11px; border-radius: 3px; overflow: hidden; background: #cbd7e5; }
+.quality-composition-bar > span { display: block; height: 100%; background: #6d7ea1; }
+.quality-composition-legend { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 16px; margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.quality-composition-legend > span:last-child { margin-left: auto; text-align: right; }
 .live-document-workspace .thumbnail.quality-review .live-thumbnail-paper { border: 2px solid #c88929; }
 .thumbnail-quality-mark { display: inline-flex; vertical-align: middle; margin-left: 4px; color: #9a5b11; }
 .document-quality-badges { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 7px; margin-top: 5px; }
 .document-quality-badges > span { display: inline-flex; align-items: center; gap: 4px; max-width: 290px; border-radius: 4px; padding: 3px 5px; background: #f2f5f8; font-size: 10px; line-height: 1.35; color: #556274; }
 .document-quality-badges > .quality-list-warning { color: #87400e; background: #fff4e2; }
 @media (max-width: 720px) {
-  .document-review-metrics { gap: 12px; padding: 10px; }
-  .quality-metric dd { font-size: 15px; }
+  .document-review-metrics { padding: 10px; }
+  .quality-disclosure-summary { gap: 7px; padding: 11px; }
+  .quality-disclosure-heading strong { font-size: 11px; }
+  .quality-disclosure-value { font-size: 19px; }
+  .quality-disclosure-value.is-label { max-width: 80px; font-size: 12px; }
+  .quality-disclosure-content { padding: 12px; }
+}
+@media (max-width: 480px) {
+  .quality-disclosure-summary { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .quality-disclosure-toggle { grid-column: 2 / -1; justify-self: end; }
+  .quality-composition-legend > span:last-child { margin-left: 0; text-align: left; }
 }

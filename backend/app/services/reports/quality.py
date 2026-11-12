@@ -1,6 +1,7 @@
 """Одинаковые пояснения метрик качества во всех форматах отчёта."""
 
 from app.schemas import DocumentQuality
+from app.services.document_quality import format_quality_percent
 
 QUALITY_TITLE = "Качество проверки документа"
 QUALITY_LIMITATION = (
@@ -34,7 +35,7 @@ def quality_warning(quality: DocumentQuality) -> str | None:
 
 def quality_rows(quality: DocumentQuality) -> list[tuple[str, str]]:
     """Возвращает человеческие подписи, не пересчитывая серверные пороги и статусы."""
-    confidence = f"{_number(quality.confidence)}%" if quality.confidence is not None else "Не измерена"
+    confidence = format_quality_percent(quality.confidence) if quality.confidence is not None else "Не измерена"
     if quality.status == "native":
         assessment = "Текстовый слой — уверенность OCR не измерялась"
     elif quality.status == "low":
@@ -49,9 +50,9 @@ def quality_rows(quality: DocumentQuality) -> list[tuple[str, str]]:
     else:
         sources = (
             f"Сканы / OCR: {quality.ocr_pages} из {quality.total_pages} "
-            f"({_number(quality.ocr_percent)}%). "
+            f"({format_quality_percent(quality.ocr_percent)}). "
             f"Текстовый слой: {quality.native_pages} из {quality.total_pages} "
-            f"({_number(quality.native_percent)}%)"
+            f"({format_quality_percent(quality.native_percent)})"
         )
 
     if quality.processing_kind == "full":
@@ -81,7 +82,7 @@ def quality_rows(quality: DocumentQuality) -> list[tuple[str, str]]:
 
     rows = [
         ("Оценка распознавания", assessment),
-        ("Порог уверенности OCR", f"{_number(quality.confidence_threshold)}%"
+        ("Порог уверенности OCR", format_quality_percent(quality.confidence_threshold)
          if quality.confidence_threshold is not None else "Не сохранён"),
         ("Источник текста", sources),
         ("Измерено качество OCR", f"{quality.measured_ocr_pages} из {quality.ocr_pages} страниц"
@@ -101,7 +102,7 @@ def quality_rows(quality: DocumentQuality) -> list[tuple[str, str]]:
 def quality_page_rows(quality: DocumentQuality) -> list[tuple[str, str]]:
     return [
         (f"Страница {page.page}",
-         page.warning.rstrip(". ") + (f". Уверенность OCR: {_number(page.confidence)}%"
+         page.warning.rstrip(". ") + (f". Уверенность OCR: {format_quality_percent(page.confidence)}"
                                if page.confidence is not None else ""))
         for page in quality.review_pages
     ]

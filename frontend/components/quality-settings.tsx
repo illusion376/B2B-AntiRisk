@@ -49,7 +49,8 @@ export function QualitySettingsCard({ user, onSave }: Props) {
       <fieldset className="settings-fieldset settings-profile-fields settings-quality-fields" disabled={!settings || saving}>
         <legend className="sr-only">Нормативы качества проверки</legend>
         <label htmlFor="quality-sla">Нормативное время <small>секунды</small>
-          <input id="quality-sla" name="processing-sla-seconds" type="number" inputMode="numeric" min={1} max={MAX_PROCESSING_SLA_SECONDS} step={1} placeholder={settings ? 'Без норматива' : ''} value={processingSlaSeconds} onChange={event => { setProcessingSlaSeconds(event.target.value); edited(); }} />
+          <input id="quality-sla" name="processing-sla-seconds" type="number" inputMode="numeric" min={1} max={MAX_PROCESSING_SLA_SECONDS} step={1} placeholder={settings ? 'Без норматива' : ''} aria-describedby="quality-sla-help" value={processingSlaSeconds} onChange={event => { setProcessingSlaSeconds(event.target.value); edited(); }} />
+          <span id="quality-sla-help" className="settings-input-hint">Норматив времени не применяется к повторной проверке готового текста.</span>
         </label>
         <label htmlFor="quality-confidence">Требуемый уровень распознавания <small>%</small>
           <input id="quality-confidence" name="ocr-min-confidence" type="number" inputMode="decimal" required min={0} max={100} step="any" aria-describedby="quality-confidence-help" value={ocrMinConfidence} onChange={event => { setOcrMinConfidence(event.target.value); edited(); }} />
@@ -57,7 +58,6 @@ export function QualitySettingsCard({ user, onSave }: Props) {
         </label>
       </fieldset>
       <div className="settings-profile-actions">
-        <span className="settings-card-note">Норматив времени не применяется к повторной проверке готового текста.</span>
         <button type="submit" className="primary-button" disabled={!settings || saving || !changed || !ocrMinConfidence.trim()}>{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}{saving ? 'Сохраняем…' : 'Сохранить'}</button>
       </div>
       {(!user || saved) && <p className="settings-profile-feedback" role="status">{!user ? 'Загружаем настройки качества…' : 'Настройки сохранены в профиле.'}</p>}

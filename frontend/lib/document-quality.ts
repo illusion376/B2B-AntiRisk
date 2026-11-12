@@ -2,7 +2,6 @@ import type { DocumentQualityDto, PageQualityDto } from './api-types';
 import type { DocumentInfo, DocumentQuality, PageContent, PageQuality, ReviewPageQuality } from './types';
 
 const decimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
-const confidenceDecimal = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
 const nonNegative = (value: number | null | undefined): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 const percent = (value: number | null | undefined): number | null => {
@@ -40,7 +39,7 @@ export function mapPageQuality(value: PageQualityDto | null | undefined): PageQu
 
 export function formatQualityPercent(value: number | null | undefined): string {
   const valid = percent(value);
-  return valid === null ? 'Нет данных' : `${confidenceDecimal.format(valid)}%`;
+  return valid === null ? 'Нет данных' : `${decimal.format(valid)}%`;
 }
 
 export function formatProcessingTime(value: number | null | undefined): string {

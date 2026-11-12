@@ -72,7 +72,8 @@ test('missing confidence differs from zero confidence and invalid page numbers c
   assert.equal(quality.reviewPages[0].confidence, 0);
   assert.equal(quality.reviewPages[1].confidence, null);
   assert.equal(formatQualityPercent(quality.confidence), '0%');
-  assert.equal(formatQualityPercent(79.96), '79,96%', 'a value below 80 must not be displayed as reaching the threshold');
+  assert.equal(formatQualityPercent(92.2857), '92,3%');
+  assert.equal(formatQualityPercent(79.96), '80%', 'displayed percentages are rounded to tenths');
   for (const value of [NaN, Infinity, -1, 101]) assert.equal(formatQualityPercent(value), 'Нет данных');
 });
 
@@ -195,7 +196,7 @@ test('low and unknown page states still warn when a response omits the manual-re
   const page = mapPage({ ...pageDto, quality: { status: 'low', confidence: 79.96,
     confidence_threshold: 80, manual_review_required: false, warning: null, reason: 'low_confidence' } });
   assert.equal(pageRecognitionQuality(document, page, 7).confidence, 79.96);
-  assert.match(pageQualityWarning(document, page, 7), /79,96%.*80%/);
+  assert.match(pageQualityWarning(document, page, 7), /80%.*80%/);
   assert.equal(documentReviewPages(document, page, 7)[0].status, 'low');
   const unknown = { ...page, quality: { ...page.quality, status: 'unknown', confidence: null } };
   assert.match(pageQualityWarning(document, unknown, 7), /не подтверждено/);
