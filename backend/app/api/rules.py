@@ -36,6 +36,7 @@ from app.vocab import SEVERITY_FROM_API, SEVERITY_TO_API
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/rules", tags=["Правила проверки"])
+_RULE_TEST_MAX_VECTOR_DISTANCE = 0.40
 
 def default_query(title: str, description: str) -> str:
     return f"{title}. {description}".strip(" .")
@@ -149,6 +150,26 @@ def delete_rule(rule_id: str, db: Session = Depends(get_db), user: User = Depend
     log_action(db, user.id, "RULE_DELETED", "rule", None, {"rule_id": rule_id, "title": rule.title})
     db.commit()
 
+def _test_guidance(*, has_risk: bool, has_chunks: bool, has_green: bool = False) -> tuple[str, list[str]]:
+    if has_risk:
+        return "RISK", ["Правило успешно выявило потенциальный риск в проверенном тексте."]
+    if not has_chunks:
+        return "NOT_FOUND", [
+            "В документе не найдены фрагменты, соответствующие поисковому запросу правила.",
+            "Уточните название или описание правила: добавьте ключевые слова из условия договора "
+            "(например, неустойка, односторонний отказ, срок оплаты).",
+        ]
+    if has_green:
+        return "OK", [
+            "В отобранных фрагментах система не зафиксировала нарушений по этому правилу.",
+            "Совет: если пункт документа кажется вам рискованным, уточните в описании точный критерий нарушения "
+            "(например: «срок возврата превышает 5 рабочих дней» вместо общего «проверить срок возврата»).",
+        ]
+    return "NOT_FOUND", [
+        "В найденных фрагментах недостаточно данных для вывода по правилу.",
+        "Уточните описание правила или проверьте найденные фрагменты вручную.",
+    ]
+
 def _run_rule(
     db: Session,
     rule: RiskRule,
@@ -200,7 +221,11 @@ def _run_rule(
         doc_id = doc.id
         doc_file_name = doc.file_name
         ensure_rule_embeddings(db, [rule])
-        chunks = hybrid_search(db, doc.id, rule.semantic_query, list(rule.query_embedding), settings.retrieval_top_k)
+        chunks = hybrid_search(
+            db, doc.id, rule.semantic_query, list(rule.query_embedding), settings.retrieval_top_k,
+            max_distance=min(settings.retrieval_max_distance, _RULE_TEST_MAX_VECTOR_DISTANCE),
+            rule_test_title=rule.title,
+        )
         pages = [
             {"page_number": n, "words": w}
             for n, w in db.execute(
@@ -208,20 +233,21 @@ def _run_rule(
                 .where(DocumentPage.document_id == doc.id)
                 .order_by(DocumentPage.page_number)
             )
-        ]
+        ] if chunks else []
         doc_name = doc.file_name
         law_type = doc.law_type
         model = doc.llm_model or (settings.llm_model.strip() if settings.llm_model else None)
         sensitivity = doc.analysis_sensitivity or "balanced"
 
     contexts = [RuleContext(rule, chunks)]
-    if mode == "llm":
+    drafts = []
+    if chunks and mode == "llm":
         try:
             drafts = asyncio.run(evaluate_with_llm(contexts, pages, doc_name, law_type, sensitivity=sensitivity, model=model))
         except Exception as exc:
             log.warning("LLM evaluation failed in sandbox (%s), falling back to heuristic: %s", type(exc).__name__, exc)
             drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
-    else:
+    elif chunks:
         drafts = evaluate_heuristic(contexts, pages, sensitivity=sensitivity)
 
     findings: list[RuleTestFinding] = []
@@ -258,23 +284,9 @@ def _run_rule(
 
     execution_ms = round((time.monotonic() - start_time) * 1000)
 
-    guidance: list[str] = []
-    verdict = "RISK" if has_risk else ("OK" if chunks and any(d.severity == "GREEN" for d in drafts) else "NOT_FOUND")
-
-    if has_risk:
-        guidance.append("Правило успешно выявило потенциальный риск в проверенном тексте.")
-    elif not chunks:
-        guidance.append("В документе не найдены фрагменты по поисковому запросу правила.")
-        guidance.append(
-            "Совет: добавьте в название или описание ключевые слова и синонимы из контрактной практики "
-            "(например: неустойка, пени, удержание, обеспечение, односторонний отказ, приёмка, срок оплаты)."
-        )
-    else:
-        guidance.append("Фрагменты текста найдены, но система не зафиксировала нарушений и сочла условия законными.")
-        guidance.append(
-            "Совет: если пункт документа кажется вам рискованным, уточните в описании точный критерий нарушения "
-            "(например: «срок возврата превышает 5 рабочих дней» вместо общего «проверить срок возврата»)."
-        )
+    verdict, guidance = _test_guidance(
+        has_risk=has_risk, has_chunks=bool(chunks), has_green=any(d.severity == "GREEN" for d in drafts),
+    )
 
     return RuleTestResult(
         rule_id=rule.id,
