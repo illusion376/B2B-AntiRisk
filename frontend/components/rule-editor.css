@@ -1,0 +1,593 @@
+/* Стили для песочницы тестирования правил и подсказок юристу */
+
+.modal.rule-editor-modal,
+.modal-wide.rule-editor-modal,
+.modal:has(.rule-editor-layout) {
+  width: min(860px, calc(100vw - 32px)) !important;
+  max-width: 860px !important;
+  max-height: calc(100dvh - 32px);
+  padding: 16px 24px 18px !important;
+  overflow-y: auto;
+}
+
+.modal.rule-editor-modal .modal-header,
+.modal:has(.rule-editor-layout) .modal-header {
+  margin-bottom: 12px !important;
+}
+
+.modal.rule-editor-modal .modal-header h2,
+.modal:has(.rule-editor-layout) .modal-header h2 {
+  font-size: 1.15rem;
+}
+
+.modal.rule-editor-modal .modal-actions,
+.modal:has(.rule-editor-layout) .modal-actions {
+  margin-top: 12px !important;
+  padding-top: 10px;
+  border-top: 1px solid #eef2f6;
+}
+
+.rule-editor-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 740px) {
+  .rule-editor-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+.rule-editor-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-editor-form .form-label {
+  margin-bottom: 4px;
+  font-size: 0.8125rem;
+}
+
+.rule-editor-form .form-input,
+.rule-editor-form .form-select {
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+
+.rule-editor-form textarea.form-textarea {
+  min-height: 64px;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+/* Перенос текста для вариантов степени риска */
+.rule-editor-form .risk-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 2px 0 8px;
+}
+
+.rule-editor-form .risk-choice {
+  white-space: normal;
+  word-break: normal;
+  line-height: 1.2;
+  padding: 6px 6px;
+  min-height: 38px;
+  font-size: 0.75rem;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rule-editor-form .risk-choice input {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.rule-editor-form .risk-choice .risk-dot {
+  flex-shrink: 0;
+}
+
+.rule-editor-form .rule-enable-field {
+  margin-top: 2px;
+  margin-bottom: 4px;
+  font-size: 0.8rem;
+}
+
+.rule-editor-form .form-hint {
+  margin-top: 2px;
+  margin-bottom: 0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+/* Блок подсказок для юриста */
+.rule-hints-card {
+  margin-top: 6px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #334155;
+}
+
+.rule-hints-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f766e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.rule-hints-card summary:hover {
+  color: #0d9488;
+}
+
+.rule-hints-content {
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.rule-hints-content ul {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.rule-hints-content li {
+  margin-bottom: 4px;
+}
+
+.rule-hints-content strong {
+  color: #0f172a;
+}
+
+/* Песочница тестирования (правая колонка) */
+.rule-editor-sandbox {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sandbox-header {
+  margin-bottom: 10px;
+}
+
+.sandbox-header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px;
+}
+
+.sandbox-header p {
+  font-size: 0.775rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.sandbox-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  background: #e2e8f0;
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.sandbox-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.sandbox-tab:hover {
+  color: #0f172a;
+}
+
+.sandbox-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sandbox-doc-select {
+  margin-bottom: 10px;
+}
+
+.sandbox-doc-select label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.sandbox-doc-select select {
+  width: 100%;
+}
+
+.sandbox-run-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sandbox-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sandbox-input-group {
+  margin-bottom: 14px;
+}
+
+.sandbox-doc-select {
+  width: 100%;
+}
+
+.sandbox-warning-banner {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #92400e;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.sandbox-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 80px;
+  font-size: 0.8125rem;
+}
+
+.sandbox-run-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+/* Результаты тестирования */
+.sandbox-results-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.sandbox-results-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sandbox-results-summary.has-risk {
+  color: #b91c1c;
+}
+
+.sandbox-results-summary.ok {
+  color: #15803d;
+}
+
+.sandbox-results-summary.not-found {
+  color: #475569;
+}
+
+.sandbox-execution-time {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.sandbox-finding-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sandbox-finding-card.critical {
+  border-left-color: #ef4444;
+}
+
+.sandbox-finding-card.warning {
+  border-left-color: #f59e0b;
+}
+
+.sandbox-finding-card.low {
+  border-left-color: #10b981;
+}
+
+.sandbox-finding-card.ok {
+  border-left-color: #10b981;
+}
+
+.sandbox-finding-card.unknown {
+  border-left-color: #94a3b8;
+}
+
+.sandbox-finding-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sandbox-finding-clause {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.sandbox-finding-quote {
+  margin: 0;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: #334155;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.sandbox-finding-comment {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.sandbox-finding-proposal {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #0f766e;
+  line-height: 1.4;
+  background: #f0fdfa;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+/* Пустое состояние (ничего не найдено) */
+.sandbox-empty-results {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  color: #475569;
+}
+
+.sandbox-empty-results h4 {
+  margin: 6px 0 4px;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.sandbox-empty-results p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Подсказки по уточнению формулировки при отсутствии находок */
+.sandbox-guidance-box {
+  margin-top: 10px;
+  text-align: left;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  color: #166534;
+}
+
+.sandbox-guidance-box.neutral {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.sandbox-guidance-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sandbox-guidance-list {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.4;
+}
+
+.sandbox-guidance-list li {
+  margin-bottom: 4px;
+}
+
+/* Спойлер найденных чанков */
+.sandbox-fragments-toggle {
+  background: transparent;
+  border: none;
+  color: #0f766e;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sandbox-fragments-toggle:hover {
+  text-decoration: underline;
+}
+
+.sandbox-fragments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sandbox-fragment-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 0.775rem;
+}
+
+.sandbox-fragment-item-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+.sandbox-fragment-item-content {
+  color: #334155;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Кнопка запуска проверки правила в списке правил просмотрщика документа */
+.inline-rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 4px 8px 4px 4px;
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+
+.inline-rule-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.inline-rule-main-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 8px 6px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.inline-rule-main-btn span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inline-rule-main-btn strong {
+  font-size: 0.8125rem;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-rule-main-btn small {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.rule-reanalyze-button {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  color: #0f766e;
+  padding: 5px 9px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.rule-reanalyze-button:hover:not(:disabled) {
+  background: #f0fdfa;
+  border-color: #0f766e;
+}
+
+.rule-reanalyze-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

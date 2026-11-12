@@ -1,10 +1,10 @@
 import type {
   AnalysisModelsDto, AnalysisModesDto, ChatHistoryDto, ChatMessageDto, DocumentDto, FindingDto, FindingsDto, HistoryDto, PageDto, ProjectDto,
-  ProjectFileDto, RuleDto, UploadDto, UserDto,
+  ProjectFileDto, RuleDto, RuleTestFindingDto, RuleTestFragmentDto, RuleTestResultDto, UploadDto, UserDto,
 } from './api-types';
 import type {
   AnalysisMode, AnalysisModels, AnalysisModes, AnalysisSensitivity, ChatHistory, ChatMessage, ChatMode, CheckRule, DocumentInfo, Finding, HistoryEntry, OutlineSection, PageContent, Project, SeverityCounts,
-  ProjectDraft, ProjectFile, QualitySettings, ReportMode, ReviewStatus, RuleDraft, SearchResponse, UploadResult, User, UserProfileDraft,
+  ProjectDraft, ProjectFile, QualitySettings, ReportMode, ReviewStatus, RuleDraft, RuleTestFinding, RuleTestFragment, RuleTestRequest, RuleTestResult, SearchResponse, UploadResult, User, UserProfileDraft,
 } from './types';
 import { reportFilename, saveDownload } from './report';
 import { mapDocumentQuality, mapPageQuality } from './document-quality';
@@ -239,6 +239,36 @@ export function rulePayload(draft: Partial<RuleDraft>) {
   };
 }
 
+export function mapRuleTestResult(dto: RuleTestResultDto): RuleTestResult {
+  return {
+    ruleId: dto.rule_id,
+    documentId: dto.document_id,
+    documentName: dto.document_name,
+    verdict: dto.verdict,
+    findings: (dto.findings || []).map(f => ({
+      id: f.id,
+      severity: f.severity,
+      title: f.title,
+      shortDescription: f.short_description,
+      page: f.page,
+      clause: f.clause,
+      quote: f.quote,
+      comment: f.comment,
+      counterProposal: f.counter_proposal,
+      confidence: f.confidence,
+      quoteVerified: f.quote_verified,
+    })),
+    fragments: (dto.fragments || []).map(fr => ({
+      page: fr.page,
+      clauseTitle: fr.clause_title,
+      content: fr.content,
+      score: fr.score,
+    })),
+    guidance: dto.guidance || [],
+    executionMs: dto.execution_ms,
+  };
+}
+
 export function thumbnailUrl(documentId: string, page: number, width = 160): string {
   return apiUrl(`/documents/${segment(documentId)}/pages/${page}/thumbnail`, { width });
 }
@@ -285,6 +315,12 @@ export const api = {
   createRule: (draft: RuleDraft, options: RequestOptions = {}): Promise<CheckRule> => request('/rules', mapRule, { ...options, method: 'POST', ...json(rulePayload(draft)) }),
   updateRule: (ruleId: string, draft: Partial<RuleDraft>, options: RequestOptions = {}): Promise<CheckRule> => request(`/rules/${segment(ruleId)}`, mapRule, { ...options, method: 'PATCH', ...json(rulePayload(draft)) }),
   deleteRule: async (ruleId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/rules/${segment(ruleId)}`, { ...options, method: 'DELETE' }); },
+  testRule: (ruleId: string, payload: RuleTestRequest, options: RequestOptions = {}): Promise<RuleTestResult> => request(`/rules/${segment(ruleId)}/test`, mapRuleTestResult, {
+    ...options, method: 'POST', ...json({ document_id: payload.documentId, custom_text: payload.customText }),
+  }),
+  previewRule: (draft: Partial<RuleDraft>, payload: RuleTestRequest, options: RequestOptions = {}): Promise<RuleTestResult> => request('/rules/preview', mapRuleTestResult, {
+    ...options, method: 'POST', ...json({ ...rulePayload(draft), document_id: payload.documentId, custom_text: payload.customText }),
+  }),
   getHistory: (options: HistoryOptions = {}): Promise<HistoryEntry[]> => {
     const query = new URLSearchParams({ limit: String(options.limit ?? 100), offset: String(options.offset ?? 0) });
     if (options.actions) query.set('actions', Array.isArray(options.actions) ? options.actions.join(',') : options.actions);
@@ -319,7 +355,7 @@ export const api = {
     if (!Number.isInteger(value.documents) || value.documents < 0) throw new Error('Invalid rerun response');
     return value;
   }, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
-  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
+  reanalyzeDocument: (documentId: string, options: AnalysisRequestOptions & { ruleIds?: string[] } = {}): Promise<DocumentInfo> => request(`/documents/${segment(documentId)}/reanalyze`, mapDocument, { signal: options.signal, method: 'POST', ...json({ rule_ids: options.ruleIds, analysis_mode: options.analysisMode, analysis_sensitivity: options.sensitivity, llm_model: options.analysisMode === 'keyword' ? undefined : options.llmModel }) }),
   deleteDocument: async (documentId: string, options: RequestOptions = {}): Promise<void> => { await requestResponse(`/documents/${segment(documentId)}`, { ...options, method: 'DELETE' }); },
   thumbnailUrl,
   documentFileUrl,

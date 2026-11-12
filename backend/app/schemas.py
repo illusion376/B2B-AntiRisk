@@ -338,13 +338,42 @@ class RuleOut(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
-class RuleTestRequest(BaseModel):
-    document_id: uuid.UUID
+class RuleTestFinding(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    severity: RiskLevel | Literal["critical", "warning", "low", "ok", "unknown"]
+    title: str
+    short_description: str | None = None
+    page: int | None = None
+    clause: str | None = None
+    quote: str | None = None
+    comment: str | None = None
+    counter_proposal: str | None = None
+    confidence: float | None = None
+    quote_verified: bool = False
+
+class RuleTestFragment(BaseModel):
+    page: int
+    clause_title: str | None = None
+    content: str
+    score: float
 
 class RuleTestResult(BaseModel):
     rule_id: str
-    findings: list[dict]
-    fragments: list[dict]
+    document_id: uuid.UUID | None = None
+    document_name: str | None = None
+    verdict: str = "NOT_FOUND"
+    findings: list[RuleTestFinding] = []
+    fragments: list[RuleTestFragment] = []
+    guidance: list[str] = []
+    execution_ms: int | None = None
+
+class RuleTestRequest(BaseModel):
+    document_id: uuid.UUID | None = None
+    custom_text: str | None = Field(default=None, max_length=15000)
+
+class RulePreviewRequest(RuleCreate):
+    document_id: uuid.UUID | None = None
+    custom_text: str | None = Field(default=None, max_length=15000)
 
 class StartRequest(BaseModel):
     analysis_mode: str | None = Field(default=None, description="llm, nli или keyword; по умолчанию — режим сервера")

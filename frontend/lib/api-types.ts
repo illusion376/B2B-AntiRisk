@@ -69,6 +69,35 @@ export interface RuleDto {
   law_type: LawType; semantic_query: string; llm_prompt: string; legal_reference: string | null;
   sort_order: number; created_at: string; updated_at: string | null;
 }
+export interface RuleTestFindingDto {
+  id: string;
+  severity: Severity;
+  title: string;
+  short_description: string | null;
+  page: number | null;
+  clause: string | null;
+  quote: string | null;
+  comment: string | null;
+  counter_proposal: string | null;
+  confidence: number | null;
+  quote_verified: boolean;
+}
+export interface RuleTestFragmentDto {
+  page: number;
+  clause_title: string | null;
+  content: string;
+  score: number;
+}
+export interface RuleTestResultDto {
+  rule_id: string;
+  document_id: string | null;
+  document_name: string | null;
+  verdict: string;
+  findings: RuleTestFindingDto[];
+  fragments: RuleTestFragmentDto[];
+  guidance: string[];
+  execution_ms: number | null;
+}
 export interface PageDto {
   page: number; total_pages: number; width: number; height: number;
   is_ocr: boolean; ocr_confidence: number | null;

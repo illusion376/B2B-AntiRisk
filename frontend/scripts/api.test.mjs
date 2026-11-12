@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadLib } from './load-lib.mjs';
 
-const { api, ApiError, mapProject, mapFinding, mapPage, mapAnalysisModes, rulePayload } = await loadLib('api');
+const { api, ApiError, mapProject, mapFinding, mapPage, mapAnalysisModes, rulePayload, mapRuleTestResult } = await loadLib('api');
 const { getProcessing, validateUpload, MAX_FILE_BYTES } = await loadLib('projects');
 const created = '2026-10-07T06:30:00+00:00';
 const counts = { critical: 1, warning: 2, low: 0, ok: 3, unknown: 2, unseen: 2 };
@@ -291,4 +291,99 @@ test('unknown findings and an incomplete traffic light remain distinct from no r
   const mappedProject = mapProject({ ...project, traffic_light: 'unknown', counts: { ...counts, critical: 0, warning: 0 } });
   assert.equal(mappedProject.trafficLight, 'unknown');
   assert.equal(mappedProject.counts.unknown, 2);
+});
+
+test('document reanalyze supports single-rule re-checking', async t => {
+  let requestBody;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/documents/document-uuid/reanalyze');
+    assert.equal(options.method, 'POST');
+    requestBody = JSON.parse(options.body);
+    return response({ ...document, analysis_mode: 'llm' });
+  });
+  await api.reanalyzeDocument(document.id, { ruleIds: ['custom_rule_1'], analysisMode: 'llm' });
+  assert.deepEqual(requestBody, { rule_ids: ['custom_rule_1'], analysis_mode: 'llm' });
+});
+
+test('rule test executes against document or custom text and maps findings, fragments and guidance', async t => {
+  const calls = [];
+  const mockTestResult = {
+    rule_id: 'rule-123',
+    document_id: 'document-uuid',
+    document_name: 'Договор.docx',
+    verdict: 'VIOLATION_FOUND',
+    findings: [{
+      id: 'finding-1',
+      severity: 'critical',
+      title: 'Срок оплаты превышен',
+      short_description: 'Превышает 7 рабочих дней',
+      page: 3,
+      clause: '4.2',
+      quote: 'Оплата производится в течение 30 календарных дней',
+      comment: 'Нарушение ст. 34 Закона 44-ФЗ',
+      counter_proposal: 'в течение 7 рабочих дней',
+      confidence: 0.95,
+      quote_verified: true,
+    }],
+    fragments: [{
+      page: 3,
+      clause_title: 'Порядок расчетов',
+      content: '4.2. Оплата производится в течение 30 календарных дней...',
+      score: 0.88,
+    }],
+    guidance: [],
+    execution_ms: 120,
+  };
+
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, method: options.method, body: JSON.parse(options.body) });
+    return response(mockTestResult);
+  });
+
+  const res1 = await api.testRule('rule-123', { documentId: 'document-uuid' });
+  assert.equal(res1.ruleId, 'rule-123');
+  assert.equal(res1.verdict, 'VIOLATION_FOUND');
+  assert.equal(res1.findings.length, 1);
+  assert.equal(res1.findings[0].clause, '4.2');
+  assert.equal(res1.findings[0].counterProposal, 'в течение 7 рабочих дней');
+  assert.equal(res1.fragments[0].clauseTitle, 'Порядок расчетов');
+
+  const res2 = await api.testRule('rule-123', { customText: 'Тестовый фрагмент договора' });
+  assert.equal(res2.ruleId, 'rule-123');
+
+  assert.deepEqual(calls, [
+    { url: '/api/rules/rule-123/test', method: 'POST', body: { document_id: 'document-uuid' } },
+    { url: '/api/rules/rule-123/test', method: 'POST', body: { custom_text: 'Тестовый фрагмент договора' } },
+  ]);
+});
+
+test('rule preview sends draft fields and maps sandbox guidance if no violation found', async t => {
+  let previewCall;
+  const mockPreviewResult = {
+    rule_id: 'preview',
+    document_id: null,
+    document_name: 'Пользовательский фрагмент',
+    verdict: 'OK',
+    findings: [],
+    fragments: [],
+    guidance: ['Формулировка правила может быть слишком узкой.'],
+    execution_ms: 45,
+  };
+
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    previewCall = { url, method: options.method, body: JSON.parse(options.body) };
+    return response(mockPreviewResult);
+  });
+
+  const res = await api.previewRule(
+    { title: 'Новое правило', description: 'Проверка неустойки', severity: 'warning' },
+    { customText: 'Пени начисляются в размере 0.1% в день.' },
+  );
+
+  assert.equal(previewCall.url, '/api/rules/preview');
+  assert.equal(previewCall.body.title, 'Новое правило');
+  assert.equal(previewCall.body.custom_text, 'Пени начисляются в размере 0.1% в день.');
+  assert.equal(res.verdict, 'OK');
+  assert.equal(res.findings.length, 0);
+  assert.deepEqual(res.guidance, ['Формулировка правила может быть слишком узкой.']);
 });
